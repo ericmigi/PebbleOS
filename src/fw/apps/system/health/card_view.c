@@ -16,9 +16,9 @@
 #include "services/normal/activity/activity_private.h"
 #include "services/normal/timeline/health_layout.h"
 #include "system/logging.h"
+#include "util/misc.h"
 #include "util/time/time.h"
 
-#define SELECT_INDICATOR_COLOR (PBL_IF_COLOR_ELSE(GColorWhite, GColorBlack))
 #define BACK_TO_WATCHFACE (-1)
 
 // Enum for different card types
@@ -106,7 +106,11 @@ static int prv_get_next_card_idx(Card current, bool up) {
 }
 
 static void prv_select_indicator_layer_update_proc(Layer *layer, GContext *ctx) {
-  action_button_draw(ctx, layer, SELECT_INDICATOR_COLOR);
+  HealthCardView *health_card_view =
+      container_of(layer, HealthCardView, select_indicator_layer);
+  Layer *card_layer = health_card_view->card_layers[health_card_view->current_card_index];
+  GColor bg = s_card_view_get_bg_color[health_card_view->current_card_index](card_layer);
+  action_button_draw(ctx, layer, gcolor_legible_over(bg));
 }
 
 static void prv_refresh_select_indicator(HealthCardView *health_card_view) {
@@ -116,6 +120,7 @@ static void prv_refresh_select_indicator(HealthCardView *health_card_view) {
       card_layer);
 
   layer_set_hidden(&health_card_view->select_indicator_layer, is_hidden);
+  layer_mark_dirty(&health_card_view->select_indicator_layer);
 }
 
 static void prv_content_indicator_setup_direction(HealthCardView *health_card_view,
