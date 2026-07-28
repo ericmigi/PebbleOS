@@ -38,6 +38,9 @@ void memory_layout_dump_mpu_regions_to_dbgserial(void);
 
 void memory_layout_setup_mpu(void);
 
+void memory_layout_readonly_bss_begin_write(void);
+void memory_layout_readonly_bss_end_write(void);
+
 const MpuRegion* memory_layout_get_app_region(void);
 const MpuRegion* memory_layout_get_app_stack_guard_region(void);
 

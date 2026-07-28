@@ -129,4 +129,6 @@ int8_t text_resources_get_glyph_horiz_advance(FontCache *font_cache, Codepoint c
 //! @param font_info a pointer to the fontinfo struct to initialize
 bool text_resources_init_font(ResAppNum app_num, uint32_t font_resource,
                               uint32_t extension_resource, FontInfo *font_info);
-
+bool text_resources_init_font_with_callback_data(ResAppNum app_num, uint32_t font_resource,
+                                                 uint32_t extension_resource,
+                                                 FontInfo *font_info, void *callback_data);

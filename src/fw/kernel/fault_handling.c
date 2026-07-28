@@ -119,11 +119,39 @@ static void convert_to_process_offset(bool known, uintptr_t* pc, PebbleTask task
 
 static CrashInfo s_current_app_crash_info;
 
-static void setup_log_app_crash_info(CrashInfo crash_info) {
+static PebbleTask prv_get_user_task_for_stack_pointer(const void *sp) {
+  if (memory_layout_is_pointer_in_region(memory_layout_get_app_region(), sp)) {
+    return PebbleTask_App;
+  }
+  if (memory_layout_is_pointer_in_region(memory_layout_get_worker_region(), sp)) {
+    return PebbleTask_Worker;
+  }
+
+  return PebbleTask_Unknown;
+}
+
+static ProcessContext *prv_get_process_context_for_task(PebbleTask task) {
+  if (task == PebbleTask_App) {
+    return app_manager_get_task_context();
+  }
+  if (task == PebbleTask_Worker) {
+    return worker_manager_get_task_context();
+  }
+
+  return NULL;
+}
+
+static void setup_log_app_crash_info(CrashInfo crash_info, PebbleTask task) {
   // Write the information out into a global variable so it can be logged out at a less critical time.
   s_current_app_crash_info = crash_info;
+  s_current_app_crash_info.task = task;
 
-  const PebbleProcessMd *md = sys_process_manager_get_current_process_md();
+  ProcessContext *context = prv_get_process_context_for_task(task);
+  if (!context || !context->app_md) {
+    return;
+  }
+
+  const PebbleProcessMd *md = context->app_md;
   s_current_app_crash_info.app_uuid = md->uuid;
 
   const uint8_t *build_id = process_metadata_get_build_id(md);
@@ -131,8 +159,6 @@ static void setup_log_app_crash_info(CrashInfo crash_info) {
     memcpy(s_current_app_crash_info.build_id, build_id, sizeof(s_current_app_crash_info.build_id));
   }
 
-  PebbleTask task = pebble_task_get_current();
-  s_current_app_crash_info.task = task;
   convert_to_process_offset(s_current_app_crash_info.pc_known, &s_current_app_crash_info.pc, task);
   convert_to_process_offset(s_current_app_crash_info.lr_known, &s_current_app_crash_info.lr, task);
 }
@@ -196,8 +222,7 @@ void NOINLINE app_crashed(void) {
   __asm volatile("");
 }
 
-static void prv_kill_user_process(uint32_t stashed_lr) {
-  PebbleTask task = pebble_task_get_current();
+static void prv_kill_user_process(PebbleTask task, uint32_t stashed_lr) {
   if (task == PebbleTask_App) {
     app_crashed();
     app_manager_get_task_context()->safe_to_kill = true;
@@ -216,7 +241,7 @@ static void prv_kill_user_process(uint32_t stashed_lr) {
   process_manager_put_kill_process_event(task, false /* gracefully */);
 
   // Wait for the kernel to kill us...
-  vTaskSuspend(xTaskGetCurrentTaskHandle());
+  vTaskSuspend(NULL /* self */);
 }
 
 
@@ -225,10 +250,11 @@ DEFINE_SYSCALL(NORETURN, sys_app_fault, uint32_t stashed_lr) {
   // Always run on the current task.
 
   CrashInfo crash_info = make_crash_info_pc(stashed_lr);
-  setup_log_app_crash_info(crash_info);
+  PebbleTask task = pebble_task_get_current();
+  setup_log_app_crash_info(crash_info, task);
   system_task_add_callback(prv_log_app_lr_and_pc_system_task, &s_current_app_crash_info);
 
-  prv_kill_user_process(stashed_lr);
+  prv_kill_user_process(task, stashed_lr);
   for (;;) {} // Not Reached
 }
 
@@ -243,15 +269,16 @@ static void hardware_fault_landing_zone(void) {
   } else if (s_current_app_crash_info.pc_known && s_current_app_crash_info.pc != 0) {
     lr = s_current_app_crash_info.pc;
   }
-  prv_kill_user_process(lr);
+  prv_kill_user_process(s_current_app_crash_info.task, lr);
 }
 
-static void prv_return_to_landing_zone(uintptr_t stacked_pc, uintptr_t stacked_lr, unsigned int* stacked_args) {
+static void prv_return_to_landing_zone(PebbleTask task, uintptr_t stacked_pc, uintptr_t stacked_lr,
+                                       unsigned int* stacked_args) {
   // We got this! Let's redirect this task to a spin function and tell the app manager to kill us.
 
   // Log about the terrible thing that just happened.
   CrashInfo crash_info = make_crash_info_pc_lr(stacked_pc, stacked_lr);
-  setup_log_app_crash_info(crash_info);
+  setup_log_app_crash_info(crash_info, task);
 
   // Alright, now to neuter the current task. We're going to do some work to make it so when we return from
   // this fault handler we'll end up in a perfectly safe place while we wait to die.
@@ -281,8 +308,7 @@ static void prv_return_to_landing_zone(uintptr_t stacked_pc, uintptr_t stacked_l
   // Now return to hardware_fault_landing_zone...
 }
 
-static void attempt_handle_stack_overflow(unsigned int* stacked_args, uintptr_t fault_pc) {
-  PebbleTask task = pebble_task_get_current();
+static void attempt_handle_stack_overflow(PebbleTask task, unsigned int* stacked_args, uintptr_t fault_pc) {
   PBL_LOG_SYNC_ERR("Stack overflow [task: %s]", pebble_task_get_name(task));
 
   if (mcu_state_is_thread_privileged()) {
@@ -298,13 +324,13 @@ static void attempt_handle_stack_overflow(unsigned int* stacked_args, uintptr_t 
   }
 
   // We got this! Let's redirect this task to a spin function and tell the app manager to kill us.
-  prv_return_to_landing_zone(0, 0, stacked_args);   // We can't get LR or PC, so just set to 0's.
+  prv_return_to_landing_zone(task, 0, 0, stacked_args);   // We can't get LR or PC, so just set to 0's.
 }
 
 
-static void attempt_handle_generic_fault(unsigned int* stacked_args) {
-  uintptr_t stacked_lr = (uintptr_t) stacked_args[5];;
-  uintptr_t stacked_pc = (uintptr_t) stacked_args[6];;;
+static void attempt_handle_generic_fault(PebbleTask task, unsigned int* stacked_args) {
+  uintptr_t stacked_lr = (uintptr_t) stacked_args[5];
+  uintptr_t stacked_pc = (uintptr_t) stacked_args[6];
 
   if (mcu_state_is_thread_privileged()) {
     // We're hosed! We can't recover so just reboot everything.
@@ -313,7 +339,7 @@ static void attempt_handle_generic_fault(unsigned int* stacked_args) {
   }
 
   // We got this! Let's redirect this task to a spin function and tell the app manager to kill us.
-  prv_return_to_landing_zone(stacked_pc, stacked_lr, stacked_args);   // We can't get LR or PC, so just set to 0's.
+  prv_return_to_landing_zone(task, stacked_pc, stacked_lr, stacked_args);
 }
 
 
@@ -365,6 +391,8 @@ static void mem_manage_handler_c(unsigned int* stacked_args, unsigned int lr) {
     // the cfsr.
     fault_handler_dump_cfsr(buffer);
 
+    PebbleTask task = prv_get_user_task_for_stack_pointer(stacked_args);
+
     // Read user PC before moving SP up; only safe if MMSTKERR is clear
     // (frame was pushed). Otherwise fall back to MMFAR.
     uintptr_t fault_pc = 0;
@@ -381,10 +409,16 @@ static void mem_manage_handler_c(unsigned int* stacked_args, unsigned int lr) {
     } else {
       __set_MSP((uint32_t)stacked_args);
     }
-    attempt_handle_stack_overflow(stacked_args, fault_pc);
+    attempt_handle_stack_overflow(task, stacked_args, fault_pc);
 
   } else {
     prv_save_debug_registers(stacked_args);
+    PebbleTask task = prv_get_user_task_for_stack_pointer(stacked_args);
+
+    if (!mcu_state_is_thread_privileged()) {
+      attempt_handle_generic_fault(task, stacked_args);
+      return;
+    }
 
     fault_handler_dump(buffer, stacked_args);
 
@@ -395,7 +429,7 @@ static void mem_manage_handler_c(unsigned int* stacked_args, unsigned int lr) {
     //    set var $lr=<value of LR above>
     //    set var $pc=<value of PC above>
     //    bt
-    attempt_handle_generic_fault(stacked_args);
+    attempt_handle_generic_fault(task, stacked_args);
   }
 }
 
@@ -419,7 +453,8 @@ static void busfault_handler_c(unsigned int* stacked_args) {
 
   PBL_LOG_FROM_FAULT_HANDLER("");
 
-  attempt_handle_generic_fault(stacked_args);
+  PebbleTask task = prv_get_user_task_for_stack_pointer(stacked_args);
+  attempt_handle_generic_fault(task, stacked_args);
 }
 
 void BusFault_Handler(void) {
@@ -445,13 +480,14 @@ static void usagefault_handler_c(unsigned int* stacked_args, unsigned int lr) {
     SCB->CFSR = SCB_CFSR_STKOF_Msk;  // Clear by writing 1
 
     // No exception frame stacked on STKOF, so no PC available.
+    PebbleTask task = prv_get_user_task_for_stack_pointer(stacked_args);
     stacked_args += 256;  // Back up SP to give landing zone room (see mem_manage_handler_c)
     if (lr & 0x04) {
       __set_PSP((uint32_t)stacked_args);
     } else {
       __set_MSP((uint32_t)stacked_args);
     }
-    attempt_handle_stack_overflow(stacked_args, 0);
+    attempt_handle_stack_overflow(task, stacked_args, 0);
     return;
   }
 
@@ -462,7 +498,8 @@ static void usagefault_handler_c(unsigned int* stacked_args, unsigned int lr) {
 
   PBL_LOG_FROM_FAULT_HANDLER("");
 
-  attempt_handle_generic_fault(stacked_args);
+  PebbleTask task = prv_get_user_task_for_stack_pointer(stacked_args);
+  attempt_handle_generic_fault(task, stacked_args);
 }
 
 void UsageFault_Handler(void) {
@@ -473,4 +510,3 @@ void UsageFault_Handler(void) {
         "mov r1, lr\n"
         "b %0\n" :: "i" (usagefault_handler_c));
 }
-

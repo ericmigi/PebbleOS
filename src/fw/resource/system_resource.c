@@ -14,6 +14,7 @@
 #include "resource/resource_storage.h"
 #include "syscall/syscall_internal.h"
 #include <pbl/logging/logging.h>
+#include <stdint.h>
 #include "system/passert.h"
 #include "system/testinfra.h"
 #include "pbl/util/size.h"
@@ -46,13 +47,37 @@ bool system_resource_is_valid(void) {
 // Total number of fonts = NUM_SYSTEM_FONTS + 1 for the fallback font
 FontInfo s_system_fonts_info_table[NUM_SYSTEM_FONTS + 1] KERNEL_READONLY_DATA;
 
+static bool prv_is_system_font_info(const FontInfo *fontinfo) {
+  const uintptr_t addr = (uintptr_t)fontinfo;
+  const uintptr_t start = (uintptr_t)s_system_fonts_info_table;
+  const uintptr_t end = (uintptr_t)&s_system_fonts_info_table[NUM_SYSTEM_FONTS + 1];
+
+  return (addr >= start) && ((addr + sizeof(FontInfo)) <= end) &&
+         (((addr - start) % sizeof(FontInfo)) == 0);
+}
+
+static bool prv_init_system_font(uint32_t resource, uint32_t extension, FontInfo *fontinfo) {
+  FontInfo staged_fontinfo = *fontinfo;
+
+  if (!text_resources_init_font_with_callback_data(SYSTEM_APP, resource, extension,
+                                                   &staged_fontinfo, fontinfo)) {
+    return false;
+  }
+
+  memory_layout_readonly_bss_begin_write();
+  *fontinfo = staged_fontinfo;
+  memory_layout_readonly_bss_end_write();
+
+  return true;
+}
+
 static GFont prv_load_system_font(const char *font_key) {
   if (font_key == NULL) {
     PBL_LOG_DBG("GETTING FALLBACK FONT");
     // load fallback font
     if (!s_system_fonts_info_table[NUM_SYSTEM_FONTS].loaded) {
-      PBL_ASSERTN(text_resources_init_font(SYSTEM_APP, RESOURCE_ID_FONT_FALLBACK_INTERNAL, 0,
-          &s_system_fonts_info_table[NUM_SYSTEM_FONTS]));
+      PBL_ASSERTN(prv_init_system_font(RESOURCE_ID_FONT_FALLBACK_INTERNAL, 0,
+                                       &s_system_fonts_info_table[NUM_SYSTEM_FONTS]));
     }
     return &s_system_fonts_info_table[NUM_SYSTEM_FONTS];
   }
@@ -64,8 +89,7 @@ static GFont prv_load_system_font(const char *font_key) {
       uint32_t extension = s_font_resource_keys[i].extension_id;
       // if the font has not been initialized yet
       if (!fontinfo->loaded) {
-        if (!text_resources_init_font(SYSTEM_APP,
-            resource, extension, &s_system_fonts_info_table[i])) {
+        if (!prv_init_system_font(resource, extension, fontinfo)) {
           // Can't initialize the font for some reason
           return NULL;
         }
@@ -99,12 +123,15 @@ DEFINE_SYSCALL(GFont, sys_font_get_system_font, const char *font_key) {
 
 DEFINE_SYSCALL(void, sys_font_reload_font, FontInfo *fontinfo) {
   if (PRIVILEGE_WAS_ELEVATED) {
-    if (!memory_layout_is_pointer_in_region(memory_layout_get_readonly_bss_region(), fontinfo)) {
+    if (!prv_is_system_font_info(fontinfo)) {
       syscall_failed();
     }
   }
 
-  text_resources_init_font(fontinfo->base.app_num, fontinfo->base.resource_id,
-      fontinfo->extension.resource_id, fontinfo);
+  if (prv_is_system_font_info(fontinfo)) {
+    prv_init_system_font(fontinfo->base.resource_id, fontinfo->extension.resource_id, fontinfo);
+  } else {
+    text_resources_init_font(fontinfo->base.app_num, fontinfo->base.resource_id,
+                             fontinfo->extension.resource_id, fontinfo);
+  }
 }
-

@@ -8,6 +8,7 @@
 
 #include "process_management/app_manager.h"
 #include "process_management/worker_manager.h"
+#include "pbl/mcu/privilege.h"
 #include "pbl/services/analytics/analytics.h"
 #include "syscall/syscall_internal.h"
 #include "system/passert.h"
@@ -17,7 +18,7 @@
 #include "task.h"
 #include "queue.h"
 
-TaskHandle_t g_task_handles[NumPebbleTask] KERNEL_READONLY_DATA = { 0 };
+TaskHandle_t g_task_handles[NumPebbleTask] = { 0 };
 
 // Cycles consumed by tasks that have already been destroyed in each slot.
 // Captured at unregister time so the analytics heartbeat can keep accounting
@@ -104,7 +105,24 @@ char pebble_task_get_char(PebbleTask task) {
   return '?';
 }
 
+static PebbleTask prv_get_current_unprivileged_task(void) {
+  uint32_t stack_marker;
+  const void *sp = &stack_marker;
+  if (memory_layout_is_pointer_in_region(memory_layout_get_app_region(), sp)) {
+    return PebbleTask_App;
+  }
+  if (memory_layout_is_pointer_in_region(memory_layout_get_worker_region(), sp)) {
+    return PebbleTask_Worker;
+  }
+
+  return PebbleTask_Unknown;
+}
+
 PebbleTask pebble_task_get_current(void) {
+  if (!mcu_state_is_thread_privileged()) {
+    return prv_get_current_unprivileged_task();
+  }
+
   TaskHandle_t task_handle = xTaskGetCurrentTaskHandle();
   return pebble_task_get_task_for_handle(task_handle);
 }
@@ -308,13 +326,18 @@ void pebble_task_create(PebbleTask pebble_task, TaskParameters_t *task_params,
   };
   mpu_set_task_configurable_regions(task_params->xRegions, region_ptrs);
 
-  TaskHandle_t new_handle;
-  PBL_ASSERT(xTaskCreateRestricted(task_params, &new_handle) == pdTRUE, "Could not start task %s",
-             task_params->pcName);
-  if (handle) {
-    *handle = new_handle;
+  TaskHandle_t new_handle = NULL;
+  vTaskSuspendAll();
+  const BaseType_t result = xTaskCreateRestricted(task_params, &new_handle);
+  if (result == pdTRUE) {
+    if (handle) {
+      *handle = new_handle;
+    }
+    prv_task_register(pebble_task, new_handle);
   }
-  prv_task_register(pebble_task, new_handle);
+  xTaskResumeAll();
+
+  PBL_ASSERT(result == pdTRUE, "Could not start task %s", task_params->pcName);
 }
 
 void pebble_task_configure_idle_task(void) {

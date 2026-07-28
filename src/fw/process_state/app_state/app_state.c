@@ -13,6 +13,7 @@
 #include "applib/ui/layer.h"
 #include "applib/ui/recognizer/recognizer_list.h"
 #include "applib/unobstructed_area_service.h"
+#include "kernel/memory_layout.h"
 #include "kernel/util/segment.h"
 #include "process_management/process_loader.h"
 #include "process_management/process_manager.h"
@@ -126,10 +127,14 @@ KERNEL_READONLY_DATA static AppState *s_app_state_ptr;
 bool app_state_configure(MemorySegment *app_state_ram,
                          ProcessAppSDKType sdk_type,
                          int16_t obstruction_origin_y) {
-  s_app_state_ptr = memory_segment_split(app_state_ram, NULL, sizeof(AppState));
-  if (!s_app_state_ptr) {
+  AppState *app_state = memory_segment_split(app_state_ram, NULL, sizeof(AppState));
+  if (!app_state) {
     return false;
   }
+
+  memory_layout_readonly_bss_begin_write();
+  s_app_state_ptr = app_state;
+  memory_layout_readonly_bss_end_write();
 
   s_app_state_ptr->sdk_type = sdk_type;
   s_app_state_ptr->initial_obstruction_origin_y = obstruction_origin_y;

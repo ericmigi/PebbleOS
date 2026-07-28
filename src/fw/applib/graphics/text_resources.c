@@ -8,6 +8,7 @@
 
 #include "applib/fonts/fonts.h"
 #include "applib/fonts/fonts_private.h"
+#include "kernel/memory_layout.h"
 #include "resource/resource_ids.auto.h"
 #include <pbl/logging/logging.h>
 #include "system/passert.h"
@@ -565,14 +566,18 @@ static const FontResource *prv_font_res_for_codepoint(Codepoint codepoint,
 
 static void prv_resource_changed_callback(void *data) {
   FontInfo *font_info = (FontInfo *)data;
+
+  memory_layout_readonly_bss_begin_write();
   font_info->loaded = false;
   font_info->extended = false;
+  memory_layout_readonly_bss_end_write();
 }
 
 ///////////////////////////
 // Public API
-bool text_resources_init_font(ResAppNum app_num, uint32_t font_resource,
-                              uint32_t extended_resource, FontInfo *font_info) {
+bool text_resources_init_font_with_callback_data(ResAppNum app_num, uint32_t font_resource,
+                                                 uint32_t extended_resource,
+                                                 FontInfo *font_info, void *callback_data) {
   // load the base of the font or bail
   if (!font_resource ||
       !prv_load_font_res(app_num, font_resource, &font_info->base, false /* is_extended */)) {
@@ -585,7 +590,7 @@ bool text_resources_init_font(ResAppNum app_num, uint32_t font_resource,
     PBL_ASSERTN(app_num == SYSTEM_APP);
     if (font_info->extension_changed_cb == NULL) {
       font_info->extension_changed_cb = resource_watch(app_num, extended_resource,
-                                                       prv_resource_changed_callback, font_info);
+                                                       prv_resource_changed_callback, callback_data);
     }
     font_info->extended = prv_load_font_res(app_num, extended_resource, &font_info->extension,
                                             true /* is_extended */);
@@ -594,6 +599,12 @@ bool text_resources_init_font(ResAppNum app_num, uint32_t font_resource,
   font_info->max_height = MAX(font_info->extension.md.max_height, font_info->base.md.max_height);
   font_info->loaded = true;
   return true;
+}
+
+bool text_resources_init_font(ResAppNum app_num, uint32_t font_resource,
+                              uint32_t extended_resource, FontInfo *font_info) {
+  return text_resources_init_font_with_callback_data(app_num, font_resource, extended_resource,
+                                                    font_info, font_info);
 }
 
 // Leaf glyph lookup against a single font. This NEVER consults the fallback font, which is what

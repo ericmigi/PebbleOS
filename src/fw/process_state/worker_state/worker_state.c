@@ -3,6 +3,7 @@
 
 #include <string.h>
 
+#include "kernel/memory_layout.h"
 #include "kernel/util/segment.h"
 #include "process_management/process_manager.h"
 #include "process_state/worker_state/worker_state.h"
@@ -43,9 +44,17 @@ typedef struct {
 KERNEL_READONLY_DATA static WorkerState *s_worker_state_ptr;
 
 bool worker_state_configure(MemorySegment *worker_state_ram) {
-  s_worker_state_ptr = memory_segment_split(worker_state_ram, NULL,
-                                            sizeof(WorkerState));
-  return s_worker_state_ptr != NULL;
+  WorkerState *worker_state = memory_segment_split(worker_state_ram, NULL,
+                                                   sizeof(WorkerState));
+  if (!worker_state) {
+    return false;
+  }
+
+  memory_layout_readonly_bss_begin_write();
+  s_worker_state_ptr = worker_state;
+  memory_layout_readonly_bss_end_write();
+
+  return true;
 }
 
 void worker_state_init(void) {
@@ -136,6 +145,5 @@ void command_dump_malloc_worker(void) {
   heap_dump_malloc_instrumentation_to_dbgserial(worker_state_get_heap());
 }
 #endif
-
 
 

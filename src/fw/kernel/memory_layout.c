@@ -9,6 +9,8 @@
 #include "pbl/util/size.h"
 #include "pbl/util/string.h"
 
+#include "FreeRTOS.h"
+
 #include <inttypes.h>
 #include <string.h>
 
@@ -112,8 +114,10 @@ static const MpuRegion s_readonly_bss_region = {
   .base_address = (uint32_t) __unpriv_ro_bss_start__,
   .size = (uint32_t) __unpriv_ro_bss_size__,
   .cache_policy = MpuCachePolicy_WriteBackWriteAllocate,
-  .permissions = MpuPermissions_PrivRW_UserRO,
+  .permissions = MpuPermissions_PrivRO_UserRO,
 };
+
+static uint32_t s_readonly_bss_write_depth;
 
 #ifndef CONFIG_SOC_SF32LB52
 // ISR stack guard
@@ -223,6 +227,26 @@ void memory_layout_setup_mpu(void) {
 #endif
 
   mpu_enable();
+}
+
+void memory_layout_readonly_bss_begin_write(void) {
+  portENTER_CRITICAL();
+
+  if (s_readonly_bss_write_depth++ == 0) {
+    MpuRegion writable_region = s_readonly_bss_region;
+    writable_region.permissions = MpuPermissions_PrivRW;
+    mpu_set_region(&writable_region);
+  }
+}
+
+void memory_layout_readonly_bss_end_write(void) {
+  PBL_ASSERTN(s_readonly_bss_write_depth > 0);
+
+  if (--s_readonly_bss_write_depth == 0) {
+    mpu_set_region(&s_readonly_bss_region);
+  }
+
+  portEXIT_CRITICAL();
 }
 
 const MpuRegion* memory_layout_get_app_region(void) {

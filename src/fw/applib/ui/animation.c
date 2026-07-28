@@ -1884,13 +1884,17 @@ static void prv_dump_scheduler(char* buffer, int buffer_size, AnimationState* st
 
 // -------------------------------------------------------------------------------------------
 void animation_private_pause(void) {
+  memory_layout_readonly_bss_begin_write();
   s_paused = true;
+  memory_layout_readonly_bss_end_write();
 }
 
 
 // -------------------------------------------------------------------------------------------
 void animation_private_resume(void) {
+  memory_layout_readonly_bss_begin_write();
   s_paused = false;
+  memory_layout_readonly_bss_end_write();
 }
 
 
