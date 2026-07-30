@@ -4,6 +4,7 @@
 #include "pbl/util/heap.h"
 
 #include "pbl/util/assert.h"
+#include "pbl/util/attributes.h"
 #include "pbl/util/math.h"
 #include "pbl/util/logging.h"
 
@@ -11,6 +12,18 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdio.h>
+
+#if !UNITTEST && defined(__arm__)
+#define HEAP_CALLBACK_CONFIG_STORAGE SECTION(".kernel_unpriv_ro_bss")
+#else
+#define HEAP_CALLBACK_CONFIG_STORAGE
+#endif
+
+void WEAK memory_layout_readonly_bss_begin_write(void) {
+}
+
+void WEAK memory_layout_readonly_bss_end_write(void) {
+}
 
 /* The following defines a type that is the size in bytes of the     */
 /* desired alignment of each datr fragment.                          */
@@ -67,6 +80,68 @@ typedef struct _tagHeapInfo_t
   AlignmentStruct_t Data;
 } HeapInfo_t;
 
+typedef struct HeapCallbackConfig {
+  Heap *heap;
+  HeapLockImpl lock_impl;
+  DoubleFreeHandler double_free_handler;
+  CorruptionHandler corruption_handler;
+} HeapCallbackConfig;
+
+#define HEAP_CALLBACK_CONFIG_COUNT 8
+
+static HeapCallbackConfig s_heap_callback_config[HEAP_CALLBACK_CONFIG_COUNT]
+    HEAP_CALLBACK_CONFIG_STORAGE;
+
+static HeapCallbackConfig *prv_find_callback_config(const Heap *heap) {
+  for (size_t i = 0; i < HEAP_CALLBACK_CONFIG_COUNT; ++i) {
+    if (s_heap_callback_config[i].heap == heap) {
+      return &s_heap_callback_config[i];
+    }
+  }
+  return NULL;
+}
+
+static HeapCallbackConfig *prv_get_or_create_callback_config(Heap *heap) {
+  HeapCallbackConfig *config = prv_find_callback_config(heap);
+  if (config) {
+    return config;
+  }
+
+  for (size_t i = 0; i < HEAP_CALLBACK_CONFIG_COUNT; ++i) {
+    if (s_heap_callback_config[i].heap == NULL) {
+      s_heap_callback_config[i].heap = heap;
+      return &s_heap_callback_config[i];
+    }
+  }
+
+  UTIL_ASSERT(0);
+  return NULL;
+}
+
+static void prv_clear_callback_config(Heap *heap) {
+  HeapCallbackConfig *config = prv_find_callback_config(heap);
+  if (config) {
+    memory_layout_readonly_bss_begin_write();
+    *config = (HeapCallbackConfig) {};
+    memory_layout_readonly_bss_end_write();
+  }
+}
+
+static const HeapLockImpl *prv_get_lock_impl(const Heap *heap) {
+  const HeapCallbackConfig *config = prv_find_callback_config(heap);
+  return config ? &config->lock_impl : &heap->lock_impl;
+}
+
+static DoubleFreeHandler prv_get_double_free_handler(const Heap *heap) {
+  const HeapCallbackConfig *config = prv_find_callback_config(heap);
+  return config ? config->double_free_handler : heap->double_free_handler;
+}
+
+static CorruptionHandler prv_get_corruption_handler(const Heap *heap) {
+  const HeapCallbackConfig *config = prv_find_callback_config(heap);
+  return config ? config->corruption_handler : heap->corruption_handler;
+}
+
 
 //! The size of a block in units of Alignment_t, including the beginer and including _x words of data.
 #define HEAP_INFO_BLOCK_SIZE(_x) ((offsetof(HeapInfo_t, Data) / ALIGNMENT_SIZE) + (_x))
@@ -82,26 +157,30 @@ _Static_assert((offsetof(HeapInfo_t, Data) % ALIGNMENT_SIZE) == 0, "Heap not pro
 
 //! Lock the heap, using whatever behaviour the heap has configured using heap_set_lock_impl
 static void heap_lock(Heap* heap) {
-  if (heap->lock_impl.lock_function) {
-    heap->lock_impl.lock_function(heap->lock_impl.lock_context);
+  const HeapLockImpl *lock_impl = prv_get_lock_impl(heap);
+  if (lock_impl->lock_function) {
+    lock_impl->lock_function(lock_impl->lock_context);
   }
 }
 
 //! Unlock the heap, using whatever behaviour the heap has configured using heap_set_lock_impl
 static void heap_unlock(Heap* heap) {
-  if (heap->lock_impl.unlock_function) {
-    heap->lock_impl.unlock_function(heap->lock_impl.lock_context);
+  const HeapLockImpl *lock_impl = prv_get_lock_impl(heap);
+  if (lock_impl->unlock_function) {
+    lock_impl->unlock_function(lock_impl->lock_context);
   }
 
   // Handle any heap corruption that may have been detected while the heap was locked.
   if (heap->corrupt_block != NULL) {
-    heap->corruption_handler(heap->corrupt_block);
+    CorruptionHandler corruption_handler = prv_get_corruption_handler(heap);
+    UTIL_ASSERT(corruption_handler);
+    corruption_handler(heap->corrupt_block);
     heap->corrupt_block = NULL;
   }
 }
 
 static void prv_handle_corruption(Heap * const heap, void *ptr) {
-  if (heap->corruption_handler) {
+  if (prv_get_corruption_handler(heap)) {
     heap->corrupt_block = ptr;
     return;
   }
@@ -182,6 +261,8 @@ void heap_calc_totals(Heap* const heap, unsigned int *used, unsigned int *free, 
 void heap_init(Heap* const heap, void* start, void* end, bool fuzz_on_free) {
   UTIL_ASSERT(start && end);
 
+  prv_clear_callback_config(heap);
+
   // Align the pointer by advancing it to the next boundary.
   start = (void*)((((uintptr_t) start) + (sizeof(Alignment_t) - 1)) & ~(sizeof(Alignment_t) - 1));
   end = (void*) (((uintptr_t) end) & ~(sizeof(Alignment_t) - 1));
@@ -209,14 +290,26 @@ void heap_init(Heap* const heap, void* start, void* end, bool fuzz_on_free) {
 }
 
 void heap_set_lock_impl(Heap *heap, HeapLockImpl lock_impl) {
+  memory_layout_readonly_bss_begin_write();
+  HeapCallbackConfig *config = prv_get_or_create_callback_config(heap);
+  config->lock_impl = lock_impl;
+  memory_layout_readonly_bss_end_write();
   heap->lock_impl = lock_impl;
 }
 
 void heap_set_double_free_handler(Heap *heap, DoubleFreeHandler double_free_handler) {
+  memory_layout_readonly_bss_begin_write();
+  HeapCallbackConfig *config = prv_get_or_create_callback_config(heap);
+  config->double_free_handler = double_free_handler;
+  memory_layout_readonly_bss_end_write();
   heap->double_free_handler = double_free_handler;
 }
 
 void heap_set_corruption_handler(Heap *heap, CorruptionHandler corruption_handler) {
+  memory_layout_readonly_bss_begin_write();
+  HeapCallbackConfig *config = prv_get_or_create_callback_config(heap);
+  config->corruption_handler = corruption_handler;
+  memory_layout_readonly_bss_end_write();
   heap->corruption_handler = corruption_handler;
 }
 
@@ -283,10 +376,11 @@ void heap_free(Heap* const heap, void *ptr, uintptr_t client_pc) {
     if (!heap_info_ptr->is_allocated) {
       // If not, try to the call the handler if present. If there's no handler, just explode.
       // If there is a handler, let them know this happened and then just no-op and fast return.
-      if (heap->double_free_handler) {
+      DoubleFreeHandler double_free_handler = prv_get_double_free_handler(heap);
+      if (double_free_handler) {
         heap_unlock(heap);
 
-        heap->double_free_handler(ptr);
+        double_free_handler(ptr);
 
         return;
       }

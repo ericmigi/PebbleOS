@@ -26,6 +26,39 @@
 void MPU_vTaskSuspendAll(void) {}
 void MPU_xTaskResumeAll(void) {}
 
+static int s_lock_count;
+static int s_unlock_count;
+static void *s_lock_context;
+static int s_double_free_count;
+static void *s_double_free_ptr;
+
+static void prv_trusted_lock(void *ctx) {
+  ++s_lock_count;
+  s_lock_context = ctx;
+}
+
+static void prv_trusted_unlock(void *ctx) {
+  ++s_unlock_count;
+  s_lock_context = ctx;
+}
+
+static void prv_untrusted_lock(void *ctx) {
+  cl_fail("tampered lock callback was called");
+}
+
+static void prv_untrusted_unlock(void *ctx) {
+  cl_fail("tampered unlock callback was called");
+}
+
+static void prv_trusted_double_free(void *ptr) {
+  ++s_double_free_count;
+  s_double_free_ptr = ptr;
+}
+
+static void prv_untrusted_double_free(void *ptr) {
+  cl_fail("tampered double-free callback was called");
+}
+
 // Tests
 ///////////////////////////////////////////////////////////
 
@@ -331,4 +364,48 @@ static void prv_alloc_and_test_fuzz_on_free(bool enabled) {
 void test_heap__fuzz_on_free(void) {
   prv_alloc_and_test_fuzz_on_free(true);
   prv_alloc_and_test_fuzz_on_free(false);
+}
+
+void test_heap__configured_callbacks_are_not_read_from_heap_metadata(void) {
+  int heap_size_bytes = 1024;
+  void *heap_space = malloc(heap_size_bytes);
+  cl_assert(heap_space != NULL);
+
+  Heap heap;
+  int trusted_context = 1;
+  int untrusted_context = 2;
+
+  s_lock_count = 0;
+  s_unlock_count = 0;
+  s_lock_context = NULL;
+  s_double_free_count = 0;
+  s_double_free_ptr = NULL;
+
+  heap_init(&heap, heap_space, heap_space + heap_size_bytes, false);
+  heap_set_lock_impl(&heap, (HeapLockImpl) {
+    .lock_function = prv_trusted_lock,
+    .unlock_function = prv_trusted_unlock,
+    .lock_context = &trusted_context,
+  });
+  heap_set_double_free_handler(&heap, prv_trusted_double_free);
+
+  heap.lock_impl = (HeapLockImpl) {
+    .lock_function = prv_untrusted_lock,
+    .unlock_function = prv_untrusted_unlock,
+    .lock_context = &untrusted_context,
+  };
+  heap.double_free_handler = prv_untrusted_double_free;
+
+  void *ptr = heap_malloc(&heap, BLOCK_SIZE, 0);
+  cl_assert(ptr != NULL);
+  heap_free(&heap, ptr, 0);
+  heap_free(&heap, ptr, 0);
+
+  cl_assert_equal_i(s_lock_count, 3);
+  cl_assert_equal_i(s_unlock_count, 3);
+  cl_assert_equal_p(s_lock_context, &trusted_context);
+  cl_assert_equal_i(s_double_free_count, 1);
+  cl_assert_equal_p(s_double_free_ptr, ptr);
+
+  free(heap_space);
 }
