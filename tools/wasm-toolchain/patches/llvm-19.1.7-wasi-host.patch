@@ -297,6 +297,24 @@
  }
  
  std::error_code setPermissions(const Twine &Path, perms Permissions) {
+@@ -880,7 +897,7 @@
+   assert(Mode == mapped_file_region::readonly);
+   if (!Mapping)
+     return;
+-#if defined(__MVS__) || defined(_AIX)
++#if defined(__MVS__) || defined(_AIX) || defined(__wasi__)
+     // If we don't have madvise, or it isn't beneficial, treat this as a no-op.
+ #elif defined(POSIX_MADV_DONTNEED)
+   ::posix_madvise(Mapping, Size, POSIX_MADV_DONTNEED);
+@@ -1193,7 +1210,7 @@
+     return errorCodeToError(errnoAsErrorCode());
+ // The underlying operation on these platforms allow opening directories
+ // for reading in more cases than other platforms.
+-#if defined(__MVS__) || defined(_AIX)
++#if defined(__MVS__) || defined(_AIX) || defined(__wasi__)
+   struct stat Status;
+   if (fstat(FD, &Status) == -1)
+     return errorCodeToError(errnoAsErrorCode());
 @@ -1224,6 +1241,10 @@
  }
  
