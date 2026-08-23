@@ -27,6 +27,7 @@ const opt = { srcs: [], extra: [] };
   for (let i = 0; i < a.length; i++) {
     switch (a[i]) {
       case '--toolchain': opt.toolchain = resolve(a[++i]); break;
+      case '--project': opt.project = resolve(a[++i]); break;
       case '--sdk': opt.sdk = resolve(a[++i]); break;
       case '--newlib': opt.newlib = resolve(a[++i]); break;
       case '--libgcc': opt.libgcc = resolve(a[++i]); break;
@@ -56,6 +57,7 @@ const CFLAGS = [
   '-std=c99', '-ffunction-sections', '-fdata-sections', '-fcommon',
   '-g', '-fPIE', '-Os', '-D_TIME_H_', '-Dtime_t=long',
   '-Wall', '-Wno-typedef-redefinition', '-Wno-missing-field-initializers',
+  '-resource-dir', '/clang-res',
   '-isystem', '/newlib', '-I', '/sdk/include',
 ];
 
@@ -66,14 +68,27 @@ for (const src of opt.srcs) {
   if (src.endsWith('.o')) { objs.push(src); continue; }
   const obj = join(objdir, basename(src) + '.o');
   console.log(`[clang.wasm] ${basename(src)}`);
-  const status = runTool('clang.wasm', 'clang', {
+  const mapdirs = {
     '/newlib': opt.newlib,
     '/sdk': opt.sdk,
-    '/src': dirname(src),
     '/obj': objdir,
-    // Project-relative includes (../src style) resolve inside /src.
-  }, [...CFLAGS, ...opt.extra,
-      '-c', `/src/${basename(src)}`, '-o', `/obj/${basename(obj)}`]);
+    // clang's builtin headers (stddef.h etc.), staged next to clang.wasm.
+    '/clang-res': join(opt.toolchain, 'clang-res'),
+  };
+  // With --project, the whole project tree is visible at /proj so that
+  // generated headers (message_keys.auto.h etc.) resolve; sources are
+  // addressed project-relative. Otherwise only the source's dir is mapped.
+  let guestSrc;
+  if (opt.project && src.startsWith(opt.project + '/')) {
+    mapdirs['/proj'] = opt.project;
+    guestSrc = '/proj/' + src.slice(opt.project.length + 1);
+  } else {
+    mapdirs['/src'] = dirname(src);
+    guestSrc = `/src/${basename(src)}`;
+  }
+  const status = runTool('clang.wasm', 'clang', mapdirs,
+    [...CFLAGS, ...opt.extra,
+     '-c', guestSrc, '-o', `/obj/${basename(obj)}`]);
   if (status !== 0) { failed = true; break; }
   objs.push(obj);
 }

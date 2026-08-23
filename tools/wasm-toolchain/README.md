@@ -27,10 +27,12 @@ Using the `pebble-timer` app against an SDK exported from this repo
    absolute relocations (gcc builds carry ~272, nearly all from newlib
    malloc internals the gcc driver links implicitly), so the PIE loader has
    nothing to patch.
-3. **Toolchain as wasm** (in progress): clang + ld.lld cross-compile to
-   `wasm32-wasi-threads` (ARM backend only) with the patch below; the
-   end-to-end app build under Node's WASI host is driven by
-   `build-app-wasm.mjs`.
+3. **Toolchain as wasm**: clang + ld.lld built for `wasm32-wasi-threads`
+   (ARM backend only, ~90 MB and ~55 MB modules) run under Node's WASI
+   host; every pebble-timer source compiled by `clang.wasm`, linked by
+   `lld.wasm`, packaged with the stock Python tools — and the resulting
+   `.pbw` installs and runs correctly in QEMU (timers set, count down,
+   round-display layout intact).
 
 ## Files
 
@@ -66,8 +68,14 @@ node tools/wasm-toolchain/build-app-wasm.mjs \
   --libc "$(arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb -print-file-name=libc.a)" \
   --ldscript $APP/build/gabbro/pebble_app.ld.auto \
   --out $APP/build/gabbro/pebble-app-wasm.elf \
+  --project $APP \
   $APP/src/*.c $APP/build/gabbro/appinfo.auto.c \
-  $APP/build/gabbro/src/resource_ids.auto.c $APP/build/src/message_keys.auto.c
+  $APP/build/gabbro/src/resource_ids.auto.c $APP/build/src/message_keys.auto.c \
+  -- -I/proj/build -I/proj/build/include -I/proj/build/gabbro \
+     -I/proj/build/src -I/proj/src \
+     -DPBL_COLOR -DPBL_COMPASS -DPBL_DISPLAY_HEIGHT=260 \
+     -DPBL_DISPLAY_WIDTH=260 -DPBL_HEALTH -DPBL_MICROPHONE \
+     -DPBL_PLATFORM_GABBRO -DPBL_ROUND -DPBL_SDK_3 -DPBL_TOUCH -DRELEASE
 
 # Package and install
 python3 tools/wasm-toolchain/package-app.py \
@@ -75,6 +83,15 @@ python3 tools/wasm-toolchain/package-app.py \
   --build $APP/build --platform gabbro \
   --elf $APP/build/gabbro/pebble-app-wasm.elf --out timer.pbw
 ```
+
+Notes:
+
+- The platform `-D` defines (and display size) come from the SDK's waf
+  configure step; the set above is what waf passes for gabbro. Omitting
+  them silently builds the rectangular-display layout variant.
+- `build-app-wasm.mjs` expects clang's builtin headers staged as
+  `clang-res/` next to the wasm binaries (copy `lib/clang/19` from the
+  LLVM build) and the modules named `clang.wasm` / `lld.wasm`.
 
 ## App-side compiler differences (clang vs gcc)
 

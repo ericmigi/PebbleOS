@@ -51,6 +51,15 @@
  bool CrashRecoveryContext::RunSafely(function_ref<void()> Fn) {
 --- a/llvm/lib/Support/LockFileManager.cpp
 +++ b/llvm/lib/Support/LockFileManager.cpp
+@@ -94,7 +94,7 @@
+   StringRef UUIDRef(UUIDStr);
+   HostID.append(UUIDRef.begin(), UUIDRef.end());
+ 
+-#elif LLVM_ON_UNIX
++#elif LLVM_ON_UNIX && !defined(__wasi__)
+   char HostName[256];
+   HostName[255] = 0;
+   HostName[0] = 0;
 @@ -111,7 +111,7 @@
  }
  
@@ -394,3 +403,23 @@
    if (!RequestedDir)
      return false;
  
+--- a/clang/tools/driver/cc1_main.cpp
++++ b/clang/tools/driver/cc1_main.cpp
+@@ -51,7 +51,7 @@
+ #include "llvm/TargetParser/RISCVISAInfo.h"
+ #include <cstdio>
+ 
+-#ifdef CLANG_HAVE_RLIMITS
++#if defined(CLANG_HAVE_RLIMITS) && !defined(__wasi__)
+ #include <sys/resource.h>
+ #endif
+ 
+@@ -78,7 +78,7 @@
+   llvm::sys::Process::Exit(GenCrashDiag ? 70 : 1);
+ }
+ 
+-#ifdef CLANG_HAVE_RLIMITS
++#if defined(CLANG_HAVE_RLIMITS) && !defined(__wasi__)
+ /// Attempt to ensure that we have at least 8MiB of usable stack space.
+ static void ensureSufficientStack() {
+   struct rlimit rlim;
