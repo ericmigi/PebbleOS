@@ -36,6 +36,11 @@ Using the `pebble-timer` app against an SDK exported from this repo
 
 ## Files
 
+- `prebuilt/` — **prebuilt** `clang.wasm.xz` / `lld.wasm.xz` + builtin headers
+  (~22 MB compressed); unpack per `BUILDING.md` and skip the LLVM build
+  entirely.
+- `BUILDING.md` — exactly how the prebuilt binaries were produced,
+  including every WASI porting issue and checksums.
 - `build-llvm-wasi.sh` — builds `clang.wasm` / `lld.wasm` from LLVM 19.1.7
   with wasi-sdk 25. Takes a few hours; artifacts are ~a hundred MB and
   cacheable forever.
