@@ -97,6 +97,7 @@ def _copy_common_tools(bld, common_folder_node):
         "tools/resources/__init__.py",
         "tools/resources/find_resource_filename.py",
         "tools/resources/resource_map/__init__.py",
+        "tools/resources/resource_map/pblpng_optimize.py",
         "tools/resources/resource_map/resource_generator.py",
         "tools/resources/resource_map/resource_generator_bitmap.py",
         "tools/resources/resource_map/resource_generator_font.py",
