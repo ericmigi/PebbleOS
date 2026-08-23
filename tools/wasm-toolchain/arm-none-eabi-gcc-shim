@@ -1,0 +1,52 @@
+#!/bin/bash
+# Drop-in arm-none-eabi-gcc replacement backed by clang + ld.lld.
+#
+# Lets the stock SDK waf pipeline build Pebble apps with LLVM instead of GCC:
+# put the directory containing this script (with the script renamed or
+# symlinked to `arm-none-eabi-gcc`) first in PATH and run the app's
+# `waf configure build` as usual. Requires native clang/lld plus an
+# arm-none-eabi-gcc install to borrow libgcc.a and newlib from.
+#
+# Validated against pebble-timer: the resulting .pbw runs correctly in QEMU.
+set -u
+
+REAL_GCC=$(command -v -p arm-none-eabi-gcc || true)
+if [ -z "$REAL_GCC" ]; then
+  for c in /usr/bin/arm-none-eabi-gcc /usr/local/bin/arm-none-eabi-gcc; do
+    [ -x "$c" ] && REAL_GCC=$c && break
+  done
+fi
+if [ -z "${REAL_GCC}" ]; then
+  echo "arm-none-eabi-gcc-shim: need a real arm-none-eabi-gcc for libgcc/newlib" >&2
+  exit 1
+fi
+LIBGCC=$("$REAL_GCC" -mcpu=cortex-m3 -mthumb -print-libgcc-file-name)
+LIBC=$("$REAL_GCC" -mcpu=cortex-m3 -mthumb -print-file-name=libc.a)
+NEWLIB_INC=$(echo | "$REAL_GCC" -E -Wp,-v - 2>&1 | sed -n 's/^ //p' | head -1)
+
+args=()
+linking=1
+for a in "$@"; do
+  case "$a" in
+    # GCC-only warning groups clang does not know
+    -Wno-error=builtin-declaration-mismatch|-Wno-error=format-truncation|\
+    -Wno-error=zero-length-bounds|-Wno-error=expansion-to-defined|\
+    -Wno-error=cast-function-type) continue ;;
+    -c|-E|-S) linking=0; args+=("$a") ;;
+    *) args+=("$a") ;;
+  esac
+done
+
+# -U__clang__ keeps waf's "is this gcc?" macro probe happy.
+extra=(--target=arm-none-eabi -U__clang__ -isystem "$NEWLIB_INC")
+tail_link=()
+if [ "$linking" = "1" ]; then
+  extra+=(-fuse-ld=lld -nostdlib)
+  # __aeabi_* helpers (double math, division, mem ops) the compiler emits.
+  # The DISCARD rules in pebble_app.ld drop what the app does not use.
+  tail_link=("$LIBGCC" "$LIBC")
+fi
+# Appended last so they win over the -Wextra/-Werror the SDK passes.
+tail=(-Wno-unknown-warning-option -Wno-typedef-redefinition
+      -Wno-missing-field-initializers)
+exec clang "${extra[@]}" "${args[@]}" "${tail_link[@]}" "${tail[@]}"
