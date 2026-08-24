@@ -1,0 +1,6 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+#pragma once
+
+#define FONT_KEY_GOTHIC_14_BOLD "RESOURCE_ID_GOTHIC_14_BOLD"
+#define FONT_KEY_GOTHIC_18_BOLD "RESOURCE_ID_GOTHIC_18_BOLD"
+
