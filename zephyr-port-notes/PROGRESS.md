@@ -93,3 +93,11 @@ Rig: unicorn-mac-1 (100.87.44.126), obelix PVT on PPK2, ppk2d HTTP :8843, flash 
   Worktree is now a self-contained build env: real .venv (pip -r requirements.txt) + all
   submodules initialized. (Gotcha logged: symlinking submodules from main then rm-ing them
   deletes superproject glue wscript_build/config files alongside — restore with git checkout.)
+
+- **M12 DONE — Zephyr PM contract on SF32LB52 + power datapoint.** SoC had no HAS_PM;
+  added HAS_PM + PM_STATE_RUNTIME_IDLE soc hook + pt2_lowpower sample. On hardware:
+  BOOT PM=1 PM_DEVICE=1 TICKLESS=1; idle current 3.38mA (unchanged from baseline — the
+  baseline already used tickless SysTick + WFI, and runtime-idle also just WFIs with clocks
+  retained). Win = PM path now exists; real savings need deep sleep (LPTIM/RTC wakeup,
+  DLL clock switching, QSPI/XIP handling, retention) — deferred, SiFli HAL has the
+  primitives but not the Zephyr integration. Branch/sample on the zephyr fork.
