@@ -327,3 +327,28 @@ cache_enable / SystemPowerOnModeInit -- the SiFli-specific PMU/AON/boot_images
 steps are NEVER run under Zephyr. hw_preinit0 + boot_images are the untested
 candidates. REMAINING PATHS: (a) SWD on LCPU core to read PC/fault (needs debug
 probe wired to LCPU SWD on rig), or (b) port SiFli full boot sequence into pt2.
+
+## P3 BLE — boot_images/hw_preinit0 shot: premise disproven, HARD STOP (2026-08-24)
+Bounded shot was: call SiFli hw_preinit0() + boot_images() (from SystemInit) before
+lcpu_power_on, on the theory shipping obelix runs them and Zephyr doesn't. Findings:
+- In the sf32lb52x SDK, boot_images(), hw_preinit0() AND SystemPowerOnModeInit() are
+  all __WEAK EMPTY stubs (system_bf0_ap.c:39/43/312).
+- Shipping obelix does NOT override them — no real bodies anywhere in pebbleos/src.
+  It calls SystemInit() (startup_sf32lb52.c:47) which runs them, but they are no-ops;
+  the only real work SystemInit does is generic Cortex-M (VTOR/CPACR/FPU/cache),
+  already done by Zephyr's own startup + soc_early_init_hook.
+- The ONLY real boot_images()/hw_preinit0() bodies live in bootloader EXAMPLE projects
+  (example/boot_loader/.../board/main.c). That boot_images is HCPU bootloader flash-image
+  loading (PSRAM init, boot_enable_flash, mbedtls AES decrypt, reads g_sec_config from
+  flash, loads app images) — wrong layer, unsafe to call from a running BLE app.
+- In the Zephyr BLE build, system_bf0_ap.c is NOT compiled, so the symbols aren't even
+  linked.
+=> Adding these calls would be dead code (empty stubs) or reckless (bootloader flash
+   loader). Not the LCPU-enable mechanism. No code added (correctly).
+
+HARD STOP reached. Every HCPU-side hypothesis is exhausted and every HCPU-observable
+input verified correct (RAM, patch code, config table, reset release, 48MHz crystal
+hp+lp ready, mailbox doorbell delivered), yet the LCPU core provably never executes its
+ROM BLE/IPC init (zeroed RX ring stays zero post-boot). Remaining path is hardware:
+attach SWD to the LCPU core to read its PC/fault at/after ReleaseLCPU. This is the
+software ceiling for the port from the HCPU side.
