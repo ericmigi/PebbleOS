@@ -72,3 +72,14 @@ Rig: unicorn-mac-1 (100.87.44.126), obelix PVT on PPK2, ppk2d HTTP :8843, flash 
   Key fork finding: Zephyr clears MMFSR before k_sys_fatal_error_handler, so fault-PC
   match is the robust contained-fault signal (MMARVALID/MMFAR unreliable there);
   reason 19 == K_ERR_ARM_MEM_DATA_ACCESS on this fork.
+
+- **M9 DONE — nPM1300 PMIC battery/charger readback on hardware.** Mainline Zephyr
+  nPM1300 driver (CONFIG_MFD_NPM13XX + CONFIG_NPM13XX_CHARGER, sensor API), no dts changes.
+  On obelix UART: PMIC_VBATT 3808 (matches PPK2's 3800mV supply), PMIC_TEMP 25319 (25.3C
+  room temp), charger online=0 (correct, PPK2-powered not USB), PMIC_READ_OK. Battery/charge
+  sensing proven under Zephyr. Sample samples/pt2_npm1300 on the zephyr fork.
+- **M10 DONE — FreeRTOS seam audit + first routing (Z0.1).** zephyr-port-notes/FREERTOS_SEAM_AUDIT.md.
+  Mechanical: 109 sem/mutex, 51 queue, 9 delay/yield, 4 task create. Design-first: 59
+  critical-section, 52 TCB, 15 ISR. None: event-groups/sw-timers/notifications. Added
+  include/pbl/os/semaphore.h (both backends), routed reliable_transport.c as proof.
+  NOTE: FreeRTOS obelix build regression check still pending (rig/worktree venv setup).
