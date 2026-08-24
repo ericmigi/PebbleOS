@@ -177,3 +177,18 @@ context -> tick_timer_service -> applib graphics/text/font -> framebuffer -> JDI
 Known cosmetic follow-ups: panel mounted 180deg (needs orientation flip), substituted system fonts
 (original app_resources.pbpack not embedded), runs privileged (S4 proved unprivileged svc#4 sandbox
 separately), UART log spam from CONFIG_LOG preview.
+
+## PHASE P2 (real PebbleOS on Zephyr) — progress
+- **P2.2 CONSOLIDATION GREEN on hardware.** Unified firmware zephyr-port-apps/fw/ boots the
+  REAL PebbleOS task/service model as Zephyr threads: FW_BOOT, real tasks up (KernelMain/
+  KernelBackground/NewTimers), FW_EVENT_LOOP_UP, FW_SERVICES_OK, FW_TICK advancing, FW_TIMER
+  dispatched. Stubs: board_drivers, display_compositor, pfs_resources, ble_comm, app_worker,
+  watchdog_analytics. Committed aad0e13e5.
+- **P2.3 PFS GREEN on hardware.** Real PebbleOS PFS (pfs.c + flash_translation + flash_region)
+  on Zephyr over the QSPI NOR via a flash shim (scratch region 0x13e00000, safe). On obelix:
+  PFS_MOUNT_OK / PFS_WRITE_OK 257 / PFS_READ_OK 57ed1a9f / PFS_PERSIST_OK / PFS_DONE. Committed 810a23970.
+- **P2.1 SANDBOX progressing.** Unprivileged sandboxed watchface: SANDBOX_APP_UP + SANDBOX_SYSCALL_OK
+  (app runs unprivileged, first svc#4 syscall elevates+returns) on hardware; then FATAL ERROR 20
+  after the first syscall — post-syscall step under diagnosis. (Boot-assert root cause was
+  tick_timer_service_init before app-thread registration; moved into a privileged svc#4 call.)
+  NOTE: touches src/fw/system/passert.h (build-gated WTF context) — verify FreeRTOS build unaffected.
