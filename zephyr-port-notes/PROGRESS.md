@@ -42,3 +42,17 @@ Rig: unicorn-mac-1 (100.87.44.126), obelix PVT on PPK2, ppk2d HTTP :8843, flash 
   ("memory-controller@50042000" — the gd25q256e child is not a separate device).
   `flash read ... 10000 30` returns the flashed Zephyr vector table. DMA controller READY.
   Write/erase deliberately untested (would eat our own image); PFS bring-up unblocked.
+
+- **M7 DONE — pbl/os Zephyr backend verified on hardware, 6/6.** lib/os/{mutex,tick,platform}_zephyr.c
+  implement include/pbl/os on k_mutex/k_*. zephyr-port/ app compiles REAL PebbleOS OS-free code
+  (lib/util circular_buffer + crc32) against the seam. On obelix UART:
+  SMOKE_PASS x6 (mutex lock/unlock, recursive, contention; tick; circular_buffer; crc32), SMOKE_DONE 6/6.
+  Six FreeRTOS-vs-Zephyr semantic deltas documented in commit — notably: Zephyr mutexes always
+  recursive (adapter blocks recursive PebbleMutex); Zephyr adds +1 tick to relative timeouts
+  (adapter uses K_TICKS(N-1)); pt2 Zephyr tick = 10kHz vs Pebble SF32 FreeRTOS 1kHz.
+- **M8 DONE — sandbox spike hooks fit the kill criterion.** arch/arm custom SVC(#4) + thread-restore
+  hooks: 57 lines added to existing Zephyr arch files (Kconfig 16, swap_helper.S 17, svc.S 23, CMake 1)
+  — under the plan's 75-line stop-gate. CONFIG_USERSPACE=n. On hardware: MPU reports 12 DREGIONs
+  (not 8 — room for Pebble's task regions). svc#4 elevation + MPU fault containment still being
+  tuned for XIP-from-external-flash (app code executable region on this SoC). Committed on the
+  zephyr fork branch pebble-sandbox-spike.
