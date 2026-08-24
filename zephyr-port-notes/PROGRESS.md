@@ -114,3 +114,18 @@ Rig: unicorn-mac-1 (100.87.44.126), obelix PVT on PPK2, ppk2d HTTP :8843, flash 
   landed); fixing repeat + wall-clock advance (RTC frozen at epoch fallback).
 - **S2 display:** relaunched after a concurrent-codex launch collision.
 - **S4 loader:** in flight.
+
+- **S4 LOADER + SYSCALL GREEN ON HARDWARE.** Real Sliding Text emery binary (3228B) on obelix:
+  LOADER_OK (header v16.0/SDK5.95, CRC 0x9a4755c9 valid via real Pebble checksum, 52 relocations
+  applied, jumptable patched) + SYSCALL_OK (DEFINE_SYSCALL over svc#4 from unprivileged thread
+  returned 42). PBW load path AND sandbox syscall path both proven on the real app binary.
+  Production wiring documented (svc2->svc4, .syscall_text island, time()->sys_get_time index 519).
+  S1 deps noted: App/Worker k_thread identity, process mem/stack bounds, per-thread syscall LR/SP,
+  MPU restore, fault handling, start (segment+entry)|1 after cache maintenance.
+
+### North Star scoreboard (Sliding Text on obelix)
+- S1 kernel/tick: TICK fires on hw; repeat+wall-clock fix in flight.
+- S2 display (JDI/LCDC): in flight (long pole).
+- S3 graphics: GREEN — 12:34 rendered on hw, CRC 0xa61a348a matches host.
+- S4 loader+syscall: GREEN — real PBW loads + svc#4 syscall works on hw.
+3 of 4 stream mechanisms proven on real hardware.
