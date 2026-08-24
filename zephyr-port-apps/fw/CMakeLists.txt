@@ -16,12 +16,15 @@ target_include_directories(app PRIVATE
 )
 
 target_compile_definitions(app PRIVATE
+  CONFIG_FLASH_GD25Q256E=1
+  CONFIG_PBLBOOT=1
   CONFIG_SOC_SF32LB52=1
   CONFIG_PEBBLE_ZEPHYR_CORE_BOOT=1
   CONFIG_RECOVERY_FW=1
   CONFIG_RELEASE=1
   CONFIG_TASK_TIMER_POOL_SIZE=16
   CONFIG_SERVICE_EVENT_SERVICE_LOG_LEVEL=0
+  CONFIG_SERVICE_FILESYSTEM_LOG_LEVEL=0
   CONFIG_SERVICE_NEW_TIMER_LOG_LEVEL=0
   CONFIG_SERVICE_REGULAR_TIMER_LOG_LEVEL=0
   CONFIG_SERVICE_SYSTEM_TASK_LOG_LEVEL=0
@@ -30,7 +33,10 @@ target_compile_definitions(app PRIVATE
 )
 
 target_sources(app PRIVATE
+  src/flash_shim.c
   src/freertos_compat.c
+  src/main.c
+  src/pfs_boot.c
   src/port.c
   src/wall_clock_zephyr.c
   "${PEBBLEOS_ROOT}/lib/os/mutex_zephyr.c"
@@ -42,15 +48,20 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/applib/tick_timer_service.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/event_loop.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/events.c"
-  "${PEBBLEOS_ROOT}/src/fw/main.c"
+  "${PEBBLEOS_ROOT}/src/fw/flash_region/filesystem_regions.c"
+  "${PEBBLEOS_ROOT}/src/fw/flash_region/flash_region.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/pebble_tasks.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/task_timer.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/util/task_init.c"
   "${PEBBLEOS_ROOT}/src/fw/services/event_service/service.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/filesystem/flash_translation.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/filesystem/pfs.c"
   "${PEBBLEOS_ROOT}/src/fw/services/new_timer/new_timer.c"
   "${PEBBLEOS_ROOT}/src/fw/services/regular_timer/service.c"
   "${PEBBLEOS_ROOT}/src/fw/services/system_task/service.c"
   "${PEBBLEOS_ROOT}/src/fw/services/tick_timer/service.c"
+  "${PEBBLEOS_ROOT}/src/fw/util/crc8.c"
+  "${PEBBLEOS_ROOT}/src/fw/util/legacy_checksum.c"
 )
 
 set_source_files_properties(

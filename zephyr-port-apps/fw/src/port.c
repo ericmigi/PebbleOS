@@ -132,6 +132,55 @@ void kernel_free(void *ptr) {
   k_free(ptr);
 }
 
+char *kernel_strdup(const char *string) {
+  size_t size = strlen(string) + 1u;
+  char *copy = kernel_malloc(size);
+  if (copy != NULL) {
+    memcpy(copy, string, size);
+  }
+  return copy;
+}
+
+char *kernel_strdup_check(const char *string) {
+  char *copy = kernel_strdup(string);
+  __ASSERT_NO_MSG(copy != NULL);
+  return copy;
+}
+
+void psleep(int millis) {
+  if (millis == 0) {
+    k_yield();
+  } else {
+    k_msleep(millis);
+  }
+}
+
+void prompt_send_response(const char *response) {
+  printk("%s\n", response);
+}
+
+void prompt_send_response_fmt(char *buffer, size_t buffer_size,
+                              const char *format, ...) {
+  va_list arguments;
+
+  va_start(arguments, format);
+  vsnprintk(buffer, buffer_size, format, arguments);
+  va_end(arguments);
+  printk("%s\n", buffer);
+}
+
+NORETURN pfs_port_panic(const char *file, int line, const char *format, ...) {
+  va_list arguments;
+
+  printk("FW_PFS_FAIL %s:%d ", file, line);
+  va_start(arguments, format);
+  vprintk(format, arguments);
+  va_end(arguments);
+  printk("\n");
+  k_panic();
+  CODE_UNREACHABLE;
+}
+
 NORETURN passert_failed(const char *filename, int line_number, const char *message, ...) {
   ARG_UNUSED(message);
   printk("PASSERT %s:%d\n", filename, line_number);

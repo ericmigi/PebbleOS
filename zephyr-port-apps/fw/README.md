@@ -18,11 +18,19 @@ FW_TASK NewTimers up
 FW_TASK KernelBackground up
 FW_TASK KernelMain up
 FW_SERVICES_OK
+FW_PFS_MOUNT_OK
+FW_PFS_IO_OK <crc>
+FW_PFS_UP
 FW_EVENT_LOOP_UP
 FW_TICK HH:MM:SS
 FW_TIMER dispatched
 ```
 
-The boot also prints one `FW_STUB` line for each intentionally deferred service
-family: board drivers, display/compositor, PFS/resources, BLE/communications,
+PFS mounts the QSPI NOR scratch region at `0x13e00000..0x13e40000` from the
+kernel-main task, then creates, writes, reads, verifies, and deletes a self-test
+file before entering the launcher event loop. The CRC in `FW_PFS_IO_OK` is
+calculated from the readback bytes.
+
+The boot also prints one `FW_STUB` line for each remaining intentionally
+deferred service family: board drivers, display/compositor, BLE/communications,
 app/worker process launch, and watchdog/analytics.

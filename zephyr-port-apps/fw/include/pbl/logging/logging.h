@@ -4,7 +4,9 @@
 #include <zephyr/sys/printk.h>
 
 #define LOG_DOMAIN_TEXT 0
+#define LOG_LEVEL_DEBUG 200
 #define PBL_LOG_MODULE_DEFINE(name, level)
+#define PBL_LOG_MODULE_DECLARE(name, level)
 #define PBL_LOG_D_DBG(domain, ...)
 #define PBL_LOG_DBG(...)
 #define PBL_LOG_WRN(...)
