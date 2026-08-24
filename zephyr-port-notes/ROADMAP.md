@@ -54,8 +54,11 @@ main remaining lift (P3–P6).
   an embedded blob).
 - [ ] Display/compositor + input (buttons/touch) as first-class fw services;
   the real launcher UI + window stack, navigable.
-- [ ] BLE: port NimBLE's npl to Zephyr, SF32 controller, pair with phone, app
-  install over Bluetooth.
+- [~] BLE: npl ported to Zephyr, NimBLE host up, SF32 controller HCPU-side
+  bring-up 100% correct (patch/cal/config/reset-release/doorbell all verified).
+  BLOCKED: LCPU radio core never executes its silicon ROM — every HCPU input
+  proven correct; needs SWD on the LCPU core. See BLE_HANDOFF.md. Notification
+  render path already green (P2 notif), so demo is ready once controller boots.
 - [ ] Boot/OTA/recovery/coredump: dual-slot, rollback, PRF, coredump round-trip.
 - [ ] Un-stub the FW_STUBs (board_drivers, watchdog, analytics/Memfault).
 
