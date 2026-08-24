@@ -83,3 +83,13 @@ Rig: unicorn-mac-1 (100.87.44.126), obelix PVT on PPK2, ppk2d HTTP :8843, flash 
   critical-section, 52 TCB, 15 ISR. None: event-groups/sw-timers/notifications. Added
   include/pbl/os/semaphore.h (both backends), routed reliable_transport.c as proof.
   NOTE: FreeRTOS obelix build regression check still pending (rig/worktree venv setup).
+
+- **M11 DONE — FreeRTOS obelix build PASSES with seam routing (regression gate green).**
+  Full `./pbl configure --board obelix@pvt && ./pbl build` in the worktree: build/pebbleos.hex
+  produced, 2071 targets clean, FLASH 64.89% / KERNEL_RAM 68.36%. Confirms the pbl/os seam
+  routing (17 semaphore sites through pbl/os, portMAX_DELAY->UINT32_MAX in bt_lock, tick.h
+  __ZEPHYR__ guard, *_zephyr.c excluded from link) does NOT regress the shipping FreeRTOS
+  firmware. The inviolable "never break FreeRTOS" rule holds.
+  Worktree is now a self-contained build env: real .venv (pip -r requirements.txt) + all
+  submodules initialized. (Gotcha logged: symlinking submodules from main then rm-ing them
+  deletes superproject glue wscript_build/config files alongside — restore with git checkout.)
