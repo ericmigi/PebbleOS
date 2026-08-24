@@ -594,6 +594,13 @@ void ble_transport_ll_reinit(void) {
   lcpu_custom_nvds_config();
 #ifdef __ZEPHYR__
   printk("BLE_LCPU_CFG_OK\n");
+  /* Zero the rev_b RX ring control (0x20402800) before releasing the LCPU. Per
+   * ipc_queue.c the SENDER (the LCPU) initializes this ring; the HCPU never
+   * does. So if the LCPU is actually executing its BLE/IPC init, it will
+   * populate a clean control here (rd_buf=addr+0x14, size=492). If it stays
+   * zero post-boot the LCPU never ran its stack. Decisive execution probe. */
+  memset((void *)(uintptr_t)s_rx_ring_addr, 0, 0x20);
+  printk("BLE_RXRING_ZEROED addr=0x%08x\n", (unsigned int)s_rx_ring_addr);
 #endif
   ret = lcpu_power_on();
   if (ret != 0) {
@@ -658,11 +665,14 @@ void ble_transport_ll_reinit(void) {
     // Is the LCPU actually released? CPUWAIT set => still halted.
     // ReleaseLCPU clears LPSYS_AON_PMR_CPUWAIT; report PMR + LPSYS reset/sleep.
     printk("BLE_LCPU_RUNSTATE pmr=0x%08x cpuwait=%d rstr1=0x%08x "
-           "slp_ctrl=0x%08x\n",
+           "slp_ctrl=0x%08x acr_lp=0x%08x lp_hxt48_rdy=%d acr_hp=0x%08x\n",
            (unsigned int)hwp_lpsys_aon->PMR,
            (int)((hwp_lpsys_aon->PMR & LPSYS_AON_PMR_CPUWAIT) ? 1 : 0),
            (unsigned int)hwp_lpsys_rcc->RSTR1,
-           (unsigned int)hwp_lpsys_aon->SLP_CTRL);
+           (unsigned int)hwp_lpsys_aon->SLP_CTRL,
+           (unsigned int)hwp_lpsys_aon->ACR,
+           (int)((hwp_lpsys_aon->ACR & LPSYS_AON_ACR_HXT48_RDY) ? 1 : 0),
+           (unsigned int)hwp_hpsys_aon->ACR);
   }
 #endif
 }

@@ -272,3 +272,38 @@ vendor board HAL_PreInit that the shipping FreeRTOS obelix runs. Next: compare t
 HP<->LP crystal/wake grant handshake (HXT48 enable+ready, LCPU XTAL_REQ grant)
 between shipping obelix PM path and this hand-rolled sequence — do NOT invent BLE
 logic, mirror shipping. (b)(a) done; pursue (c) mailbox/PM-handshake ordering.
+
+## P3 BLE — XTAL theory disproven; LCPU proven NOT executing (2026-08-24)
+Followed the crystal-grant lead. Added HAL_HPAON_EnableXT48() + ACR probes.
+Result: acr_hp_before=0xC0000007 acr_lp_before=0xC0000007, lp_hxt48_rdy=1 BEFORE
+the call — the 48MHz crystal is ALREADY up and granted to BOTH HP and LP domains
+(Zephyr clock init / the LXT-cal path brought it up). HAL_HPAON_EnableXT48() is a
+confirmed no-op (ACR unchanged) and did NOT change LCPU behavior. => XTAL_REQ is
+NOT the blocker; slp_ctrl=0x60 (XTAL_REQ|BT_WKUP) is the controller's normal
+steady state, not a stall. Reverted the no-op EnableXT48; kept the ACR diagnostic.
+
+DECISIVE execution test: per ipc_queue.c:212 the SENDER initializes each ring;
+for the LCPU->HCPU (RX) ring at 0x20402800 the sender is the LCPU, so the HCPU
+never writes it. Zeroed that ring control (0x20402800, 0x20 bytes) right before
+lcpu_power_on()/ReleaseLCPU, then read it back post-boot:
+  BLE_RXRING_ZEROED addr=0x20402800
+  BLE_RING_CTRL selected rd_buf=0 wr_buf=0 read_idx=0 write_idx=0 size=0  (STILL ZERO)
+The LCPU never populated it. Same for the legacy ring (0x20405c00, also zero).
+=> The LCPU core is NOT executing its ROM BLE/IPC init at all. The earlier
+"garbage" in that ring was stale LPSYS retention RAM (the 1.2s PPK2 power cycle
+doesn't clear retention), NOT LCPU writes; the one-time "clean" ring in the first
+probe capture was likewise retained from an earlier firmware, so there is no real
+nondeterminism — the LCPU has never run in any probe boot.
+
+State fully characterized, ALL HCPU-side artifacts verified correct:
+  RAM mapped (incl 0x20405000) | patch code valid Thumb @0x2040500C | config
+  table magic+IPC @0x20402A00 | reset released (cpuwait=0,rstr1=0) | 48MHz xtal
+  ready (hp+lp) | doorbell delivered (TX mailbox CxMISR=1) — yet the LCPU does
+  not execute. lcpu_power_on() is shipping SDK, identical to FreeRTOS obelix, and
+  builds with SF32LB52X_REV_AUTO + SOC_BF0_HCPU defined. HAL_LPAON_ConfigStartAddr
+  (LCPU boot vector) is a silicon-ROM function (no source).
+
+Next (needs LCPU-side visibility, not more HCPU probing): attach SWD to the LCPU
+core to read its PC/fault, OR obtain the vendor rev_b LCPU boot-enable sequence
+and diff what shipping obelix's full system init does that Zephyr's hand-rolled
+prv_prepare_lcpu_clock() omits before ReleaseLCPU. Do NOT invent BLE logic.
