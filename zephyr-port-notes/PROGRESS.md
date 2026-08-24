@@ -243,3 +243,32 @@ so HCPU writes never reach the RAM the LCPU boots from. Decisive test: HCPU
 write-readback of 0x20402800/0x20400000 after patch install. If RB fails -> reserve
 0x2040_0000 in pt2 dts+linker (match shipping obelix). If RB ok -> rom_config /
 release-reset-status / mailbox ordering.
+
+## P3 BLE — shared-RAM hypothesis DISPROVEN (2026-08-24, agent probe)
+Added an HCPU write-readback + region-dump probe in hci_sf32lb52.c right after
+lcpu_power_on() returns. Result on hw (obelix revid 0x0f):
+- BLE_LPRAM_RB 0x20402800 and 0x20400000: 0xA5A5A5A5/0x5A5A5A5A echo perfectly.
+- BLE_PATCHCODE 0x2040500C: valid Thumb (0xf000b580 push{r7,lr}+bl), header
+  "PACH" 0x48434150 at 0x20405000, readback+restore OK.
+- BLE_LCPU_CFG_TBL 0x20402A00 (rev_b config, = LCPU2HCPU_MB_CH2_BUF_REV_B):
+  magic=0x45457878, HCPU_TX_QUEUE@off200=0x2007FE00 — correct & intact.
+=> LPSYS shared RAM IS mapped/writable from HCPU (incl 0x20405000, above the
+   rev_b 11KB window). Patch code, patch header, and LCPU config table ALL land
+   correctly. The shared-RAM-mapping hypothesis is WRONG. NOT a dts/linker fix.
+
+Also ruled out:
+- Reset release: BLE_LCPU_RUNSTATE pmr=0 cpuwait=0 rstr1=0 => LCPU is released,
+  not halted, not in reset.
+- LCPU is ALIVE: slp_ctrl=0x60 = XTAL_REQ(bit5)+BT_WKUP(bit6), SLEEP_STATUS clear.
+- Doorbell delivered: BLE_TX_SIGNALED tx-mailbox CxISR=1 CxMISR=1 (unmasked,
+  asserting to LCPU) but stays latched — the LCPU never clears/services it.
+
+Remaining: LCPU is released, correctly patched+configured, and the HCPU doorbell
+reaches it, yet it never drains the H2L ring or fires IRQ 58. Strongest lead:
+slp_ctrl XTAL_REQ is asserted by the LCPU (it wants the 48MHz crystal). The
+Zephyr port hand-rolls the HAL_PreInit clock/PMU bring-up in
+prv_prepare_lcpu_clock() (hci_sf32lb52.c:~120-221) because Zephyr never calls the
+vendor board HAL_PreInit that the shipping FreeRTOS obelix runs. Next: compare the
+HP<->LP crystal/wake grant handshake (HXT48 enable+ready, LCPU XTAL_REQ grant)
+between shipping obelix PM path and this hand-rolled sequence — do NOT invent BLE
+logic, mirror shipping. (b)(a) done; pursue (c) mailbox/PM-handshake ordering.
