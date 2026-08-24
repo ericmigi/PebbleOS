@@ -36,3 +36,9 @@ Rig: unicorn-mac-1 (100.87.44.126), obelix PVT on PPK2, ppk2d HTTP :8843, flash 
 - gnuarmemb variant works: ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb GNUARMEMB_TOOLCHAIN_PATH=<brew arm dir>.
 - SF32LB52 SoC Kconfig selects CPU_HAS_ARM_MPU. No JDI display driver in fork (only ls0xx) —
   obelix display bring-up = port PebbleOS display_jdi.c to a Zephyr driver (future task).
+
+- **M6 DONE — external QSPI NOR reads under Zephyr.** CONFIG_FLASH + CONFIG_FLASH_SHELL +
+  CONFIG_FLASH_SF32LB_MPI_QSPI_NOR; flash device name is the mpi2 controller node
+  ("memory-controller@50042000" — the gd25q256e child is not a separate device).
+  `flash read ... 10000 30` returns the flashed Zephyr vector table. DMA controller READY.
+  Write/erase deliberately untested (would eat our own image); PFS bring-up unblocked.
