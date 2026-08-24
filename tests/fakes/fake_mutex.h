@@ -121,9 +121,17 @@ PebbleRecursiveMutex * mutex_create_recursive(void) {
   return prv_mutex_create(is_recursive);
 }
 
+void mutex_destroy_recursive(PebbleRecursiveMutex *handle) {
+  mutex_destroy((PebbleMutex *)handle);
+}
+
 void mutex_lock_recursive(PebbleRecursiveMutex *handle) {
   FakePebbleMutex *mutex = (FakePebbleMutex *)handle;
   mutex->lock_count++;
+}
+
+void mutex_lock_recursive_with_lr(PebbleRecursiveMutex *handle, uint32_t myLR) {
+  mutex_lock_recursive(handle);
 }
 
 bool mutex_lock_recursive_with_timeout(PebbleRecursiveMutex *handle, uint32_t timeout_ms) {

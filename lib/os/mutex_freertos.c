@@ -124,8 +124,18 @@ PebbleRecursiveMutex * mutex_create_recursive(void) {
   return mutex;
 }
 
+void mutex_destroy_recursive(PebbleRecursiveMutex *handle) {
+  mutex_destroy((PebbleMutex *)handle);
+}
+
 void mutex_lock_recursive(PebbleRecursiveMutex * handle) {
   uintptr_t myLR = (uintptr_t) __builtin_return_address(0);
+  OS_ASSERT(!mcu_state_is_isr());
+  xLightMutexLockRecursive(handle->common.freertos_mutex, portMAX_DELAY);
+  LOG_LOCKED(handle->common.lr, myLR);
+}
+
+void mutex_lock_recursive_with_lr(PebbleRecursiveMutex *handle, uint32_t myLR) {
   OS_ASSERT(!mcu_state_is_isr());
   xLightMutexLockRecursive(handle->common.freertos_mutex, portMAX_DELAY);
   LOG_LOCKED(handle->common.lr, myLR);
@@ -175,4 +185,3 @@ void mutex_unlock_recursive(PebbleRecursiveMutex * handle) {
   LOG_UNLOCKED(handle->common.lr, uxLightMutexGetRecursiveCallCount(mutex));
   xLightMutexUnlockRecursive(mutex);
 }
-

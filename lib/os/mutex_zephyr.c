@@ -92,8 +92,17 @@ PebbleRecursiveMutex *mutex_create_recursive(void) {
   return (PebbleRecursiveMutex *)prv_create_mutex();
 }
 
+void mutex_destroy_recursive(PebbleRecursiveMutex *handle) {
+  mutex_destroy((PebbleMutex *)handle);
+}
+
 void mutex_lock_recursive(PebbleRecursiveMutex *handle) {
   uintptr_t lr = (uintptr_t)__builtin_return_address(0);
+  OS_ASSERT(!k_is_in_isr());
+  OS_ASSERT(prv_lock(&handle->common, K_FOREVER, lr));
+}
+
+void mutex_lock_recursive_with_lr(PebbleRecursiveMutex *handle, uint32_t lr) {
   OS_ASSERT(!k_is_in_isr());
   OS_ASSERT(prv_lock(&handle->common, K_FOREVER, lr));
 }

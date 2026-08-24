@@ -14,7 +14,9 @@
 
 #define FORMAT_PRINTF(STR_IDX, FIRST) FORMAT_FUNC(__printf__, STR_IDX, FIRST)
 
+#ifndef ALWAYS_INLINE
 #define ALWAYS_INLINE __attribute__((__always_inline__)) inline
+#endif
 #define DEPRECATED __attribute__((deprecated))
 #define NOINLINE __attribute__((__noinline__))
 #define NORETURN __attribute__((__noreturn__)) void

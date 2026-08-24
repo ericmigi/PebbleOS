@@ -31,7 +31,11 @@ void mutex_unlock(PebbleMutex *handle);
 
 PebbleRecursiveMutex * mutex_create_recursive(void);
 
+void mutex_destroy_recursive(PebbleRecursiveMutex *handle);
+
 void mutex_lock_recursive(PebbleRecursiveMutex *handle);
+
+void mutex_lock_recursive_with_lr(PebbleRecursiveMutex *handle, uint32_t LR);
 
 bool mutex_lock_recursive_with_timeout(PebbleRecursiveMutex *handle, uint32_t timeout_ms);
 

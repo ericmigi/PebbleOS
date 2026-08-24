@@ -10,6 +10,7 @@
 
 #include "pbl/os/assert.h"
 #include "pbl/os/mutex.h"
+#include "pbl/os/semaphore.h"
 #include "pbl/os/tick.h"
 #include "pbl/util/assert.h"
 #include "pbl/util/circular_buffer.h"
@@ -116,7 +117,23 @@ static const char *prv_test_mutex_recursive(void) {
   if (mutex_is_owned_recursive(mutex)) {
     return "still-owned";
   }
-  mutex_destroy((PebbleMutex *)mutex);
+  mutex_destroy_recursive(mutex);
+  return NULL;
+}
+
+static const char *prv_test_semaphore(void) {
+  PebbleSemaphore *semaphore = semaphore_create();
+  if (semaphore == NULL) {
+    return "create";
+  }
+  if (semaphore_take_with_timeout(semaphore, 0)) {
+    return "not-empty";
+  }
+  semaphore_give(semaphore);
+  if (!semaphore_take_with_timeout(semaphore, 0)) {
+    return "take";
+  }
+  semaphore_destroy(semaphore);
   return NULL;
 }
 
@@ -228,6 +245,7 @@ int main(void) {
   RUN_TEST("mutex_lock_unlock", prv_test_mutex_lock_unlock);
   RUN_TEST("mutex_recursive", prv_test_mutex_recursive);
   RUN_TEST("mutex_contention", prv_test_mutex_contention);
+  RUN_TEST("semaphore", prv_test_semaphore);
   RUN_TEST("tick_conversions", prv_test_tick_conversions);
   RUN_TEST("circular_buffer", prv_test_circular_buffer);
   RUN_TEST("crc32", prv_test_crc32);

@@ -50,6 +50,9 @@ loghash_dict.pickle
 analyze_mcu_flash_usage_treemap.jsonp
 **/.idea
 **/CMakeLists.txt
+!zephyr-port/CMakeLists.txt
+
+/build-smoke/
 
 .env
 
