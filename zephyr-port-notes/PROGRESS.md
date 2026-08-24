@@ -101,3 +101,16 @@ Rig: unicorn-mac-1 (100.87.44.126), obelix PVT on PPK2, ppk2d HTTP :8843, flash 
   retained). Win = PM path now exists; real savings need deep sleep (LPTIM/RTC wakeup,
   DLL clock switching, QSPI/XIP handling, retention) — deferred, SiFli HAL has the
   primitives but not the Zephyr integration. Branch/sample on the zephyr fork.
+
+## North Star swarm (Sliding Text watchface on obelix)
+
+- **S3 GRAPHICS GREEN ON HARDWARE.** Real PebbleOS applib graphics + text + an embedded
+  Pebble PBF font render "12:34" into a 200x228 8bpp (ARGB2222) framebuffer on the actual
+  obelix. UART: GFX_CRC 0xa61a348a (byte-identical to host prediction) + ASCII preview
+  clearly showing 12:34. Entire graphics ABI path de-risked independent of the display.
+  Framebuffer contract for S2 integration: contiguous 45,600 bytes GColor8 ARGB2222
+  (AA RR GG BB), 200-byte stride; JDI path converts lower-6 RGB222->RGB332 before DMA.
+- **S1 KERNEL on hardware:** KERNEL_UP + real Pebble tick_timer_service fires (one TICK
+  landed); fixing repeat + wall-clock advance (RTC frozen at epoch fallback).
+- **S2 display:** relaunched after a concurrent-codex launch collision.
+- **S4 loader:** in flight.
