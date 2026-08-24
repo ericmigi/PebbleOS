@@ -86,19 +86,25 @@ void system_task_init(void) {
   xQueueAddToSet(s_system_task_queue, s_system_task_queue_set);
   xQueueAddToSet(s_from_app_system_task_queue, s_system_task_queue_set);
 
+#ifdef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+  const uint32_t kernel_bg_stack_words = 0;
+#else
   extern uint32_t __kernel_bg_stack_start__[];
   extern uint32_t __kernel_bg_stack_size__[];
   extern uint32_t __stack_guard_size__[];
   const uint32_t kernel_bg_stack_words = ( (uint32_t)__kernel_bg_stack_size__
                        - (uint32_t)__stack_guard_size__) / sizeof(portSTACK_TYPE);
+#endif
 
   TaskParameters_t task_params = {
     .pvTaskCode = system_task_main,
     .pcName = "KernelBG",
     .usStackDepth = kernel_bg_stack_words,
     .uxPriority = SYSTEM_TASK_PRIORITY | portPRIVILEGE_BIT,
+#ifndef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
     .puxStackBuffer = (void*)(uintptr_t)((uint32_t)__kernel_bg_stack_start__
                                           + (uint32_t)__stack_guard_size__)
+#endif
   };
 
   pebble_task_create(PebbleTask_KernelBackground, &task_params, NULL);

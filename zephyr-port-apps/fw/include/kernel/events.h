@@ -8,9 +8,13 @@
 #include "FreeRTOS.h"
 #include "kernel/pebble_tasks.h"
 #include "pbl/util/list.h"
+#include <pbl/drivers/button_id.h>
 
 typedef enum {
   PEBBLE_NULL_EVENT = 0,
+  // Values match the shipping kernel/events.h enum (button service compat).
+  PEBBLE_BUTTON_DOWN_EVENT = 5,
+  PEBBLE_BUTTON_UP_EVENT = 6,
   PEBBLE_TICK_EVENT = 15,
   PEBBLE_CALLBACK_EVENT = 27,
   PEBBLE_SUBSCRIPTION_EVENT = 29,
@@ -29,6 +33,10 @@ typedef struct {
 } PebbleCallbackEvent;
 
 typedef struct {
+  ButtonId button_id;
+} PebbleButtonEvent;
+
+typedef struct {
   bool subscribe;
   PebbleTask task : 8;
   PebbleEventType event_type;
@@ -40,6 +48,7 @@ typedef struct {
     PebbleTickEvent clock_tick;
     PebbleCallbackEvent callback;
     PebbleSubscriptionEvent subscription;
+    PebbleButtonEvent button;
   };
   PebbleTaskBitset task_mask;
   PebbleEventType type : 8;

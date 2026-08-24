@@ -171,7 +171,7 @@ void watchface_port_push_frame(void) {
   }
 }
 
-static void prv_display_init(void) {
+void fw_sandbox_display_init(void) {
   size_t framebuffer_size;
   uint16_t framebuffer_stride;
 
@@ -200,7 +200,7 @@ bool fw_sandbox_launch(void) {
   PebbleProcessInfo info;
 
   memset(&g_sandbox_app_arena, 0, sizeof(g_sandbox_app_arena));
-  prv_display_init();
+  fw_sandbox_display_init();
   if (!prv_load_pbw(&info)) {
     printk("SANDBOX_LOAD_FAIL\n");
     return false;

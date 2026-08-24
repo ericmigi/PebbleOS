@@ -81,9 +81,11 @@ static Layer *s_kernel_layer_tree_stack[LAYER_TREE_STACK_SIZE];
 static Window *s_top_window;
 static struct k_thread *s_kernel_thread;
 static struct k_thread *s_app_thread;
+#if !defined(PBL_WATCHFACE_IN_FW)
 static EventServiceInfo *s_app_tick_client;
 static EventServiceAddSubscriberCallback s_add_subscriber;
 static EventServiceRemoveSubscriberCallback s_remove_subscriber;
+#endif
 static struct k_heap s_app_heap;
 
 K_MSGQ_DEFINE(s_kernel_event_queue, sizeof(PebbleEvent), EVENT_QUEUE_DEPTH, sizeof(uint32_t));
@@ -91,9 +93,13 @@ K_MSGQ_DEFINE(s_app_event_queue, sizeof(PebbleEvent), EVENT_QUEUE_DEPTH, sizeof(
 
 bool clock_is_24h_style(void);
 
+#if !defined(PBL_WATCHFACE_IN_FW)
 time_t kernel_wall_clock_get(void) {
   return (time_t)KERNEL_BUILD_EPOCH + (time_t)(k_uptime_get() / 1000);
 }
+#else
+time_t kernel_wall_clock_get(void);
+#endif
 
 static uint32_t prv_read_u32(const uint8_t *bytes) {
   uint32_t value;
@@ -218,6 +224,7 @@ uint8_t *watchface_framebuffer_bytes(size_t *size_out, uint16_t *stride_out) {
   return s_framebuffer.buffer;
 }
 
+#if !defined(PBL_WATCHFACE_IN_FW)
 void event_put(PebbleEvent *event) {
   if (k_msgq_put(&s_kernel_event_queue, event, K_MSEC(100)) != 0) {
     printk("WATCHFACE_EVENT_DROP kernel\n");
@@ -234,9 +241,34 @@ void watchface_port_dispatch_kernel_event(PebbleEvent *event) {
     printk("WATCHFACE_EVENT_DROP app\n");
   }
 }
+#endif
 
 bool watchface_port_wait_tick(struct tm *tick_time, TimeUnits *units_changed,
                               TickHandler *handler, time_t *timestamp) {
+#if defined(PBL_WATCHFACE_IN_FW)
+  static struct tm s_last_time;
+  static bool s_first_tick = true;
+  extern TickHandler g_watchface_fw_tick_handler;
+
+  k_msleep(s_first_tick ? 1 : 1000);
+  if (!g_watchface_fw_tick_handler) {
+    return false;
+  }
+
+  *timestamp = kernel_wall_clock_get();
+  gmtime_r(timestamp, tick_time);
+  *units_changed = s_first_tick ? 0 : SECOND_UNIT;
+  if (!s_first_tick && s_last_time.tm_min != tick_time->tm_min) {
+    *units_changed |= MINUTE_UNIT;
+  }
+  if (!s_first_tick && s_last_time.tm_hour != tick_time->tm_hour) {
+    *units_changed |= HOUR_UNIT;
+  }
+  s_last_time = *tick_time;
+  s_first_tick = false;
+  *handler = g_watchface_fw_tick_handler;
+  return true;
+#else
   TickTimerServiceState *state = &s_app_state.tick_state;
 
   for (;;) {
@@ -285,12 +317,14 @@ bool watchface_port_wait_tick(struct tm *tick_time, TimeUnits *units_changed,
       return true;
     }
   }
+#endif
 }
 
 void watchface_port_render_tick(time_t timestamp) {
   prv_dump_frame(timestamp);
 }
 
+#if !defined(PBL_WATCHFACE_IN_FW)
 void event_service_init(PebbleEventType type, EventServiceAddSubscriberCallback add_subscriber,
                         EventServiceRemoveSubscriberCallback remove_subscriber) {
   if (type == PEBBLE_TICK_EVENT) {
@@ -334,7 +368,9 @@ void app_event_loop(void) {
     }
   }
 }
+#endif
 
+#if !defined(PBL_WATCHFACE_IN_FW)
 RtcTicks rtc_get_ticks(void) {
   return k_uptime_ticks();
 }
@@ -379,7 +415,9 @@ TaskHandle_t pebble_task_get_handle_for_task(PebbleTask task) {
   }
   return NULL;
 }
+#endif
 
+#if !defined(PBL_WATCHFACE_IN_FW)
 TickTimerServiceState *app_state_get_tick_timer_service_state(void) {
   return &s_app_state.tick_state;
 }
@@ -392,6 +430,7 @@ TickTimerServiceState *kernel_applib_get_tick_timer_service_state(void) {
   static TickTimerServiceState state;
   return &state;
 }
+#endif
 
 GContext *app_state_get_graphics_context(void) {
   return &s_context;
@@ -469,6 +508,7 @@ void task_free(void *ptr) {
   applib_free(ptr);
 }
 
+#if !defined(PBL_WATCHFACE_IN_FW)
 void *kernel_zalloc(size_t size) {
   return k_calloc(1, size);
 }
@@ -476,6 +516,7 @@ void *kernel_zalloc(size_t size) {
 void kernel_free(void *ptr) {
   k_free(ptr);
 }
+#endif
 
 bool sys_resource_is_valid(ResAppNum app_num, uint32_t resource_id) {
   return app_num == SYSTEM_APP && prv_resource_data(resource_id, NULL) != NULL;
@@ -734,6 +775,7 @@ struct tm *watchface_port_localtime(const int32_t *timep) {
   return gmtime_r(&value, result);
 }
 
+#if !defined(PBL_WATCHFACE_IN_FW)
 static const char *prv_small_number(unsigned value) {
   static const char *const numbers[] = {
       "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
@@ -821,3 +863,17 @@ NORETURN util_assertion_failed(const char *filename, int line) {
   k_panic();
   CODE_UNREACHABLE;
 }
+#endif
+
+#if defined(PBL_WATCHFACE_IN_FW)
+TickHandler g_watchface_fw_tick_handler;
+
+void watchface_port_tick_subscribe(TimeUnits tick_units, TickHandler handler) {
+  ARG_UNUSED(tick_units);
+  g_watchface_fw_tick_handler = handler;
+}
+
+void watchface_port_tick_unsubscribe(void) {
+  g_watchface_fw_tick_handler = NULL;
+}
+#endif

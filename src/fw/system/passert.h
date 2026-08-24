@@ -76,7 +76,12 @@ NORETURN passert_failed_no_message_with_lr(const char* filename, int line_number
 
 NORETURN wtf(void);
 
+#if defined(PBL_WTF_CONTEXT)
+NORETURN wtf_with_context(const char *filename, int line_number);
+#define WTF wtf_with_context(__FILE_NAME__, __LINE__)
+#else
 #define WTF wtf()
+#endif
 
 #if UNITTEST
 

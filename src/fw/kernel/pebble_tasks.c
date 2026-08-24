@@ -1,6 +1,76 @@
 /* SPDX-FileCopyrightText: 2024 Google LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#ifdef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+
+#include "pebble_tasks.h"
+
+#include "kernel/events.h"
+#include "system/passert.h"
+#include "FreeRTOS.h"
+#include "task.h"
+
+TaskHandle_t g_task_handles[NumPebbleTask];
+
+void pebble_task_register(PebbleTask task, TaskHandle_t task_handle) {
+  PBL_ASSERTN(task < NumPebbleTask);
+  g_task_handles[task] = task_handle;
+}
+
+void pebble_task_unregister(PebbleTask task) {
+  PBL_ASSERTN(task < NumPebbleTask);
+  g_task_handles[task] = NULL;
+}
+
+const char *pebble_task_get_name(PebbleTask task) {
+  TaskHandle_t handle = task < NumPebbleTask ? g_task_handles[task] : NULL;
+  return handle ? pcTaskGetTaskName(handle) : "Unknown";
+}
+
+char pebble_task_get_char(PebbleTask task) {
+  static const char chars[NumPebbleTask] = {'m', 's', 'w', 'a', 'b', 'c', 'd', 't', 'p'};
+  return task < NumPebbleTask ? chars[task] : '?';
+}
+
+PebbleTask pebble_task_get_current(void) {
+  return pebble_task_get_task_for_handle(xTaskGetCurrentTaskHandle());
+}
+
+PebbleTask pebble_task_get_task_for_handle(TaskHandle_t task_handle) {
+  for (int i = 0; i < NumPebbleTask; ++i) {
+    if (g_task_handles[i] == task_handle) {
+      return (PebbleTask)i;
+    }
+  }
+  return PebbleTask_Unknown;
+}
+
+TaskHandle_t pebble_task_get_handle_for_task(PebbleTask task) {
+  return task < NumPebbleTask ? g_task_handles[task] : NULL;
+}
+
+void pebble_task_suspend(PebbleTask task) {
+  vTaskSuspend(pebble_task_get_handle_for_task(task));
+}
+
+QueueHandle_t pebble_task_get_to_queue(PebbleTask task) {
+  return event_get_to_kernel_queue(task);
+}
+
+void pebble_task_create(PebbleTask task, TaskParameters_t *task_params, TaskHandle_t *handle) {
+  TaskHandle_t new_handle;
+  PBL_ASSERTN(xTaskCreateRestricted(task_params, &new_handle) == pdPASS);
+  pebble_task_register(task, new_handle);
+  if (handle) {
+    *handle = new_handle;
+  }
+}
+
+void pebble_task_configure_idle_task(void) {
+}
+
+#else
+
 #include "pebble_tasks.h"
 
 #include "kernel/memory_layout.h"
@@ -342,3 +412,5 @@ void pebble_task_configure_idle_task(void) {
   mpu_set_task_configurable_regions(region_config, region_ptrs);
   vTaskAllocateMPURegions(xTaskGetIdleTaskHandle(), region_config);
 }
+
+#endif

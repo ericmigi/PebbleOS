@@ -1,6 +1,143 @@
 /* SPDX-FileCopyrightText: 2024 Google LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#ifdef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+
+#include "pbl/services/event_service.h"
+
+#include "applib/event_service_client.h"
+#include "kernel/pbl_malloc.h"
+#include "kernel/pebble_tasks.h"
+#include "pbl/os/mutex.h"
+#include "system/passert.h"
+#include "FreeRTOS.h"
+#include "queue.h"
+
+typedef struct {
+  int num_subscribers;
+  QueueHandle_t subscribers[NumPebbleTask];
+  EventServiceAddSubscriberCallback add_subscriber_callback;
+  EventServiceRemoveSubscriberCallback remove_subscriber_callback;
+} EventServiceEntry;
+
+static EventServiceEntry *s_event_services[PEBBLE_NUM_EVENTS];
+static PebbleMutex *s_service_mutex;
+
+void event_service_system_init(void) {
+  s_service_mutex = mutex_create();
+}
+
+void event_service_init(PebbleEventType type,
+                        EventServiceAddSubscriberCallback add_subscriber_callback,
+                        EventServiceRemoveSubscriberCallback remove_subscriber_callback) {
+  PBL_ASSERTN(type < PEBBLE_NUM_EVENTS);
+  if (s_event_services[type]) {
+    kernel_free(s_event_services[type]);
+  }
+  s_event_services[type] = kernel_zalloc_check(sizeof(EventServiceEntry));
+  s_event_services[type]->add_subscriber_callback = add_subscriber_callback;
+  s_event_services[type]->remove_subscriber_callback = remove_subscriber_callback;
+}
+
+static void prv_subscribe(PebbleSubscriptionEvent *subscription) {
+  EventServiceEntry *service = s_event_services[subscription->event_type];
+  if (!service) {
+    event_service_init(subscription->event_type, NULL, NULL);
+    service = s_event_services[subscription->event_type];
+  }
+  if (service->subscribers[subscription->task]) {
+    return;
+  }
+  if (service->add_subscriber_callback) {
+    service->add_subscriber_callback(subscription->task);
+  }
+  service->subscribers[subscription->task] = subscription->event_queue;
+  ++service->num_subscribers;
+}
+
+static void prv_unsubscribe(PebbleSubscriptionEvent *subscription) {
+  EventServiceEntry *service = s_event_services[subscription->event_type];
+  if (!service || !service->subscribers[subscription->task]) {
+    return;
+  }
+  service->subscribers[subscription->task] = NULL;
+  --service->num_subscribers;
+  if (service->remove_subscriber_callback) {
+    service->remove_subscriber_callback(subscription->task);
+  }
+}
+
+void event_service_subscribe_from_kernel_main(PebbleSubscriptionEvent *subscription) {
+  PBL_ASSERT_TASK(PebbleTask_KernelMain);
+  mutex_lock(s_service_mutex);
+  prv_subscribe(subscription);
+  mutex_unlock(s_service_mutex);
+}
+
+void event_service_handle_subscription(PebbleSubscriptionEvent *subscription) {
+  mutex_lock(s_service_mutex);
+  if (subscription->subscribe) {
+    prv_subscribe(subscription);
+  } else {
+    prv_unsubscribe(subscription);
+  }
+  mutex_unlock(s_service_mutex);
+}
+
+bool event_service_is_running(PebbleEventType type) {
+  return s_event_services[type] && s_event_services[type]->num_subscribers > 0;
+}
+
+void event_service_handle_event(PebbleEvent *event) {
+  EventServiceEntry *service = s_event_services[event->type];
+  if (!service) {
+    return;
+  }
+  PebbleTask current = pebble_task_get_current();
+  for (int task = 0; task < NumPebbleTask; ++task) {
+    if (task == current || !service->subscribers[task] ||
+        (event->task_mask & (1U << task))) {
+      continue;
+    }
+    PBL_ASSERTN(xQueueSendToBack(service->subscribers[task], event, 0) == pdPASS);
+  }
+  if (current < NumPebbleTask && service->subscribers[current] &&
+      !(event->task_mask & (1U << current))) {
+    event_service_client_handle_event(event);
+  }
+}
+
+void event_service_clear_process_subscriptions(PebbleTask task) {
+  for (int type = 0; type < PEBBLE_NUM_EVENTS; ++type) {
+    PebbleSubscriptionEvent subscription = {
+      .subscribe = false,
+      .task = task,
+      .event_type = type,
+    };
+    prv_unsubscribe(&subscription);
+  }
+}
+
+void *event_service_claim_buffer(PebbleEvent *event) {
+  (void)event;
+  return NULL;
+}
+
+void event_service_free_claimed_buffer(void *ref) {
+  (void)ref;
+}
+
+bool event_service_is_known_buffer(const void *buffer) {
+  (void)buffer;
+  return false;
+}
+
+void sys_event_service_cleanup(PebbleEvent *event) {
+  (void)event;
+}
+
+#else
+
 #include "applib/event_service_client.h"
 #include "kernel/event_loop.h"
 #include "kernel/pbl_malloc.h"
@@ -391,3 +528,5 @@ DEFINE_SYSCALL(void, sys_event_service_cleanup, PebbleEvent *e) {
     }
   }
 }
+
+#endif

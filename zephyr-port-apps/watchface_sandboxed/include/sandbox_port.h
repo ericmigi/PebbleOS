@@ -14,3 +14,7 @@ void watchface_port_render_tick(time_t timestamp);
 int32_t watchface_port_time(int32_t *tloc);
 struct tm *watchface_port_localtime(const int32_t *timep);
 GRect watchface_layer_get_unobstructed_bounds_by_value(const Layer *layer);
+#if defined(PBL_WATCHFACE_IN_FW)
+void watchface_port_tick_subscribe(TimeUnits tick_units, TickHandler handler);
+void watchface_port_tick_unsubscribe(void);
+#endif

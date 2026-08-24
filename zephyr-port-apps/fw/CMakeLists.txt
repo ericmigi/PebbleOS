@@ -51,6 +51,10 @@ target_compile_options(app PRIVATE
 target_sources(app PRIVATE
   src/app_registry.c
   src/app_registry_stubs.c
+  src/button_zephyr.c
+  src/input_service.c
+  src/launcher_ui.c
+  src/ui_shims.c
   src/flash_shim.c
   src/freertos_compat.c
   src/main.c
@@ -70,6 +74,8 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/lib/util/list.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/event_service_client.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/tick_timer_service.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/click.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/evented_timer/service.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/event_loop.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/events.c"
   "${PEBBLEOS_ROOT}/src/fw/flash_region/filesystem_regions.c"
@@ -114,6 +120,10 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/applib/fonts/codepoint.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/text_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/menu_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/scroll_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/inverter_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/animation_timing.c"
   "${PEBBLEOS_ROOT}/lib/util/crc32.c"
   "${PEBBLEOS_ROOT}/lib/util/keyed_circular_cache.c"
   "${PEBBLEOS_ROOT}/lib/util/iterator.c"
@@ -154,6 +164,11 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/applib/fonts/codepoint.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/text_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/menu_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/scroll_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/inverter_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/animation_timing.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/ui_shims.c"
   PROPERTIES COMPILE_OPTIONS
     "-include;${FW_GRAPHICS_APP_STATE};-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/gfx/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/include"
 )

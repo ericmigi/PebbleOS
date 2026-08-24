@@ -1,6 +1,114 @@
 /* SPDX-FileCopyrightText: 2024 Google LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#ifdef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+
+#include "kernel/events.h"
+
+#include <string.h>
+
+#include "kernel/pebble_tasks.h"
+#include "pbl/os/tick.h"
+#include "system/passert.h"
+#include "FreeRTOS.h"
+#include "queue.h"
+
+static QueueHandle_t s_kernel_event_queue;
+static QueueHandle_t s_from_app_event_queue;
+static QueueHandle_t s_from_worker_event_queue;
+static QueueHandle_t s_from_kernel_event_queue;
+static QueueSetHandle_t s_system_event_queue_set;
+
+void events_init(void) {
+  PBL_ASSERTN(s_system_event_queue_set == NULL);
+  s_system_event_queue_set = xQueueCreateSet(47);
+  s_kernel_event_queue = xQueueCreate(32, sizeof(PebbleEvent));
+  s_from_app_event_queue = xQueueCreate(10, sizeof(PebbleEvent));
+  s_from_worker_event_queue = xQueueCreate(5, sizeof(PebbleEvent));
+  s_from_kernel_event_queue = xQueueCreate(14, sizeof(PebbleEvent));
+  PBL_ASSERTN(s_system_event_queue_set && s_kernel_event_queue && s_from_app_event_queue &&
+              s_from_worker_event_queue && s_from_kernel_event_queue);
+  PBL_ASSERTN(xQueueAddToSet(s_kernel_event_queue, s_system_event_queue_set) == pdPASS);
+  PBL_ASSERTN(xQueueAddToSet(s_from_app_event_queue, s_system_event_queue_set) == pdPASS);
+  PBL_ASSERTN(xQueueAddToSet(s_from_worker_event_queue, s_system_event_queue_set) == pdPASS);
+}
+
+QueueHandle_t event_get_to_kernel_queue(PebbleTask task) {
+  switch (task) {
+    case PebbleTask_App: return s_from_app_event_queue;
+    case PebbleTask_Worker: return s_from_worker_event_queue;
+    case PebbleTask_KernelMain: return s_from_kernel_event_queue;
+    case PebbleTask_NewTimers:
+    case PebbleTask_KernelBackground: return s_kernel_event_queue;
+    default: WTF; return NULL;
+  }
+}
+
+void event_put(PebbleEvent *event) {
+  QueueHandle_t queue = pebble_task_get_current() == PebbleTask_KernelMain
+                            ? s_from_kernel_event_queue
+                            : s_kernel_event_queue;
+  PBL_ASSERTN(xQueueSendToBack(queue, event, milliseconds_to_ticks(3000)) == pdPASS);
+}
+
+bool event_put_isr(PebbleEvent *event) {
+  BaseType_t should_switch = pdFALSE;
+  PBL_ASSERTN(xQueueSendToBackFromISR(s_kernel_event_queue, event, &should_switch) == pdPASS);
+  return should_switch == pdTRUE;
+}
+
+void event_put_from_process(PebbleTask task, PebbleEvent *event) {
+  PBL_ASSERTN(xQueueSendToBack(event_get_to_kernel_queue(task), event,
+                              milliseconds_to_ticks(3000)) == pdPASS);
+}
+
+bool event_try_put_from_process(PebbleTask task, PebbleEvent *event) {
+  return xQueueSendToBack(event_get_to_kernel_queue(task), event,
+                          milliseconds_to_ticks(3000)) == pdPASS;
+}
+
+bool event_take_timeout(PebbleEvent *event, int timeout_ms) {
+  if (xQueueReceive(s_from_kernel_event_queue, event, 0) == pdPASS) {
+    return true;
+  }
+  QueueHandle_t ready = xQueueSelectFromSet(s_system_event_queue_set,
+                                            milliseconds_to_ticks(timeout_ms));
+  if (!ready) {
+    return false;
+  }
+  if (xQueueReceive(s_kernel_event_queue, event, 0) == pdPASS) {
+    return true;
+  }
+  return xQueueReceive(ready, event, 0) == pdPASS;
+}
+
+void **event_get_buffer(PebbleEvent *event) {
+  (void)event;
+  return NULL;
+}
+
+void event_deinit(PebbleEvent *event) {
+  (void)event;
+}
+
+void event_cleanup(PebbleEvent *event) {
+  memset(event, 0, sizeof(*event));
+}
+
+QueueHandle_t event_kernel_to_kernel_event_queue(void) {
+  return s_from_kernel_event_queue;
+}
+
+void event_reset_from_process_queue(PebbleTask task) {
+  xQueueReset(event_get_to_kernel_queue(task));
+}
+
+BaseType_t event_queue_cleanup_and_reset(QueueHandle_t queue) {
+  return xQueueReset(queue);
+}
+
+#else
+
 #include "events.h"
 
 #include <pbl/logging/logging.h>
@@ -453,3 +561,5 @@ BaseType_t event_queue_cleanup_and_reset(QueueHandle_t queue) {
 
   return xQueueReset(queue);
 }
+
+#endif

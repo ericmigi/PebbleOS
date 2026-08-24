@@ -20,6 +20,8 @@
 #include "pbl/services/system_task.h"
 #include "pfs_boot.h"
 #include "sandbox_launcher.h"
+#include "button_input.h"
+#include "launcher_ui.h"
 
 static TimerID s_probe_timer;
 
@@ -52,16 +54,25 @@ static void prv_kernel_main(void *parameter) {
   new_timer_start(s_probe_timer, 1500, prv_timer_fired, NULL, 0);
 
   PBL_LOG_ALWAYS("FW_SERVICES_OK");
+
+  // Buttons: prove the debounce filter, then bring up the real click_recognizer
+  // and start sampling the physical GPIOs. Must run on KernelMain so click.c's
+  // app_timer callbacks dispatch back on this task via the event loop.
+  button_input_selfcheck();
+  input_service_init();
+  button_zephyr_init();
+
   if (fw_pfs_boot() == 0) {
     PBL_LOG_ALWAYS("FW_PFS_UP");
     fw_app_registry_init();
-    const FwAppRegistryEntry *app = fw_launcher_pick_app();
-    if (app) {
-      PBL_LOG_ALWAYS("FW_LAUNCH %s", app->name);
-      (void)fw_sandbox_launch();
-    }
   }
-  launcher_main_loop();
+
+  // Stand up the real window stack + launcher menu and run the KernelMain UI
+  // event loop. Navigation consumes the button/click-service events wired above
+  // (button_zephyr -> event queue -> input_service click_recognizer); SELECT
+  // launches the selected app. Replaces the previous auto-launch + bare
+  // launcher_main_loop().
+  fw_launcher_ui_run();
 }
 
 static void prv_log_stubs(void) {

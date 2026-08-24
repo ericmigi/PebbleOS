@@ -4,13 +4,19 @@
 #include "click.h"
 #include "click_internal.h"
 
+// window_stack_private.h is not referenced here; on the Zephyr port it pulls in
+// the window/graphics chain whose sign_extend() collides with Zephyr's
+// sys/util.h, so it is intentionally omitted.
+#ifndef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
 #include "window_stack_private.h"
+#endif
 
 #include "process_state/app_state/app_state.h"
 #include "process_management/app_manager.h"
 #include "pbl/util/size.h"
 
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
 //! The time that the user has to hold the button before repetition kicks in.

@@ -16,6 +16,10 @@
 #include "pbl/util/math.h"
 #include "util/units.h"
 
+#ifdef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+#include <zephyr/sys/printk.h>
+#endif
+
 PBL_LOG_MODULE_DECLARE(service_blob_db, CONFIG_SERVICE_BLOB_DB_LOG_LEVEL);
 
 #define SETTINGS_FILE_NAME   "appdb"
@@ -240,6 +244,13 @@ void app_db_init(void) {
   // is then one greater than the largest found.
   status_t rv = prv_lock_mutex_and_open_file();
   if (rv != S_SUCCESS) {
+#ifdef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+    if (rv == E_DOES_NOT_EXIST) {
+      s_next_unique_flash_app_id = FIRST_VALID_INSTALL_ID;
+      printk("FW_PFS_NO_APPDB\n");
+      return;
+    }
+#endif
     WTF;
   }
 
@@ -255,6 +266,12 @@ void app_db_init(void) {
 
   PBL_LOG_INFO("Found %"PRIu32" apps. Next ID: %"PRIu32" ", data.num_apps,
           s_next_unique_flash_app_id);
+
+#ifdef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+  if (data.num_apps == 0) {
+    printk("FW_PFS_NO_APPDB\n");
+  }
+#endif
 
   prv_close_file_and_unlock_mutex();
 }

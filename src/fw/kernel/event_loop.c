@@ -1,6 +1,68 @@
 /* SPDX-FileCopyrightText: 2024 Google LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#ifdef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+
+#include "event_loop.h"
+#include "kernel/events.h"
+
+#include "kernel/pebble_tasks.h"
+#include "pbl/services/event_service.h"
+
+static int s_block_popup_count;
+
+void launcher_task_add_callback(CallbackEventCallback callback, void *data) {
+  PebbleEvent event = {
+    .type = PEBBLE_CALLBACK_EVENT,
+    .callback = {
+      .callback = callback,
+      .data = data,
+    },
+  };
+  event_put(&event);
+}
+
+bool launcher_task_is_current_task(void) {
+  return pebble_task_get_current() == PebbleTask_KernelMain;
+}
+
+void launcher_block_popups(bool block) {
+  s_block_popup_count += block ? 1 : -1;
+}
+
+bool launcher_popups_are_blocked(void) {
+  return s_block_popup_count > 0;
+}
+
+void launcher_cancel_force_quit(void) {
+}
+
+void launcher_main_loop(void) {
+  extern void pebble_zephyr_core_event_loop_init(void);
+  pebble_zephyr_core_event_loop_init();
+
+  while (1) {
+    static PebbleEvent event;
+    if (!event_take_timeout(&event, 1000)) {
+      continue;
+    }
+    if (event.type == PEBBLE_CALLBACK_EVENT && event.callback.callback) {
+      event.callback.callback(event.callback.data);
+    }
+    if (event.type == PEBBLE_BUTTON_DOWN_EVENT || event.type == PEBBLE_BUTTON_UP_EVENT) {
+      // Weakly linked: only the fw app provides the button input service.
+      extern void input_service_handle_button_event(PebbleEvent *e) __attribute__((weak));
+      if (input_service_handle_button_event) {
+        input_service_handle_button_event(&event);
+      }
+    }
+    event_service_handle_event(&event);
+    event_cleanup(&event);
+  }
+}
+
+#else
+
 #include "event_loop.h"
 #include "events.h"
 
@@ -654,3 +716,5 @@ void launcher_main_loop(void) {
 
   __builtin_unreachable();
 }
+
+#endif

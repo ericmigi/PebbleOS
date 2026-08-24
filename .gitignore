@@ -51,9 +51,11 @@ analyze_mcu_flash_usage_treemap.jsonp
 **/.idea
 **/CMakeLists.txt
 !zephyr-port/CMakeLists.txt
+!zephyr-port-apps/fw/CMakeLists.txt
 !zephyr-port-apps/watchface_sandboxed/CMakeLists.txt
 
 /build-smoke/
+/build-fw/
 
 .env
 

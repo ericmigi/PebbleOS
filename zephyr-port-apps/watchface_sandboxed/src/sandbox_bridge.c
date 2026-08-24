@@ -67,7 +67,9 @@ int __sandbox_syscall_probe(int value);
 
 DEFINE_SYSCALL(void, sandbox_app_runtime_init, void) {
   watchface_port_app_state_init();
+#if !defined(PBL_WATCHFACE_IN_FW)
   tick_timer_service_init();
+#endif
 }
 
 DEFINE_SYSCALL(void, sandbox_mpu_readback, void) {
@@ -191,11 +193,19 @@ DEFINE_SYSCALL(size_t, sandbox_strlen, const char *string) {
 DEFINE_SYSCALL(void, sandbox_tick_timer_service_subscribe,
                TimeUnits tick_units, TickHandler handler) {
   prv_log_step(SandboxStepTickSubscribe, (uintptr_t)handler);
+#if defined(PBL_WATCHFACE_IN_FW)
+  watchface_port_tick_subscribe(tick_units, handler);
+#else
   tick_timer_service_subscribe(tick_units, handler);
+#endif
 }
 
 DEFINE_SYSCALL(void, sandbox_tick_timer_service_unsubscribe, void) {
+#if defined(PBL_WATCHFACE_IN_FW)
+  watchface_port_tick_unsubscribe();
+#else
   tick_timer_service_unsubscribe();
+#endif
 }
 
 DEFINE_SYSCALL(Window *, sandbox_window_create, void) {
