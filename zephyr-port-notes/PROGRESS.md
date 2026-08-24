@@ -307,3 +307,23 @@ Next (needs LCPU-side visibility, not more HCPU probing): attach SWD to the LCPU
 core to read its PC/fault, OR obtain the vendor rev_b LCPU boot-enable sequence
 and diff what shipping obelix's full system init does that Zephyr's hand-rolled
 prv_prepare_lcpu_clock() omits before ReleaseLCPU. Do NOT invent BLE logic.
+
+## P3 BLE — LCPU core proven NOT executing (2026-08-24, agent 10d1773d8/bcd4b7467)
+Shared-RAM hypothesis DISPROVEN: HCPU write-readback of 0x20402800/0x20400000
+echoes perfectly; patch code valid Thumb @0x2040500C; config table magic +
+HCPU_TX_QUEUE=0x2007FE00 intact @0x20402A00. XTAL hypothesis DISPROVEN: acr_hp/lp
+=0xC0000007, lp_hxt48_rdy=1 BEFORE our fix (Zephyr clock init already brings 48M up);
+HAL_HPAON_EnableXT48 was a no-op, reverted. Reset released (cpuwait=0 rstr1=0),
+doorbell delivered (TX mailbox CxMISR=1 latched). Decisive: zeroed RX ring ctrl
+0x20402800 right before ReleaseLCPU -> post-boot STILL zero (LCPU never populates
+its own RX ring per ipc_queue.c:212 "receiver no need to init, sender already
+init"). => LCPU never runs its ROM BLE/IPC init; hangs in early silicon-ROM boot
+before touching HCPU. Prior "garbage vs clean" ring reads were stale LPSYS
+RETENTION RAM (1.2s PPK2 cycle doesn't clear retention), not nondeterminism.
+Structural gap found: Zephyr pt2 soc_early_init_hook (soc/sifli/sf32/sf32lb52x/
+soc.c) does ONLY cache-enable + bootrom flash-delay. SiFli SystemInit (shipping,
+startup_sf32lb52.c:47) also runs hw_preinit0 / mpu_config / boot_images /
+cache_enable / SystemPowerOnModeInit -- the SiFli-specific PMU/AON/boot_images
+steps are NEVER run under Zephyr. hw_preinit0 + boot_images are the untested
+candidates. REMAINING PATHS: (a) SWD on LCPU core to read PC/fault (needs debug
+probe wired to LCPU SWD on rig), or (b) port SiFli full boot sequence into pt2.
