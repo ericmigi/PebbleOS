@@ -227,3 +227,19 @@ Empty-PFS/no-AppDB made non-fatal (falls through to launch the embedded PBW).
 - P2.4 registry/launcher: DONE.  CAPSTONE (launch app sandboxed under full fw): DONE.
 Remaining polish: real AppDB code-bank load (currently embedded PBW), display/compositor
 as a first-class fw service (the app pushes frames directly today), BLE/OTA (P3).
+
+## P3 BLE — root-cause narrowed (2026-08-24)
+Controller HCPU-side bring-up all succeeds: BLE_REVID 0x0f, patch REV_B (correct
+for 0x0f per bf0_lcpu_init.c:96-100), RF cal OK, IRQ 58 wired, host TX's HCI
+Reset (0c03) into H2L ring 0x2007fe00 (write_idx=4). BUT the LCPU core is SILENT:
+- TX ring read_idx stuck 0 (LCPU never drains our reset)
+- s_lcpu_irq_count stays 0 (LCPU never fires IRQ 58 back) — no BLE_HCI_IRQ, no sync/RX
+- RX ring 0x20402800 (rev_b) reads garbage; legacy 0x20405c00 all-zero
+lcpu_power_on() IS called (transport:598) incl HAL_RCC_ReleaseLCPU + patch + 5ms delay.
+=> LCPU released+patched from HCPU view but not executing its BLE loop.
+PRIME HYPOTHESIS (agent a9270f8 testing): LPSYS/LCPU shared RAM 0x2040_0000
+(patch+config+RX ring live here) not reserved/mapped in pt2 board memory config,
+so HCPU writes never reach the RAM the LCPU boots from. Decisive test: HCPU
+write-readback of 0x20402800/0x20400000 after patch install. If RB fails -> reserve
+0x2040_0000 in pt2 dts+linker (match shipping obelix). If RB ok -> rom_config /
+release-reset-status / mailbox ordering.
