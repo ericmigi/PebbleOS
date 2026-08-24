@@ -614,65 +614,23 @@ void ble_transport_ll_reinit(void) {
   // Shared-RAM readback probe: verify HCPU writes to LPSYS RAM are visible.
   // If readback mismatches OR the just-installed rev_b patch region is empty,
   // the LPSYS RAM at 0x2040_0000 is not mapped/reserved for the HCPU.
+  // The LCPU (the RX-ring sender per ipc_queue.c) writes rd_buf=addr+0x14 into
+  // the rev_b RX ring control at 0x20402800 once it has run its IPC init and is
+  // ready to service HCI. The ring was zeroed before ReleaseLCPU, so wait for
+  // that signal before returning: if the host starts sending HCI (and ringing
+  // the H2L doorbell) before the LCPU has enabled its mailbox IRQ, the command
+  // is lost and the controller never responds. This is the controller-ready
+  // handshake the standalone port otherwise lacks.
   {
-    static const uint32_t probe_addrs[] = {0x20402800U, 0x20400000U};
-    for (unsigned i = 0; i < ARRAY_SIZE(probe_addrs); i++) {
-      volatile uint32_t *p = (volatile uint32_t *)(uintptr_t)probe_addrs[i];
-      uint32_t saved = *p;
-      *p = 0xA5A5A5A5U;
-      uint32_t rb1 = *p;
-      *p = 0x5A5A5A5AU;
-      uint32_t rb2 = *p;
-      *p = saved;
-      printk("BLE_LPRAM_RB a=0x%08x wrote=0xA5A5A5A5 read=0x%08x "
-             "wrote=0x5A5A5A5A read=0x%08x\n",
-             (unsigned int)probe_addrs[i], (unsigned int)rb1,
-             (unsigned int)rb2);
+    volatile uint32_t *rd_buf = (volatile uint32_t *)(uintptr_t)0x20402800U;
+    int waited_ms = 0;
+    while (*rd_buf != 0x20402814U && waited_ms < 500) {
+      k_msleep(5);
+      waited_ms += 5;
     }
-    // Dump the rev_b LCPU config table (HAL_LCPU_CONFIG_set writes it here for
-    // revid>=A4: LCPU2HCPU_MB_CH2_BUF_REV_B_START_ADDR). magic@0 must be
-    // 0x45457878; HCPU_TX_QUEUE (HCPU IPC addr) @offset 200 must be 0x2007FE00.
-    {
-      const uint32_t cfg = 0x20402A00U;
-      printk("BLE_LCPU_CFG_TBL addr=0x%08x magic=0x%08x ipc@200=0x%08x\n",
-             (unsigned int)cfg,
-             (unsigned int)(*(volatile uint32_t *)(uintptr_t)(cfg + 0U)),
-             (unsigned int)(*(volatile uint32_t *)(uintptr_t)(cfg + 200U)));
-      for (uint32_t a = cfg; a < cfg + 0x20U; a += 4U) {
-        printk("BLE_CFG_MEM a=0x%08x val=0x%08x\n", (unsigned int)a,
-               (unsigned int)(*(volatile uint32_t *)(uintptr_t)a));
-      }
-    }
-    // Verify the patch CODE landed. It is written to 0x20405000 (buf hdr:
-    // {0x48434150,0x81,0x2040500D}) + code at 0x2040500C. This is ABOVE the
-    // rev_b 11KB LPSYS window (ends 0x20402C00). If not backed by RAM the
-    // patch never lands and the LCPU runs unpatched. Non-destructive readback
-    // at 0x20405000 too (write pattern, restore) to prove it is real RAM.
-    {
-      volatile uint32_t *ph = (volatile uint32_t *)(uintptr_t)0x20405000U;
-      uint32_t saved = *ph;
-      *ph = 0xA5A5A5A5U;
-      uint32_t rb = *ph;
-      *ph = saved;
-      printk("BLE_PATCH_RB a=0x20405000 wrote=0xA5A5A5A5 read=0x%08x "
-             "restored=0x%08x\n",
-             (unsigned int)rb, (unsigned int)*ph);
-      for (uint32_t a = 0x20405000U; a < 0x20405020U; a += 4U) {
-        printk("BLE_PATCHCODE a=0x%08x val=0x%08x\n", (unsigned int)a,
-               (unsigned int)(*(volatile uint32_t *)(uintptr_t)a));
-      }
-    }
-    // Is the LCPU actually released? CPUWAIT set => still halted.
-    // ReleaseLCPU clears LPSYS_AON_PMR_CPUWAIT; report PMR + LPSYS reset/sleep.
-    printk("BLE_LCPU_RUNSTATE pmr=0x%08x cpuwait=%d rstr1=0x%08x "
-           "slp_ctrl=0x%08x acr_lp=0x%08x lp_hxt48_rdy=%d acr_hp=0x%08x\n",
-           (unsigned int)hwp_lpsys_aon->PMR,
-           (int)((hwp_lpsys_aon->PMR & LPSYS_AON_PMR_CPUWAIT) ? 1 : 0),
-           (unsigned int)hwp_lpsys_rcc->RSTR1,
-           (unsigned int)hwp_lpsys_aon->SLP_CTRL,
-           (unsigned int)hwp_lpsys_aon->ACR,
-           (int)((hwp_lpsys_aon->ACR & LPSYS_AON_ACR_HXT48_RDY) ? 1 : 0),
-           (unsigned int)hwp_hpsys_aon->ACR);
+    printk("BLE_LCPU_READY rd_buf=0x%08x waited=%dms slp_ctrl=0x%08x\n",
+           (unsigned int)*rd_buf, waited_ms,
+           (unsigned int)hwp_lpsys_aon->SLP_CTRL);
   }
 #endif
 }

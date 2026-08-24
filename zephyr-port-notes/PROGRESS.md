@@ -352,3 +352,36 @@ hp+lp ready, mailbox doorbell delivered), yet the LCPU core provably never execu
 ROM BLE/IPC init (zeroed RX ring stays zero post-boot). Remaining path is hardware:
 attach SWD to the LCPU core to read its PC/fault at/after ReleaseLCPU. This is the
 software ceiling for the port from the HCPU side.
+
+## P3 BLE — SOLVED: D-cache coherency. Controller up + ADVERTISING (2026-08-24)
+Control experiment (shipping boots BLE on this same silicon) proved the fault was
+in the port, not hardware. Root cause: HCPU D-CACHE COHERENCY.
+
+The HCPU and LCPU share RAM: LCPU boot data (patch @0x20405000, rom_config
+@0x20402A00, NVDS @0x2040FE00) in LPSYS RAM, and the HCI command/event rings
+(TX @0x2007FE00 HPSYS, RX @0x20402800 LPSYS). The shipping firmware runs SiFli's
+mpu_config() (ATTR_RAM = NON_CACHEABLE) so all of this is non-cacheable. The
+standalone Zephyr port never runs SystemInit/mpu_config, and soc_early_init_hook
+calls sys_cache_data_enable() -> HCPU D-cache ON with that RAM cacheable
+write-back. So HCPU writes sat in cache and the LCPU read stale physical RAM:
+it booted un-patched/mis-configured (never ran its IPC init) and never saw HCI
+commands. (My earlier "LCPU never executes" was WRONG: the diagnostic
+write+readback probe incidentally forced cache coherency, so the LCPU
+intermittently came alive — which is exactly what mislead the dead-core theory.)
+
+Diagnosis clincher: zero the RX ring before ReleaseLCPU, then poll. Clean build
+= rd_buf stays 0 (LCPU never inits ring). With the destructive readback probe
+present = rd_buf=0x20402814 within 50ms. Only difference = the probe's cache
+line write-backs. A one-shot SCB_CleanDCache() before ReleaseLCPU then made the
+LCPU boot, fire IRQ 58, and send its 0xFC11 BLE_READY event -- but the ongoing
+HCI TX ring (also cacheable) still went stale.
+
+FIX (committable, port-side): CONFIG_DCACHE=n in zephyr-port-apps/ble/prj.conf.
+The SiFli-SDK submodule (bf0_lcpu_init.c, coredevices) can't take the flush, and
+disabling the D-cache fixes every direction at once, matching shipping's
+non-cacheable-RAM intent. Result on hw (obelix revid 0x0f):
+  BLE_HCI_IRQ, BLE_HCI_RX (many), BLE_CONTROLLER_UP,
+  BLE_ADDR 66:07:09:EE:24:04, BLE_ADV_START.
+BLE controller is UP, HCI sync complete, and the Pebble advertisement is live.
+ponytail: global D-cache off; upgrade path = non-cacheable MPU region over just
+0x2040_0000 + the HPSYS mailbox if HCPU throughput matters.
