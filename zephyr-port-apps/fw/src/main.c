@@ -4,6 +4,7 @@
 #include <time.h>
 
 #include "FreeRTOS.h"
+#include "app_registry.h"
 #include "applib/tick_timer_service.h"
 #include "applib/tick_timer_service_private.h"
 #include "kernel/event_loop.h"
@@ -52,6 +53,7 @@ static void prv_kernel_main(void *parameter) {
   PBL_LOG_ALWAYS("FW_SERVICES_OK");
   if (fw_pfs_boot() == 0) {
     PBL_LOG_ALWAYS("FW_PFS_UP");
+    fw_app_registry_init();
   }
   launcher_main_loop();
 }
@@ -60,7 +62,6 @@ static void prv_log_stubs(void) {
   PBL_LOG_ALWAYS("FW_STUB board_drivers");
   PBL_LOG_ALWAYS("FW_STUB display_compositor");
   PBL_LOG_ALWAYS("FW_STUB ble_comm");
-  PBL_LOG_ALWAYS("FW_STUB app_worker");
   PBL_LOG_ALWAYS("FW_STUB watchdog_analytics");
 }
 

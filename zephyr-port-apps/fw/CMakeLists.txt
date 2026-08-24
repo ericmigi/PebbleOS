@@ -33,6 +33,8 @@ target_compile_definitions(app PRIVATE
 )
 
 target_sources(app PRIVATE
+  src/app_registry.c
+  src/app_registry_stubs.c
   src/flash_shim.c
   src/freertos_compat.c
   src/main.c
@@ -53,11 +55,15 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/kernel/pebble_tasks.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/task_timer.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/util/task_init.c"
+  "${PEBBLEOS_ROOT}/src/fw/process_management/pebble_process_info.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/blob_db/app_db.c"
   "${PEBBLEOS_ROOT}/src/fw/services/event_service/service.c"
   "${PEBBLEOS_ROOT}/src/fw/services/filesystem/flash_translation.c"
   "${PEBBLEOS_ROOT}/src/fw/services/filesystem/pfs.c"
   "${PEBBLEOS_ROOT}/src/fw/services/new_timer/new_timer.c"
   "${PEBBLEOS_ROOT}/src/fw/services/regular_timer/service.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/settings/settings_file.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/settings/settings_raw_iter.c"
   "${PEBBLEOS_ROOT}/src/fw/services/system_task/service.c"
   "${PEBBLEOS_ROOT}/src/fw/services/tick_timer/service.c"
   "${PEBBLEOS_ROOT}/src/fw/util/crc8.c"
@@ -71,6 +77,21 @@ set_source_files_properties(
 )
 
 set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/services/blob_db/app_db.c"
+  PROPERTIES COMPILE_OPTIONS "-include;string.h"
+)
+
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/services/settings/settings_file.c"
+  PROPERTIES COMPILE_DEFINITIONS "SECONDS_PER_DAY=86400"
+)
+
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/services/settings/settings_raw_iter.c"
+  PROPERTIES COMPILE_OPTIONS "-Wno-unused-variable"
+)
+
+set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/services/system_task/service.c"
-  PROPERTIES COMPILE_OPTIONS "-include;system/reset.h"
+  PROPERTIES COMPILE_OPTIONS "-include;zephyr/kernel.h;-include;system/reset.h"
 )

@@ -128,6 +128,16 @@ void *kernel_zalloc_check(size_t size) {
   return memory;
 }
 
+void *kernel_calloc(size_t count, size_t size) {
+  return k_calloc(count, size);
+}
+
+void *kernel_calloc_check(size_t count, size_t size) {
+  void *memory = k_calloc(count, size);
+  __ASSERT_NO_MSG(memory || count == 0 || size == 0);
+  return memory;
+}
+
 void kernel_free(void *ptr) {
   k_free(ptr);
 }

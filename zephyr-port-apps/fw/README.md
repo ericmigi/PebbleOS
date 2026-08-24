@@ -21,6 +21,9 @@ FW_SERVICES_OK
 FW_PFS_MOUNT_OK
 FW_PFS_IO_OK <crc>
 FW_PFS_UP
+FW_REGISTRY_UP
+FW_APP_COUNT <count>
+FW_APP <uuid-or-id> <name>
 FW_EVENT_LOOP_UP
 FW_TICK HH:MM:SS
 FW_TIMER dispatched
@@ -31,6 +34,12 @@ kernel-main task, then creates, writes, reads, verifies, and deletes a self-test
 file before entering the launcher event loop. The CRC in `FW_PFS_IO_OK` is
 calculated from the readback bytes.
 
+After PFS is ready, the firmware opens PebbleOS's real `appdb` SettingsFile,
+enumerates installed `AppDBEntry` records, and combines them with the
+default-enabled normal-shell system app list. The minimal launcher selection
+prefers the first visible installed app and falls back to TicToc; process loading
+is the next slice.
+
 The boot also prints one `FW_STUB` line for each remaining intentionally
 deferred service family: board drivers, display/compositor, BLE/communications,
-app/worker process launch, and watchdog/analytics.
+and watchdog/analytics.

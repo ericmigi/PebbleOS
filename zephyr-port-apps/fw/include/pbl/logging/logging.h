@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #pragma once
 
-#include <zephyr/sys/printk.h>
+#include <stddef.h>
+
+void printk(const char *format, ...);
 
 #define LOG_DOMAIN_TEXT 0
 #define LOG_LEVEL_DEBUG 200
