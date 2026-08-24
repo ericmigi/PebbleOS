@@ -153,3 +153,13 @@ Camera gotchas:
 Scripts checked in under `zephyr-port-notes/rig/`: grab_daemon2.swift (the
 camera daemon), grab.swift (one-shot), grab_video.swift (mov recorder — avoid,
 wedges), boot_capture.py, shell_probe.py, Info.plist (GrabD bundle plist).
+
+## P3 BLE connect-test setup (rig)
+- Pixel 7a attached to unicorn-mac-1: adb serial 33141JEHN24410. adb at /opt/homebrew/bin/adb
+  (not on default PATH — `export PATH=/opt/homebrew/bin:$PATH`).
+- Stock CoreApp installed: package `coredevices.coreapp`. Drive via adb / android-mcp for the
+  connect + notification test (no app changes — 1:1 compat is the requirement).
+- BT stack on watch = PebbleOS NimBLE host (src/bluetooth-fw/nimble/) + SF32 LCPU controller
+  (vendor blob already in flash) via HCI-H4 over IPC (third_party/nimble/transport/hci_sf32lb52.c,
+  lcpu_power_on + ipc_queue). npl ported to Zephyr (npl_os_zephyr.c).
+- Milestone (scoped): connect -> receive ONE notification -> display it on the panel. No OTA.
