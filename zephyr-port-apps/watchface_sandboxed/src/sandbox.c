@@ -63,6 +63,34 @@ static void prv_mpu_region_write(uint8_t region, uint32_t rbar,
   __ISB();
 }
 
+// Raw region write with no barriers; only valid while the MPU is disabled
+// (see prv_mpu_batch_begin/end). Reprogramming several regions with the MPU
+// enabled forces a pipeline refetch after each write under a transiently
+// inconsistent map, which faults; disabling the MPU for the batch uses the
+// privileged default map (all code executable) until the full new map is in.
+static void prv_mpu_region_write_raw(uint8_t region, uint32_t rbar,
+                                     uint32_t rlar) {
+  MPU->RNR = region;
+  MPU->RBAR = rbar;
+  MPU->RLAR = rlar;
+}
+
+static uint32_t prv_mpu_batch_begin(void) {
+  const uint32_t ctrl = MPU->CTRL;
+  __DMB();
+  MPU->CTRL = 0U;
+  __DSB();
+  __ISB();
+  return ctrl;
+}
+
+static void prv_mpu_batch_end(uint32_t ctrl) {
+  __DSB();
+  MPU->CTRL = ctrl;
+  __DSB();
+  __ISB();
+}
+
 static void prv_mpu_dump(void) {
   const uint8_t regions =
       (MPU->TYPE & MPU_TYPE_DREGION_Msk) >> MPU_TYPE_DREGION_Pos;
@@ -230,24 +258,28 @@ void z_arm_custom_thread_restore_hook(struct k_thread *incoming) {
         ((s_stack_start + s_stack_size - 1U) & MPU_RLAR_LIMIT_Msk) |
         (MPU_MAIR_INDEX_SRAM << MPU_RLAR_AttrIndx_Pos) | MPU_RLAR_EN_Msk;
 
+    const uint32_t ctrl = prv_mpu_batch_begin();
     if (s_code_region_needed) {
-      prv_mpu_region_write(s_code_region, s_app_code_rbar, s_app_code_rlar);
+      prv_mpu_region_write_raw(s_code_region, s_app_code_rbar, s_app_code_rlar);
     }
-    prv_mpu_region_write(s_ram_region, arena_rbar, arena_rlar);
-    prv_mpu_region_write(s_stack_region, stack_rbar, stack_rlar);
+    prv_mpu_region_write_raw(s_ram_region, arena_rbar, arena_rlar);
+    prv_mpu_region_write_raw(s_stack_region, stack_rbar, stack_rlar);
+    prv_mpu_batch_end(ctrl);
     if (atomic_get(&s_syscall_active)) {
       __set_CONTROL(control & ~CONTROL_nPRIV_Msk);
     } else {
       __set_CONTROL(control | CONTROL_nPRIV_Msk);
     }
   } else {
-    prv_mpu_region_write(s_stack_region, s_saved_stack_rbar,
-                         s_saved_stack_rlar);
-    prv_mpu_region_write(s_ram_region, s_saved_ram_rbar, s_saved_ram_rlar);
+    const uint32_t ctrl = prv_mpu_batch_begin();
+    prv_mpu_region_write_raw(s_stack_region, s_saved_stack_rbar,
+                             s_saved_stack_rlar);
+    prv_mpu_region_write_raw(s_ram_region, s_saved_ram_rbar, s_saved_ram_rlar);
     if (s_code_region_needed) {
-      prv_mpu_region_write(s_code_region, s_saved_code_rbar,
-                           s_saved_code_rlar);
+      prv_mpu_region_write_raw(s_code_region, s_saved_code_rbar,
+                               s_saved_code_rlar);
     }
+    prv_mpu_batch_end(ctrl);
     __set_CONTROL(control & ~CONTROL_nPRIV_Msk);
   }
   __ISB();
@@ -412,7 +444,12 @@ bool sandbox_prepare(struct k_thread *app_thread, uintptr_t stack_start,
 
   s_code_region_needed = !code_access_found;
   if (s_code_region_needed) {
-    s_app_code_rbar = (code_start & MPU_RBAR_BASE_Msk) | P_RO_U_RO_Msk;
+    // Firmware code must be user-executable: RO for priv+user, and XN cleared
+    // (the arena region clears XN the same way). Without clearing XN the region
+    // is execute-never, so fetching firmware code faults with an instruction
+    // access violation.
+    s_app_code_rbar =
+        ((code_start & MPU_RBAR_BASE_Msk) | P_RO_U_RO_Msk) & ~MPU_RBAR_XN_Msk;
     s_app_code_rlar =
         ((code_end - 1U) & MPU_RLAR_LIMIT_Msk) |
         (MPU_MAIR_INDEX_FLASH << MPU_RLAR_AttrIndx_Pos) | MPU_RLAR_EN_Msk;
