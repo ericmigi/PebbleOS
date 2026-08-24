@@ -211,3 +211,19 @@ separately), UART log spam from CONFIG_LOG preview.
 - P2.3 PFS: DONE (filesystem on QSPI NOR) + integrated into the unified fw.
 - P2.4 app registry/launcher: in flight.
 - Remaining: display/compositor into fw; capstone = launcher runs a stored PBW sandboxed.
+
+## ★★★★★ P2 CAPSTONE COMPLETE — FIRMWARE LAUNCHES AN APP SANDBOXED, ON THE PANEL ★★★★★
+The unified PebbleOS-on-Zephyr firmware (zephyr-port-apps/fw/) on real obelix:
+FW_BOOT -> real tasks up -> FW_SERVICES_OK -> FW_PFS_MOUNT_OK -> FW_REGISTRY_UP ->
+FW_LAUNCH TicToc -> SANDBOX_APP_UP -> SANDBOX_SYSCALL_OK -> SANDBOX_TICK/SANDBOX_FRAME,
+with FW_TICK advancing in parallel. The launched app runs UNPRIVILEGED in the MPU
+sandbox and RENDERS ON THE PHYSICAL PANEL ("seven thirty one" = 19:31, real Gotham) —
+photo zephyr-port-notes/capstone-app-sandboxed-on-panel.png. Firmware kernel threads and
+the sandboxed app coexist. Committed 563c40bd3.
+Empty-PFS/no-AppDB made non-fatal (falls through to launch the embedded PBW).
+
+### P2 (real PebbleOS on Zephyr) — ALL CORE SLICES DONE ON HARDWARE
+- P2.1 unprivileged sandbox: DONE.  P2.2 consolidation: DONE.  P2.3 PFS: DONE.
+- P2.4 registry/launcher: DONE.  CAPSTONE (launch app sandboxed under full fw): DONE.
+Remaining polish: real AppDB code-bank load (currently embedded PBW), display/compositor
+as a first-class fw service (the app pushes frames directly today), BLE/OTA (P3).
