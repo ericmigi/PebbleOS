@@ -47,12 +47,19 @@ time_t kernel_wall_clock_get(void) {
   const time_t uptime_seconds = k_uptime_get() / 1000;
 
   if (!s_wall_clock_initialized) {
+#ifdef KERNEL_DEMO_EPOCH
+    // Demo override: stage a known displayed time for recording. The face
+    // formats time as UTC in this port, so KERNEL_DEMO_EPOCH is the desired
+    // displayed local time expressed as a UTC epoch.
+    s_wall_clock_offset = (time_t)KERNEL_DEMO_EPOCH - uptime_seconds;
+#else
     time_t rtc_time;
     if (prv_read_rtc(&rtc_time) && rtc_time != SF32LB_RTC_RESET_EPOCH) {
       s_wall_clock_offset = rtc_time - uptime_seconds;
     } else {
       s_wall_clock_offset = KERNEL_BUILD_EPOCH;
     }
+#endif
     s_wall_clock_initialized = true;
   }
 

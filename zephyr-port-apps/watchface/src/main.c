@@ -43,19 +43,6 @@ static bool prv_range_fits(size_t offset, size_t size, size_t limit) {
   return offset <= limit && size <= limit - offset;
 }
 
-static void prv_rotate_framebuffer_180(void) {
-  if (s_display_desc.buf_size < 2U) {
-    return;
-  }
-
-  for (size_t first = 0U, last = s_display_desc.buf_size - 1U; first < last;
-       ++first, --last) {
-    const uint8_t pixel = s_framebuffer[first];
-    s_framebuffer[first] = s_framebuffer[last];
-    s_framebuffer[last] = pixel;
-  }
-}
-
 static bool prv_validate_header(const PebbleProcessInfo *info, size_t blob_size,
                                 size_t *stored_size_out) {
   const size_t header_size = sizeof(*info);
@@ -190,11 +177,10 @@ void watchface_port_push_frame(void) {
     return;
   }
 
-  // The PT2 panel is mounted upside-down. The driver copies the complete frame
-  // synchronously, so restore the Pebble framebuffer as soon as the push ends.
-  prv_rotate_framebuffer_180();
+  // Push the Pebble framebuffer straight to the panel. Hardware verification
+  // showed the software 180° rotation left the physical panel upside-down, so
+  // the native scan orientation is already correct.
   const int ret = display_write(s_display, 0U, 0U, &s_display_desc, s_framebuffer);
-  prv_rotate_framebuffer_180();
   if (ret != 0) {
     printk("DISPLAY_PUSH_FAIL %d\n", ret);
     return;
