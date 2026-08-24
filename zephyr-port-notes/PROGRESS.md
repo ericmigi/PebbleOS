@@ -56,3 +56,19 @@ Rig: unicorn-mac-1 (100.87.44.126), obelix PVT on PPK2, ppk2d HTTP :8843, flash 
   (not 8 — room for Pebble's task regions). svc#4 elevation + MPU fault containment still being
   tuned for XIP-from-external-flash (app code executable region on this SoC). Committed on the
   zephyr fork branch pebble-sandbox-spike.
+
+- **M8 COMPLETE — P0 sandbox spike FULLY GREEN on obelix hardware.** The single biggest
+  de-risk of the whole port. On real pt2 silicon:
+  `PASS_SYSCALL 20` (unprivileged app thread issues svc#4, custom hook elevates, reads
+  k_uptime, returns unprivileged) / `PASS_FAULT_CONTAINED reason=19` (app reads guarded
+  buffer, MemManage fault caught by overridden k_sys_fatal_error_handler, only the app
+  thread aborted) / `PASS_KERNEL_ALIVE` x9 (kernel + main thread survive).
+  Pebble's foreign MPU/SVC sandbox proven riding on Zephyr threads, CONFIG_USERSPACE=n,
+  57 lines added to existing Zephyr arch files (< 75-line kill criterion). Branch
+  pebble-sandbox-spike on the zephyr fork.
+  HARDWARE MPU MAP (deliverable): 12 DREGIONs. Region 0 = XIP flash @0x12000000 AP3 RO+X
+  (unpriv-executable, no code slot needed). Region 1 = SRAM @0x20000000 AP0 priv-RW.
+  Regions 2-11 free for Pebble task regions. MAIR0 0x0044ffaa.
+  Key fork finding: Zephyr clears MMFSR before k_sys_fatal_error_handler, so fault-PC
+  match is the robust contained-fault signal (MMARVALID/MMFAR unreliable there);
+  reason 19 == K_ERR_ARM_MEM_DATA_ACCESS on this fork.
