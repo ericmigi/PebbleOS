@@ -33,7 +33,7 @@ static uint8_t s_app_segment[APP_SEGMENT_CAPACITY] __aligned(32);
 static struct k_thread s_kernel_thread;
 static struct k_thread s_app_thread;
 static const struct device *const s_display = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
-static const uint8_t *s_framebuffer;
+static uint8_t *s_framebuffer;
 static struct display_buffer_descriptor s_display_desc;
 static bool s_display_ready;
 static K_THREAD_STACK_DEFINE(s_kernel_stack, KERNEL_STACK_SIZE);
@@ -41,6 +41,19 @@ static K_THREAD_STACK_DEFINE(s_app_stack, APP_STACK_SIZE);
 
 static bool prv_range_fits(size_t offset, size_t size, size_t limit) {
   return offset <= limit && size <= limit - offset;
+}
+
+static void prv_rotate_framebuffer_180(void) {
+  if (s_display_desc.buf_size < 2U) {
+    return;
+  }
+
+  for (size_t first = 0U, last = s_display_desc.buf_size - 1U; first < last;
+       ++first, --last) {
+    const uint8_t pixel = s_framebuffer[first];
+    s_framebuffer[first] = s_framebuffer[last];
+    s_framebuffer[last] = pixel;
+  }
 }
 
 static bool prv_validate_header(const PebbleProcessInfo *info, size_t blob_size,
@@ -177,7 +190,11 @@ void watchface_port_push_frame(void) {
     return;
   }
 
+  // The PT2 panel is mounted upside-down. The driver copies the complete frame
+  // synchronously, so restore the Pebble framebuffer as soon as the push ends.
+  prv_rotate_framebuffer_180();
   const int ret = display_write(s_display, 0U, 0U, &s_display_desc, s_framebuffer);
+  prv_rotate_framebuffer_180();
   if (ret != 0) {
     printk("DISPLAY_PUSH_FAIL %d\n", ret);
     return;
@@ -190,8 +207,7 @@ int main(void) {
   watchface_port_graphics_init();
   size_t framebuffer_size;
   uint16_t framebuffer_stride;
-  const uint8_t *framebuffer =
-      watchface_framebuffer_bytes(&framebuffer_size, &framebuffer_stride);
+  uint8_t *framebuffer = watchface_framebuffer_bytes(&framebuffer_size, &framebuffer_stride);
   printk("WATCHFACE_FB %p size=%zu stride=%u ARGB2222\n", framebuffer,
          framebuffer_size, framebuffer_stride);
   s_framebuffer = framebuffer;

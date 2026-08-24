@@ -36,15 +36,23 @@
 #include "pbl/util/crc32.h"
 #include "process_state/app_state/app_state.h"
 #include "resource/resource.h"
+#include "sliding_text_emery_resources.h"
 #include "watchface_port.h"
 
 #define EVENT_QUEUE_DEPTH 8
 #define APP_HEAP_SIZE 16384
-#define FONT_RESOURCE_LARGE 1U
-#define FONT_RESOURCE_MEDIUM 2U
-#define FONT_RESOURCE_SMALL 3U
+#define FONT_RESOURCE_GOTHAM_BOLD_50 1U
+#define FONT_RESOURCE_GOTHAM_LIGHT_50 2U
+#define SYSTEM_FONT_RESOURCE_GOTHIC_14 256U
+#define PBPACK_MANIFEST_SIZE 12U
+#define PBPACK_TABLE_ENTRY_SIZE 16U
+#define PBPACK_APP_TABLE_ENTRIES 256U
+#define PBPACK_CONTENT_OFFSET \
+  (PBPACK_MANIFEST_SIZE + PBPACK_TABLE_ENTRY_SIZE * PBPACK_APP_TABLE_ENTRIES)
+#if defined(WATCHFACE_ASCII_PREVIEW)
 #define PREVIEW_COLS 50
 #define PREVIEW_ROWS 28
+#endif
 
 typedef struct {
   TickTimerServiceState tick_state;
@@ -59,21 +67,15 @@ struct Animation {
   bool scheduled;
 };
 
-static const uint8_t s_font_large_data[] __aligned(4) = {
-#include "watchface_font_large.pbf.inc"
-};
-static const uint8_t s_font_medium_data[] __aligned(4) = {
-#include "watchface_font_medium.pbf.inc"
-};
-static const uint8_t s_font_small_data[] __aligned(4) = {
+static const uint8_t s_font_system_data[] __aligned(4) = {
 #include "watchface_font_small.pbf.inc"
 };
 
 static FrameBuffer s_framebuffer;
 static GContext s_context;
-static FontInfo s_font_large;
-static FontInfo s_font_medium;
-static FontInfo s_font_small;
+static FontInfo s_font_bold;
+static FontInfo s_font_light;
+static FontInfo s_font_system;
 static WatchfaceAppState s_app_state;
 static Layer *s_kernel_layer_tree_stack[LAYER_TREE_STACK_SIZE];
 static Window *s_top_window;
@@ -90,24 +92,32 @@ K_MSGQ_DEFINE(s_app_event_queue, sizeof(PebbleEvent), EVENT_QUEUE_DEPTH, sizeof(
 
 time_t kernel_wall_clock_get(void);
 
+static uint32_t prv_read_u32(const uint8_t *bytes) {
+  uint32_t value;
+  memcpy(&value, bytes, sizeof(value));
+  return value;
+}
+
 static const uint8_t *prv_resource_data(uint32_t resource_id, size_t *size_out) {
   const uint8_t *data = NULL;
   size_t size = 0;
-  switch (resource_id) {
-    case FONT_RESOURCE_LARGE:
-      data = s_font_large_data;
-      size = sizeof(s_font_large_data);
-      break;
-    case FONT_RESOURCE_MEDIUM:
-      data = s_font_medium_data;
-      size = sizeof(s_font_medium_data);
-      break;
-    case FONT_RESOURCE_SMALL:
-      data = s_font_small_data;
-      size = sizeof(s_font_small_data);
-      break;
-    default:
-      break;
+
+  if (resource_id == SYSTEM_FONT_RESOURCE_GOTHIC_14) {
+    data = s_font_system_data;
+    size = sizeof(s_font_system_data);
+  } else if (sliding_text_emery_resources_len >= PBPACK_CONTENT_OFFSET && resource_id > 0U &&
+             resource_id <= prv_read_u32(sliding_text_emery_resources)) {
+    const uint8_t *entry = sliding_text_emery_resources + PBPACK_MANIFEST_SIZE +
+                           (resource_id - 1U) * PBPACK_TABLE_ENTRY_SIZE;
+    const uint32_t entry_id = prv_read_u32(entry);
+    const uint32_t offset = prv_read_u32(entry + 4U);
+    const uint32_t length = prv_read_u32(entry + 8U);
+    if (entry_id == resource_id &&
+        offset <= sliding_text_emery_resources_len - PBPACK_CONTENT_OFFSET &&
+        length <= sliding_text_emery_resources_len - PBPACK_CONTENT_OFFSET - offset) {
+      data = sliding_text_emery_resources + PBPACK_CONTENT_OFFSET + offset;
+      size = length;
+    }
   }
   if (size_out) {
     *size_out = size;
@@ -129,6 +139,7 @@ static void prv_render(void) {
   s_top_window->is_render_scheduled = false;
 }
 
+#if defined(WATCHFACE_ASCII_PREVIEW)
 static void prv_print_preview(void) {
   printk("WATCHFACE_PREVIEW %dx%d\n", PREVIEW_COLS, PREVIEW_ROWS);
   for (int row = 0; row < PREVIEW_ROWS; ++row) {
@@ -153,6 +164,7 @@ static void prv_print_preview(void) {
     printk("|\n");
   }
 }
+#endif
 
 static void prv_dump_frame(time_t timestamp) {
   struct tm now;
@@ -163,7 +175,9 @@ static void prv_dump_frame(time_t timestamp) {
   printk("WATCHFACE_TICK %02d:%02d\n", now.tm_hour, now.tm_min);
   printk("WATCHFACE_FRAME 0x%08x\n", crc);
   watchface_port_push_frame();
+#if defined(WATCHFACE_ASCII_PREVIEW)
   prv_print_preview();
+#endif
 }
 
 void watchface_port_set_threads(struct k_thread *kernel_thread, struct k_thread *app_thread) {
@@ -177,9 +191,9 @@ void watchface_port_graphics_init(void) {
   graphics_context_init(&s_context, &s_framebuffer, GContextInitializationMode_App);
   k_heap_init(&s_app_heap, s_app_heap_memory, sizeof(s_app_heap_memory));
 
-  if (!text_resources_init_font(SYSTEM_APP, FONT_RESOURCE_LARGE, 0, &s_font_large) ||
-      !text_resources_init_font(SYSTEM_APP, FONT_RESOURCE_MEDIUM, 0, &s_font_medium) ||
-      !text_resources_init_font(SYSTEM_APP, FONT_RESOURCE_SMALL, 0, &s_font_small)) {
+  if (!text_resources_init_font(SYSTEM_APP, FONT_RESOURCE_GOTHAM_BOLD_50, 0, &s_font_bold) ||
+      !text_resources_init_font(SYSTEM_APP, FONT_RESOURCE_GOTHAM_LIGHT_50, 0, &s_font_light) ||
+      !text_resources_init_font(SYSTEM_APP, SYSTEM_FONT_RESOURCE_GOTHIC_14, 0, &s_font_system)) {
     printk("WATCHFACE_FONT_FAIL\n");
     k_panic();
   }
@@ -190,7 +204,7 @@ void watchface_port_app_state_init(void) {
   tick_timer_service_state_init(&s_app_state.tick_state);
 }
 
-const uint8_t *watchface_framebuffer_bytes(size_t *size_out, uint16_t *stride_out) {
+uint8_t *watchface_framebuffer_bytes(size_t *size_out, uint16_t *stride_out) {
   if (size_out) {
     *size_out = framebuffer_get_size_bytes(&s_framebuffer);
   }
@@ -441,15 +455,10 @@ const uint8_t *sys_resource_read_only_bytes(ResAppNum app_num, uint32_t resource
 
 bool sys_resource_bytes_are_readonly(void *bytes) {
   const uintptr_t address = (uintptr_t)bytes;
-  const uint8_t *resources[] = {s_font_large_data, s_font_medium_data, s_font_small_data};
-  const size_t sizes[] = {
-      sizeof(s_font_large_data), sizeof(s_font_medium_data), sizeof(s_font_small_data)};
-  for (size_t i = 0; i < ARRAY_SIZE(resources); ++i) {
-    if (address >= (uintptr_t)resources[i] && address < (uintptr_t)(resources[i] + sizes[i])) {
-      return true;
-    }
-  }
-  return false;
+  return (address >= (uintptr_t)sliding_text_emery_resources &&
+          address < (uintptr_t)(sliding_text_emery_resources + sliding_text_emery_resources_len)) ||
+         (address >= (uintptr_t)s_font_system_data &&
+          address < (uintptr_t)(s_font_system_data + sizeof(s_font_system_data)));
 }
 
 ResAppNum sys_get_current_resource_num(void) {
@@ -501,7 +510,7 @@ ResHandle applib_resource_get_handle(uint32_t resource_id) {
 
 GFont fonts_get_system_font(const char *font_key) {
   ARG_UNUSED(font_key);
-  return &s_font_small;
+  return &s_font_system;
 }
 
 GFont sys_font_get_system_font(const char *font_key) {
@@ -510,12 +519,12 @@ GFont sys_font_get_system_font(const char *font_key) {
 
 GFont fonts_load_custom_font(ResHandle handle) {
   switch ((uintptr_t)handle) {
-    case FONT_RESOURCE_LARGE:
-      return &s_font_large;
-    case FONT_RESOURCE_MEDIUM:
-      return &s_font_medium;
+    case FONT_RESOURCE_GOTHAM_BOLD_50:
+      return &s_font_bold;
+    case FONT_RESOURCE_GOTHAM_LIGHT_50:
+      return &s_font_light;
     default:
-      return &s_font_small;
+      return &s_font_system;
   }
 }
 
@@ -689,7 +698,7 @@ static void prv_fallback_tick(struct tm *tick_time, TimeUnits units_changed) {
       layers[i] = text_layer_create(GRect(0, 18 + i * 64, PBL_DISPLAY_WIDTH, 58));
       text_layer_set_background_color(layers[i], GColorClear);
       text_layer_set_text_color(layers[i], GColorWhite);
-      text_layer_set_font(layers[i], i == 0 ? &s_font_large : &s_font_medium);
+      text_layer_set_font(layers[i], i == 0 ? &s_font_bold : &s_font_light);
       layer_add_child(window_get_root_layer(window), text_layer_get_layer(layers[i]));
     }
     app_window_stack_push(window, false);

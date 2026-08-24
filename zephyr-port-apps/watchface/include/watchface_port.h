@@ -19,4 +19,4 @@ bool watchface_port_take_kernel_event(PebbleEvent *event);
 void watchface_port_dispatch_kernel_event(PebbleEvent *event);
 void watchface_start_fallback(void);
 
-const uint8_t *watchface_framebuffer_bytes(size_t *size_out, uint16_t *stride_out);
+uint8_t *watchface_framebuffer_bytes(size_t *size_out, uint16_t *stride_out);
