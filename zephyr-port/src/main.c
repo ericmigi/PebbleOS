@@ -28,11 +28,17 @@ static struct k_sem s_contention_release;
 static struct k_sem s_contention_done;
 static bool s_contention_timed_out;
 static bool s_contention_acquired;
+static PebbleSemaphore *s_handoff_semaphore;
+static struct k_sem s_handoff_ready;
+static struct k_sem s_handoff_release;
+static struct k_sem s_handoff_done;
 
 static struct k_thread s_contention_thread_a;
 static struct k_thread s_contention_thread_b;
+static struct k_thread s_handoff_thread;
 K_THREAD_STACK_DEFINE(s_contention_stack_a, CONTENTION_STACK_SIZE);
 K_THREAD_STACK_DEFINE(s_contention_stack_b, CONTENTION_STACK_SIZE);
+K_THREAD_STACK_DEFINE(s_handoff_stack, CONTENTION_STACK_SIZE);
 
 NORETURN util_assertion_failed(const char *filename, int line) {
   os_assertion_failed(filename, line);
@@ -64,6 +70,17 @@ static void prv_contention_waiter(void *arg1, void *arg2, void *arg3) {
     mutex_unlock(s_contention_mutex);
   }
   k_sem_give(&s_contention_done);
+}
+
+static void prv_semaphore_giver(void *arg1, void *arg2, void *arg3) {
+  ARG_UNUSED(arg1);
+  ARG_UNUSED(arg2);
+  ARG_UNUSED(arg3);
+
+  k_sem_give(&s_handoff_ready);
+  k_sem_take(&s_handoff_release, K_FOREVER);
+  semaphore_give(s_handoff_semaphore);
+  k_sem_give(&s_handoff_done);
 }
 
 static const char *prv_test_mutex_lock_unlock(void) {
@@ -134,6 +151,33 @@ static const char *prv_test_semaphore(void) {
     return "take";
   }
   semaphore_destroy(semaphore);
+  return NULL;
+}
+
+static const char *prv_test_semaphore_handoff(void) {
+  s_handoff_semaphore = semaphore_create();
+  if (s_handoff_semaphore == NULL) {
+    return "create";
+  }
+
+  k_sem_init(&s_handoff_ready, 0, 1);
+  k_sem_init(&s_handoff_release, 0, 1);
+  k_sem_init(&s_handoff_done, 0, 1);
+  k_thread_create(&s_handoff_thread, s_handoff_stack, K_THREAD_STACK_SIZEOF(s_handoff_stack),
+                  prv_semaphore_giver, NULL, NULL, NULL, CONTENTION_PRIORITY, 0, K_NO_WAIT);
+
+  if (k_sem_take(&s_handoff_ready, K_SECONDS(1)) != 0) {
+    return "thread-start";
+  }
+  k_sem_give(&s_handoff_release);
+  if (!semaphore_take_with_timeout(s_handoff_semaphore, 1000)) {
+    return "take-timeout";
+  }
+  if (k_sem_take(&s_handoff_done, K_SECONDS(1)) != 0) {
+    return "thread-timeout";
+  }
+
+  semaphore_destroy(s_handoff_semaphore);
   return NULL;
 }
 
@@ -246,6 +290,7 @@ int main(void) {
   RUN_TEST("mutex_recursive", prv_test_mutex_recursive);
   RUN_TEST("mutex_contention", prv_test_mutex_contention);
   RUN_TEST("semaphore", prv_test_semaphore);
+  RUN_TEST("semaphore_handoff", prv_test_semaphore_handoff);
   RUN_TEST("tick_conversions", prv_test_tick_conversions);
   RUN_TEST("circular_buffer", prv_test_circular_buffer);
   RUN_TEST("crc32", prv_test_crc32);

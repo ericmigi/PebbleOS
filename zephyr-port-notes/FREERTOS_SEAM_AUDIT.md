@@ -139,10 +139,23 @@ semaphores. This change adds those thin mutex operations plus a thread-context
 binary semaphore API. It routes all eight direct semaphore operations in
 `reliable_transport.c`, leaving **101** production direct semaphore references.
 
-The three `vSemaphoreCreateBinary` sites are not equivalent to
+The next routing batch converts two more complete, thread-context handles:
+
+- `src/fw/services/firmware_update/service.c`: five references
+- `src/fw/drivers/flash/flash_erase.c`: four references
+
+Both initially-given semaphores are represented as an initially-empty
+`semaphore_create()` followed by `semaphore_give()`. This preserves the legacy
+constructor behavior in `firmware_update` and the explicit create/give sequence
+in `flash_erase`. After both routing batches, **92** production direct semaphore
+references remain; the **5** test references are unchanged. Handles that have
+any ISR or critical-section use remain direct.
+
+The three baseline `vSemaphoreCreateBinary` sites are not equivalent to
 `xSemaphoreCreateBinary`: the legacy macro creates the semaphore in the given
-state. They must not be mechanically replaced with the new initially-empty
-semaphore constructor.
+state. One is routed above with an explicit initial give; the two remaining
+sites must not be mechanically replaced with the new initially-empty semaphore
+constructor.
 
 ## Event groups
 
@@ -311,8 +324,8 @@ was found. Coverage: **none**, but no Z0 work is currently needed.
 ## FreeRTOS type coupling
 
 API-call routing alone will not remove the header dependency. The current
-production tree still contains these direct type references after the proof
-routing:
+production tree still contains these direct type references after both routing
+batches:
 
 | Type | References | Files |
 |---|---:|---:|
@@ -322,7 +335,7 @@ routing:
 | `QueueHandle_t` | 33 | 14 |
 | `QueueSetHandle_t` | 2 | 2 |
 | `QueueSetMemberHandle_t` | 2 | 2 |
-| `SemaphoreHandle_t` | 28 | 21 |
+| `SemaphoreHandle_t` | 26 | 19 |
 | `TickType_t` | 22 | 13 |
 
 The most important leaks are `QueueHandle_t` and `SemaphoreHandle_t` in public
@@ -380,3 +393,21 @@ their owning family rather than replaced globally:
    telemetry, TLS/MPU, core dump, and tickless-idle projects.
 8. Design critical-section APIs last and by intent (IRQ mask, scheduler lock,
    or spinlock), not as a textual replacement for `portENTER_CRITICAL`.
+
+## Running direct-use tally
+
+This tally is derived from the baseline counts above and includes the two
+completed routing batches. Tests are listed separately and remain untouched.
+
+| Family | Production remaining | Tests remaining |
+|---|---:|---:|
+| Binary semaphores / mutexes | 92 | 5 |
+| Queues | 51 | 27 |
+| Delay / suspend / yield | 9 | 4 |
+| Task create / delete | 4 | 2 |
+| Critical sections | 59 | 0 |
+| TCB / scheduler inspection | 52 | 4 |
+| ISR variants | 15 | 0 |
+| Event groups | 0 | 0 |
+| FreeRTOS software timers | 0 | 0 |
+| Task notifications | 0 | 0 |

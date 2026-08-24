@@ -5,21 +5,19 @@
 #include <pbl/drivers/flash/flash_internal.h>
 
 #include "flash_region/flash_region.h"
+#include "pbl/os/semaphore.h"
 #include "pbl/services/new_timer/new_timer.h"
 #include <pbl/logging/logging.h>
 #include "system/passert.h"
 #include "pbl/util/attributes.h"
 #include "pbl/util/math.h"
 
-#include "FreeRTOS.h"
-#include "semphr.h"
-
 #include <inttypes.h>
 
 PBL_LOG_MODULE_DECLARE(driver_flash, CONFIG_DRIVER_FLASH_LOG_LEVEL);
 
 
-static SemaphoreHandle_t s_erase_mutex = NULL;
+static PebbleSemaphore *s_erase_mutex = NULL;
 static struct FlashRegionEraseState {
   uint32_t next_erase_addr;
   uint32_t end_addr;
@@ -33,16 +31,16 @@ T_STATIC void prv_lock_erase_mutex(void);
 T_STATIC void prv_unlock_erase_mutex(void);
 #if !UNITTEST
 void flash_erase_init(void) {
-  s_erase_mutex = xSemaphoreCreateBinary();
-  xSemaphoreGive(s_erase_mutex);
+  s_erase_mutex = semaphore_create();
+  semaphore_give(s_erase_mutex);
 }
 
 static void prv_lock_erase_mutex(void) {
-  xSemaphoreTake(s_erase_mutex, portMAX_DELAY);
+  semaphore_take(s_erase_mutex);
 }
 
 static void prv_unlock_erase_mutex(void) {
-  xSemaphoreGive(s_erase_mutex);
+  semaphore_give(s_erase_mutex);
 }
 #endif
 
