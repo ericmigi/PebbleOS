@@ -162,6 +162,7 @@ static void prv_dump_frame(time_t timestamp) {
   const uint32_t crc = crc32(CRC32_INIT, s_framebuffer.buffer, size);
   printk("WATCHFACE_TICK %02d:%02d\n", now.tm_hour, now.tm_min);
   printk("WATCHFACE_FRAME 0x%08x\n", crc);
+  watchface_port_push_frame();
   prv_print_preview();
 }
 

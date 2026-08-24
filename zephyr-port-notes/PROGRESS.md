@@ -164,3 +164,16 @@ Remaining: wire the framebuffer -> S2 display_write (RGB222->RGB332) so it's vis
 physical JDI panel = the final pixel-push. Caveats: runs privileged/MPU-off (S4 proved the
 unprivileged svc#4 sandbox separately); substituted system fonts (original app_resources.pbpack
 not embedded); synchronous animation adapter.
+
+## ★★★★★ NORTH STAR ACHIEVED — REAL WATCHFACE VISIBLE ON THE OBELIX PANEL ★★★★★
+S6 wired the watchface framebuffer -> S2 display_write (DEVICE_DT_GET(DT_CHOSEN(zephyr_display)),
+display_blanking_off, display_write 200x228 pitch200 45600B, PIXEL_FORMAT_L_8 carrier, driver does
+ARGB2222->RGB332). Flashed to real obelix: the unmodified published Sliding Text watchface's OWN
+PBW code runs on PebbleOS-on-Zephyr, ticks, and renders the time as words ("three"/"two") VISIBLE
+ON THE PHYSICAL JDI PANEL (photo: zephyr-port-notes/sliding-text-on-obelix.png). Display driver
+also independently confirmed with color-bar test (colorbars-on-obelix.png).
+Full path proven end to end on hardware: PBW load + relocate + jump-table -> app runs in process
+context -> tick_timer_service -> applib graphics/text/font -> framebuffer -> JDI/LCDC panel.
+Known cosmetic follow-ups: panel mounted 180deg (needs orientation flip), substituted system fonts
+(original app_resources.pbpack not embedded), runs privileged (S4 proved unprivileged svc#4 sandbox
+separately), UART log spam from CONFIG_LOG preview.

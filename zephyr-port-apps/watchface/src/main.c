@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include <errno.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -7,6 +8,8 @@
 #include <string.h>
 
 #include <zephyr/cache.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/display.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 
@@ -29,6 +32,10 @@ _Static_assert(sizeof(PebbleProcessInfo) == 130U, "PebbleProcessInfo v16 ABI cha
 static uint8_t s_app_segment[APP_SEGMENT_CAPACITY] __aligned(32);
 static struct k_thread s_kernel_thread;
 static struct k_thread s_app_thread;
+static const struct device *const s_display = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
+static const uint8_t *s_framebuffer;
+static struct display_buffer_descriptor s_display_desc;
+static bool s_display_ready;
 static K_THREAD_STACK_DEFINE(s_kernel_stack, KERNEL_STACK_SIZE);
 static K_THREAD_STACK_DEFINE(s_app_stack, APP_STACK_SIZE);
 
@@ -165,6 +172,20 @@ static void prv_app_main(void *arg1, void *arg2, void *arg3) {
   printk("WATCHFACE_EXIT %d\n", result);
 }
 
+void watchface_port_push_frame(void) {
+  if (!s_display_ready) {
+    return;
+  }
+
+  const int ret = display_write(s_display, 0U, 0U, &s_display_desc, s_framebuffer);
+  if (ret != 0) {
+    printk("DISPLAY_PUSH_FAIL %d\n", ret);
+    return;
+  }
+  printk("DISPLAY_PUSH ok\n");
+  printk("DISPLAY_PUSH_EOF\n");
+}
+
 int main(void) {
   watchface_port_graphics_init();
   size_t framebuffer_size;
@@ -173,6 +194,23 @@ int main(void) {
       watchface_framebuffer_bytes(&framebuffer_size, &framebuffer_stride);
   printk("WATCHFACE_FB %p size=%zu stride=%u ARGB2222\n", framebuffer,
          framebuffer_size, framebuffer_stride);
+  s_framebuffer = framebuffer;
+  s_display_desc = (struct display_buffer_descriptor){
+      .buf_size = framebuffer_size,
+      .width = framebuffer_stride,
+      .height = framebuffer_size / framebuffer_stride,
+      .pitch = framebuffer_stride,
+  };
+  if (!device_is_ready(s_display)) {
+    printk("DISPLAY_PUSH_FAIL %d\n", -ENODEV);
+  } else {
+    const int ret = display_blanking_off(s_display);
+    if (ret != 0) {
+      printk("DISPLAY_PUSH_FAIL %d\n", ret);
+    } else {
+      s_display_ready = true;
+    }
+  }
   new_timer_service_init();
   regular_timer_init();
 
