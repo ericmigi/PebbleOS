@@ -192,3 +192,22 @@ separately), UART log spam from CONFIG_LOG preview.
   after the first syscall — post-syscall step under diagnosis. (Boot-assert root cause was
   tick_timer_service_init before app-thread registration; moved into a privileged svc#4 call.)
   NOTE: touches src/fw/system/passert.h (build-gated WTF context) — verify FreeRTOS build unaffected.
+
+- **P2.1 SANDBOX COMPLETE on hardware.** The real Sliding Text PBW runs UNPRIVILEGED in the
+  Pebble MPU sandbox on obelix, survives timer preemption (MPU-swapping context switch), ticks,
+  and renders: SANDBOX_APP_UP / SYSCALL_OK / app_entry / window_create / text_layer_create /
+  tick_subscribe / event_loop / wait_tick / tick_handler / render / SANDBOX_TICK 18:13 /
+  SANDBOX_FRAME, no fatal, kernel alive. Root causes (fixed directly, codex was down): (1) the
+  firmware-code MPU region left execute-never (XN not cleared); (2) per-write ISB during
+  multi-region MPU reprogram forced a refetch under a transiently inconsistent map -> fault at
+  the first preemption; batch the writes with the MPU disabled, then re-enable. Committed 487a77405.
+  Also fixed 3 stale bisect artifacts that had broken the build/boot (dup main in boot_probe.c,
+  SANDBOX_BISECT_NO_SYSCALL_SECTION define, early return() truncating CMakeLists) + added
+  CONFIG_LOG_MODE_IMMEDIATE so markers survive a crash.
+
+### P2 scoreboard
+- P2.1 unprivileged sandbox: DONE (real PBW runs sandboxed on hw).
+- P2.2 consolidation: DONE (real task/service model boots on hw).
+- P2.3 PFS: DONE (filesystem on QSPI NOR) + integrated into the unified fw.
+- P2.4 app registry/launcher: in flight.
+- Remaining: display/compositor into fw; capstone = launcher runs a stored PBW sandboxed.
