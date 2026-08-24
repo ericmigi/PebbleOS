@@ -129,3 +129,9 @@ Rig: unicorn-mac-1 (100.87.44.126), obelix PVT on PPK2, ppk2d HTTP :8843, flash 
 - S3 graphics: GREEN — 12:34 rendered on hw, CRC 0xa61a348a matches host.
 - S4 loader+syscall: GREEN — real PBW loads + svc#4 syscall works on hw.
 3 of 4 stream mechanisms proven on real hardware.
+
+- **S1 KERNEL/TICK GREEN ON HARDWARE.** Fixed tick repeat (timer re-arms) + wall-clock advance
+  (SF32LB RTC). On obelix: KERNEL_UP then TICK advancing once per second with real time
+  (unix 1787581010, 14:16:50->14:16:56). The exact tick_timer_service path Sliding Text uses.
+  ALL 4 STREAM MECHANISMS NOW PROVEN except S2 display. Sliding Text's 41 SDK imports decoded:
+  tick_timer_service_subscribe + TextLayer + pbl_override_time.
