@@ -135,3 +135,17 @@ Rig: unicorn-mac-1 (100.87.44.126), obelix PVT on PPK2, ppk2d HTTP :8843, flash 
   (unix 1787581010, 14:16:50->14:16:56). The exact tick_timer_service path Sliding Text uses.
   ALL 4 STREAM MECHANISMS NOW PROVEN except S2 display. Sliding Text's 41 SDK imports decoded:
   tick_timer_service_subscribe + TextLayer + pbl_override_time.
+
+- **S2 DISPLAY GREEN ON HARDWARE.** First Zephyr JDI/LCDC driver for obelix. On the watch:
+  DISPLAY_BIND ok / DISPLAY_WRITE_START / DISPLAY_EOF / DISPLAY_DONE — the LCDC pushed a full
+  frame to the real panel and the EOF callback fired (no silent-loss timeout). SiFli HAL reused,
+  full pt2 dts (LCDC1 @0x50008000, panel + 12 JDI signals). Committed on zephyr fork branch
+  pt2-display. Pixels not eyeball-verified (no rig camera) but frame transfer completes.
+
+### ★ ALL FOUR NORTH STAR STREAM MECHANISMS GREEN ON REAL OBELIX HARDWARE ★
+- S1 kernel/tick: TICK advances 1/sec with real wall clock.
+- S2 display: JDI/LCDC frame transfer + EOF on the panel.
+- S3 graphics: real PebbleOS pipeline renders 12:34, CRC matches host.
+- S4 loader+syscall: real Sliding Text PBW loads (52 relocs, CRC valid) + svc#4 syscall.
+Remaining: S5 integration (fuse into the running watchface) + final S3-framebuffer -> S2-display_write
+wiring for the visible ticking clock.
