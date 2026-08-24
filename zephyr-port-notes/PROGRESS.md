@@ -149,3 +149,18 @@ Rig: unicorn-mac-1 (100.87.44.126), obelix PVT on PPK2, ppk2d HTTP :8843, flash 
 - S4 loader+syscall: real Sliding Text PBW loads (52 relocs, CRC valid) + svc#4 syscall.
 Remaining: S5 integration (fuse into the running watchface) + final S3-framebuffer -> S2-display_write
 wiring for the visible ticking clock.
+
+## ★★★ NORTH STAR (compute): REAL SLIDING TEXT WATCHFACE EXECUTES ON OBELIX/ZEPHYR ★★★
+S5 watchface capstone flashed to real obelix. UART:
+  WATCHFACE_LOADED entry=0x000005b8 reloc=52   (real PBW binary loaded + relocated)
+  WATCHFACE_PATH PBW_PRIVILEGED                 (REAL PBW execution path, not the fallback)
+  WATCHFACE_UP                                  (the app's own init ran + returned)
+  WATCHFACE_TICK 14:44                          (its tick handler fired, real time)
+  WATCHFACE_FRAME 0x5e882aa5 + ASCII preview showing rendered glyphs
+The unmodified published third-party Sliding Text watchface's OWN machine code runs on
+PebbleOS-on-Zephyr on real obelix hardware, subscribes to tick_timer_service, and renders
+the time into the 200x228 framebuffer. Every North Star mechanism proven AND integrated.
+Remaining: wire the framebuffer -> S2 display_write (RGB222->RGB332) so it's visible on the
+physical JDI panel = the final pixel-push. Caveats: runs privileged/MPU-off (S4 proved the
+unprivileged svc#4 sandbox separately); substituted system fonts (original app_resources.pbpack
+not embedded); synchronous animation adapter.
