@@ -1,0 +1,23 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+#pragma once
+
+#include <stdbool.h>
+
+#include "applib/graphics/text_render.h"
+
+typedef struct FrameBuffer FrameBuffer;
+typedef struct Heap Heap;
+
+typedef struct TextRenderState {
+  SpecialCodepointHandlerCb special_codepoint_handler_cb;
+  void *special_codepoint_handler_context;
+} TextRenderState;
+
+GContext *app_state_get_graphics_context(void);
+TextRenderState *app_state_get_text_render_state(void);
+bool app_state_get_text_perimeter_debugging_enabled(void);
+void app_state_set_text_perimeter_debugging_enabled(bool enabled);
+GBitmap *app_state_legacy2_get_2bit_framebuffer(void);
+Heap *app_state_get_heap(void);
+bool heap_is_allocated(Heap *heap, void *ptr);
+bool process_manager_compiled_with_legacy2_sdk(void);
