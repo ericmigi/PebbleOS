@@ -22,12 +22,18 @@ typedef struct {
 
 static TaskTimerManager s_manager;
 static PebbleSemaphore *s_wake_semaphore;
+static struct k_timer s_deadline_timer;
 static struct k_thread s_thread;
 static K_THREAD_STACK_DEFINE(s_stack, NEW_TIMER_STACK_SIZE);
 K_MSGQ_DEFINE(s_work_queue, sizeof(NewTimerWorkItem), NEW_TIMER_WORK_ITEMS, sizeof(void *));
 
 void pebble_zephyr_semaphore_give(SemaphoreHandle_t semaphore) {
   semaphore_give((PebbleSemaphore *)semaphore);
+}
+
+static void prv_deadline_expired(struct k_timer *timer) {
+  ARG_UNUSED(timer);
+  semaphore_give(s_wake_semaphore);
 }
 
 static void prv_service_loop(void *arg1, void *arg2, void *arg3) {
@@ -40,7 +46,11 @@ static void prv_service_loop(void *arg1, void *arg2, void *arg3) {
     if (ticks_to_wait == portMAX_DELAY) {
       semaphore_take(s_wake_semaphore);
     } else {
-      semaphore_take_with_timeout(s_wake_semaphore, ticks_to_milliseconds(ticks_to_wait));
+      // task_timer deadlines are in Zephyr ticks. Keep them in that domain so
+      // the 10 kHz pt2 clock does not lose sub-millisecond wakeups.
+      k_timer_start(&s_deadline_timer, K_TICKS(ticks_to_wait - 1), K_NO_WAIT);
+      semaphore_take(s_wake_semaphore);
+      k_timer_stop(&s_deadline_timer);
     }
 
     NewTimerWorkItem work;
@@ -52,6 +62,7 @@ static void prv_service_loop(void *arg1, void *arg2, void *arg3) {
 
 void new_timer_service_init(void) {
   s_wake_semaphore = semaphore_create();
+  k_timer_init(&s_deadline_timer, prv_deadline_expired, NULL);
   task_timer_manager_init(&s_manager, (SemaphoreHandle_t)s_wake_semaphore);
   k_thread_create(&s_thread, s_stack, K_THREAD_STACK_SIZEOF(s_stack), prv_service_loop, NULL, NULL,
                   NULL, NEW_TIMER_PRIORITY, 0, K_NO_WAIT);

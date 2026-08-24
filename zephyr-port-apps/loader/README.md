@@ -63,6 +63,10 @@ must be preserved because the target app was built against SDK 5.95. Other
 useful reference entries are tick_timer_service_subscribe at index 262 and
 graphics_draw_text at index 309.
 
+Disassembly of this exact PBW confirms that it imports pbl_override_time and
+tick_timer_service_subscribe. Its complete 41-entry import set is recorded in
+SLIDING_TEXT_IMPORTS.md.
+
 The full Zephyr firmware must build the existing tools/generate_native_sdk
 output and export the real g_pbl_system_tbl. The placeholder in this probe
 only proves the loader's pointer patch.
@@ -127,6 +131,7 @@ task and TLS assumptions:
 
 - stable App/Worker k_thread identity and current-process lookup
 - loaded image, app stack, and optional privileged syscall-stack bounds
+- process-owned AppState and heap allocation inside user-accessible app RAM
 - per-thread saved syscall LR/SP and nested syscall/callback state
 - MPU restore programming on every incoming thread switch
 - process-fault/exit handling for rejected SVCs and bad user pointers
@@ -138,6 +143,13 @@ containing app-callable applib code user RO/executable, and kernel RAM
 privileged-only. g_pbl_system_tbl must be user-readable and read-only. The SVC
 return-PC island is the privilege boundary: direct calls to privileged bodies
 remain unprivileged and must not gain kernel access.
+
+Do not map only the 3024-byte loaded image and stack. Sliding Text's exported
+applib calls run unprivileged and directly mutate AppState, UI objects, and the
+app heap. The legacy app manager allocates those from APP_RAM and exposes the
+current AppState pointer through user-readable, kernel-controlled storage. S1
+must reproduce that ownership and mapping, or port every such export behind a
+syscall; the former is the compatible first milestone.
 
 After loading, perform any required D-cache clean and I-cache invalidate before
 S1 starts (segment + info.offset) | 1 as an unprivileged thread. S1 also owns

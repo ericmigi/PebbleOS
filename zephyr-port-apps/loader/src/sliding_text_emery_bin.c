@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: Apache-2.0 */
 /* Generated from Sliding Text's emery/pebble-app.bin. */
 #include "sliding_text_emery_bin.h"
 
