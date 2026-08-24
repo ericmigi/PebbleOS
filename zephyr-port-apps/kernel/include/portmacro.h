@@ -1,0 +1,7 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+#pragma once
+
+#include "FreeRTOS.h"
+
+typedef BaseType_t portBASE_TYPE;
