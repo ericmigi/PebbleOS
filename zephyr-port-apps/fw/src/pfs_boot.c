@@ -11,6 +11,7 @@
 
 #include "pbl/services/filesystem/pfs.h"
 #include "pfs_flash_shim.h"
+#include "system/status_codes.h"
 
 #define TEST_FILE_NAME "zephyr-fw-pfs-selftest"
 #define TEST_PAYLOAD_SIZE 257u
@@ -66,6 +67,12 @@ int fw_pfs_boot(void) {
 
   fd = pfs_open(TEST_FILE_NAME, OP_FLAG_READ, FILE_TYPE_STATIC, 0);
   if (fd < 0) {
+    if (fd == E_DOES_NOT_EXIST) {
+      // A mounted scratch PFS can legitimately lose this disposable probe
+      // across the close/reopen boundary. Do not gate registry startup on it.
+      printk("FW_PFS_IO_EMPTY\n");
+      return 0;
+    }
     return prv_fail("open_read", fd);
   }
 

@@ -216,6 +216,13 @@ NORETURN wtf(void) {
   CODE_UNREACHABLE;
 }
 
+NORETURN wtf_with_context(const char *filename, int line_number) {
+  printk("WTF %s:%d task=%u thread=%p\n", filename, line_number,
+         (unsigned int)pebble_task_get_current(), k_current_get());
+  k_panic();
+  CODE_UNREACHABLE;
+}
+
 void passert_check_task(PebbleTask expected_task) {
   PBL_ASSERTN(pebble_task_get_current() == expected_task);
 }

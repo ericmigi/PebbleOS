@@ -19,6 +19,7 @@
 #include "pbl/services/regular_timer.h"
 #include "pbl/services/system_task.h"
 #include "pfs_boot.h"
+#include "sandbox_launcher.h"
 
 static TimerID s_probe_timer;
 
@@ -54,6 +55,11 @@ static void prv_kernel_main(void *parameter) {
   if (fw_pfs_boot() == 0) {
     PBL_LOG_ALWAYS("FW_PFS_UP");
     fw_app_registry_init();
+    const FwAppRegistryEntry *app = fw_launcher_pick_app();
+    if (app) {
+      PBL_LOG_ALWAYS("FW_LAUNCH %s", app->name);
+      (void)fw_sandbox_launch();
+    }
   }
   launcher_main_loop();
 }
