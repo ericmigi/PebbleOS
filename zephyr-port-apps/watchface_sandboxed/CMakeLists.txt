@@ -6,9 +6,11 @@ set(USER_CACHE_DIR "${CMAKE_BINARY_DIR}/.cache" CACHE PATH "Zephyr cache directo
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(pebbleos_zephyr_watchface_sandboxed)
 
+get_filename_component(PEBBLEOS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+
+
 option(WATCHFACE_ASCII_PREVIEW "Print an ASCII framebuffer preview on every tick" OFF)
 
-get_filename_component(PEBBLEOS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 set(GFX "${PEBBLEOS_ROOT}/src/fw/applib/graphics")
 string(TIMESTAMP WATCHFACE_BUILD_EPOCH "%s" UTC)
 
@@ -38,6 +40,7 @@ target_compile_definitions(app PRIVATE
   CONFIG_SOC_SF32LB52=1
   CONFIG_TASK_TIMER_POOL_SIZE=8
   KERNEL_BUILD_EPOCH=${WATCHFACE_BUILD_EPOCH}
+  PBL_WTF_CONTEXT=1
 )
 
 if(WATCHFACE_ASCII_PREVIEW)
@@ -58,7 +61,6 @@ target_sources(app PRIVATE
 
   # S1: timer spine (the runtime is integration-specific and lives in port.c).
   "${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/src/new_timer_zephyr.c"
-  "${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/src/wall_clock_zephyr.c"
   "${PEBBLEOS_ROOT}/lib/os/mutex_zephyr.c"
   "${PEBBLEOS_ROOT}/lib/os/platform_zephyr.c"
   "${PEBBLEOS_ROOT}/lib/os/semaphore_zephyr.c"

@@ -16,6 +16,7 @@
 
 #include "applib/applib_resource.h"
 #include "applib/fonts/fonts.h"
+#include "applib/tick_timer_service_private.h"
 #include "applib/tick_timer_service.h"
 #include "applib/ui/animation.h"
 #include "applib/ui/app_window_stack.h"
@@ -33,8 +34,45 @@ void *task_malloc(size_t size);
 void task_free(void *ptr);
 
 static bool s_app_announced;
+static uint32_t s_step_mask;
+
+static const char *const s_step_names[SandboxStepCount] = {
+    [SandboxStepAppEntry] = "app_entry",
+    [SandboxStepWindowCreate] = "window_create",
+    [SandboxStepTextLayerCreate] = "text_layer_create",
+    [SandboxStepTickSubscribe] = "tick_subscribe",
+    [SandboxStepWindowStackPush] = "window_stack_push",
+    [SandboxStepEventLoop] = "event_loop",
+    [SandboxStepWaitTick] = "wait_tick",
+    [SandboxStepTickHandler] = "tick_handler",
+    [SandboxStepRender] = "render",
+};
+
+static void prv_log_step(SandboxStep step, uintptr_t detail) {
+  if ((unsigned int)step >= SandboxStepCount ||
+      (s_step_mask & (1UL << step)) != 0U) {
+    return;
+  }
+
+  s_step_mask |= 1UL << step;
+  if (detail != 0U) {
+    printk("SANDBOX_STEP %s 0x%08x\n", s_step_names[step],
+           (uint32_t)detail);
+  } else {
+    printk("SANDBOX_STEP %s\n", s_step_names[step]);
+  }
+}
 
 int __sandbox_syscall_probe(int value);
+
+DEFINE_SYSCALL(void, sandbox_app_runtime_init, void) {
+  watchface_port_app_state_init();
+  tick_timer_service_init();
+}
+
+DEFINE_SYSCALL(void, sandbox_mpu_readback, void) {
+  sandbox_dump_active_mpu();
+}
 
 DEFINE_SYSCALL(int, sandbox_syscall_probe, int value) {
   if (sandbox_thread_is_unprivileged()) {
@@ -48,6 +86,10 @@ DEFINE_SYSCALL(int, sandbox_syscall_probe, int value) {
     printk("SANDBOX_SYSCALL_OK\n");
   }
   return value * 2;
+}
+
+DEFINE_SYSCALL(void, sandbox_app_step, SandboxStep step, uintptr_t detail) {
+  prv_log_step(step, detail);
 }
 
 DEFINE_SYSCALL(bool, sandbox_wait_tick, struct tm *tick_time,
@@ -69,15 +111,19 @@ DEFINE_SYSCALL(void, sandbox_render_tick, time_t timestamp) {
 }
 
 void sandbox_app_event_loop(void) {
+  sandbox_app_step(SandboxStepEventLoop, 0U);
   for (;;) {
     struct tm tick_time;
     TimeUnits units_changed;
     TickHandler handler;
     time_t timestamp;
 
+    sandbox_app_step(SandboxStepWaitTick, 0U);
     if (sandbox_wait_tick(&tick_time, &units_changed, &handler, &timestamp) &&
         handler) {
+      sandbox_app_step(SandboxStepTickHandler, (uintptr_t)handler);
       handler(&tick_time, units_changed);
+      sandbox_app_step(SandboxStepRender, 0U);
       sandbox_render_tick(timestamp);
     }
   }
@@ -144,6 +190,7 @@ DEFINE_SYSCALL(size_t, sandbox_strlen, const char *string) {
 
 DEFINE_SYSCALL(void, sandbox_tick_timer_service_subscribe,
                TimeUnits tick_units, TickHandler handler) {
+  prv_log_step(SandboxStepTickSubscribe, (uintptr_t)handler);
   tick_timer_service_subscribe(tick_units, handler);
 }
 
@@ -152,6 +199,7 @@ DEFINE_SYSCALL(void, sandbox_tick_timer_service_unsubscribe, void) {
 }
 
 DEFINE_SYSCALL(Window *, sandbox_window_create, void) {
+  prv_log_step(SandboxStepWindowCreate, 0U);
   return window_create();
 }
 
@@ -165,6 +213,7 @@ DEFINE_SYSCALL(Layer *, sandbox_window_get_root_layer, const Window *window) {
 
 DEFINE_SYSCALL(void, sandbox_app_window_stack_push, Window *window,
                bool animated) {
+  prv_log_step(SandboxStepWindowStackPush, (uintptr_t)window);
   app_window_stack_push(window, animated);
 }
 
@@ -196,6 +245,7 @@ DEFINE_SYSCALL(bool, sandbox_animation_set_implementation,
 }
 
 DEFINE_SYSCALL(TextLayer *, sandbox_text_layer_create, GRect frame) {
+  prv_log_step(SandboxStepTextLayerCreate, 0U);
   return text_layer_create(frame);
 }
 

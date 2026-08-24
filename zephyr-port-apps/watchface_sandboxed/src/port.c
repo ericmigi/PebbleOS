@@ -89,8 +89,11 @@ static struct k_heap s_app_heap;
 K_MSGQ_DEFINE(s_kernel_event_queue, sizeof(PebbleEvent), EVENT_QUEUE_DEPTH, sizeof(uint32_t));
 K_MSGQ_DEFINE(s_app_event_queue, sizeof(PebbleEvent), EVENT_QUEUE_DEPTH, sizeof(uint32_t));
 
-time_t kernel_wall_clock_get(void);
 bool clock_is_24h_style(void);
+
+time_t kernel_wall_clock_get(void) {
+  return (time_t)KERNEL_BUILD_EPOCH + (time_t)(k_uptime_get() / 1000);
+}
 
 static uint32_t prv_read_u32(const uint8_t *bytes) {
   uint32_t value;
@@ -800,10 +803,17 @@ NORETURN passert_failed_no_message_with_lr(const char *filename, int line_number
   CODE_UNREACHABLE;
 }
 
-NORETURN wtf(void) {
-  printk("WATCHFACE_ASSERT WTF\n");
+NORETURN wtf_with_context(const char *filename, int line_number) {
+  const PebbleTask task = pebble_task_get_current();
+  printk("WATCHFACE_ASSERT WTF %s:%d task=%u current=%p app=%p kernel=%p\n",
+         filename, line_number, (unsigned int)task, k_current_get(),
+         s_app_thread, s_kernel_thread);
   k_panic();
   CODE_UNREACHABLE;
+}
+
+NORETURN wtf(void) {
+  wtf_with_context("<unknown>", 0);
 }
 
 NORETURN util_assertion_failed(const char *filename, int line) {

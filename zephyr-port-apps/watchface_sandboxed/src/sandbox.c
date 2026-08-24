@@ -5,6 +5,7 @@
 
 #include <zephyr/arch/arm/custom_sandbox_hooks.h>
 #include <zephyr/arch/arm/mpu/arm_mpu.h>
+#include <zephyr/fatal.h>
 #include <zephyr/linker/linker-defs.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/printk.h>
@@ -19,7 +20,6 @@
 #define SVC_EXC_RETURN_PSP BIT(2)
 #define SVC_EXC_RETURN_BASIC_FRAME BIT(4)
 #define XPSR_STACK_ALIGN BIT(9)
-
 SandboxAppArena g_sandbox_app_arena __aligned(MPU_MIN_ALIGN);
 
 static struct k_thread *s_app_thread;
@@ -38,6 +38,7 @@ static uint32_t s_saved_code_rbar;
 static uint32_t s_saved_code_rlar;
 static uint32_t s_app_code_rbar;
 static uint32_t s_app_code_rlar;
+static bool s_code_region_needed;
 static atomic_t s_sandbox_ready;
 static atomic_t s_syscall_active;
 static uintptr_t s_app_return_address;
@@ -62,6 +63,53 @@ static void prv_mpu_region_write(uint8_t region, uint32_t rbar,
   __ISB();
 }
 
+static void prv_mpu_dump(void) {
+  const uint8_t regions =
+      (MPU->TYPE & MPU_TYPE_DREGION_Msk) >> MPU_TYPE_DREGION_Pos;
+
+  printk("SANDBOX_FAULT_MPU ctrl=0x%08x type=0x%08x mair0=0x%08x "
+         "mair1=0x%08x\n",
+         MPU->CTRL, MPU->TYPE, MPU->MAIR0, MPU->MAIR1);
+  for (uint8_t i = 0U; i < regions; ++i) {
+    uint32_t rbar;
+    uint32_t rlar;
+    prv_mpu_region_read(i, &rbar, &rlar);
+    printk("SANDBOX_FAULT_MPU region=%u rbar=0x%08x rlar=0x%08x "
+           "base=0x%08x limit=0x%08x ap=%u xn=%u attr=%u en=%u\n",
+           i, rbar, rlar, (uint32_t)(rbar & MPU_RBAR_BASE_Msk),
+           (uint32_t)((rlar & MPU_RLAR_LIMIT_Msk) | (MPU_MIN_ALIGN - 1U)),
+           (unsigned int)((rbar & MPU_RBAR_AP_Msk) >> MPU_RBAR_AP_Pos),
+           (unsigned int)((rbar & MPU_RBAR_XN_Msk) != 0U),
+           (unsigned int)((rlar & MPU_RLAR_AttrIndx_Msk) >>
+                          MPU_RLAR_AttrIndx_Pos),
+           (unsigned int)((rlar & MPU_RLAR_EN_Msk) != 0U));
+  }
+}
+
+void k_sys_fatal_error_handler(unsigned int reason,
+                               const struct arch_esf *esf) {
+  const uint32_t cfsr = SCB->CFSR;
+  const uint32_t pc = esf ? esf->basic.pc : 0U;
+  const uint32_t lr = esf ? esf->basic.lr : 0U;
+  const uint32_t xpsr = esf ? esf->basic.xpsr : 0U;
+
+  printk("SANDBOX_FATAL reason=%u thread=%p control=0x%08x msp=0x%08x "
+         "psp=0x%08x psplim=0x%08x\n",
+         reason, k_current_get(), __get_CONTROL(), __get_MSP(), __get_PSP(),
+         __get_PSPLIM());
+  printk("SANDBOX_FAULT cfsr=0x%08x hfsr=0x%08x mmfar=0x%08x "
+         "mmfar_valid=%u bfar=0x%08x bfar_valid=%u pc=0x%08x lr=0x%08x "
+         "xpsr=0x%08x\n",
+         cfsr, SCB->HFSR, SCB->MMFAR,
+         (cfsr & SCB_CFSR_MMARVALID_Msk) != 0U, SCB->BFAR,
+         (cfsr & SCB_CFSR_BFARVALID_Msk) != 0U, pc, lr, xpsr);
+  prv_mpu_dump();
+
+  if (reason == K_ERR_KERNEL_PANIC || k_current_get() != s_app_thread) {
+    k_fatal_halt(reason);
+  }
+}
+
 static bool prv_region_contains(uint32_t rbar, uint32_t rlar, uintptr_t start,
                                 size_t size) {
   const uintptr_t base = rbar & MPU_RBAR_BASE_Msk;
@@ -70,6 +118,40 @@ static bool prv_region_contains(uint32_t rbar, uint32_t rlar, uintptr_t start,
 
   return size != 0U && (rlar & MPU_RLAR_EN_Msk) != 0U && start >= base &&
          start <= UINTPTR_MAX - (size - 1U) && start + size - 1U <= limit;
+}
+
+static bool prv_region_is_user_executable(uint32_t rbar, uint32_t rlar,
+                                          uintptr_t start, size_t size) {
+  const uint32_t ap =
+      (rbar & MPU_RBAR_AP_Msk) >> MPU_RBAR_AP_Pos;
+
+  return prv_region_contains(rbar, rlar, start, size) &&
+         (rbar & MPU_RBAR_XN_Msk) == 0U &&
+         (ap == P_RW_U_RW || ap == P_RO_U_RO);
+}
+
+void sandbox_dump_active_mpu(void) {
+  uint32_t rbar;
+  uint32_t rlar;
+
+  prv_mpu_region_read(s_ram_region, &rbar, &rlar);
+  printk("SANDBOX_MPU_ACTIVE arena_region=%u rbar=0x%08x rlar=0x%08x "
+         "ap=%u xn=%u user_exec=%u control=0x%08x\n",
+         s_ram_region, rbar, rlar,
+         (unsigned int)((rbar & MPU_RBAR_AP_Msk) >> MPU_RBAR_AP_Pos),
+         (unsigned int)((rbar & MPU_RBAR_XN_Msk) != 0U),
+         prv_region_is_user_executable(rbar, rlar, s_arena_start,
+                                       s_arena_size),
+         __get_CONTROL());
+}
+
+static bool prv_ranges_overlap(uintptr_t first_start, size_t first_size,
+                               uintptr_t second_start, size_t second_size) {
+  return first_size != 0U && second_size != 0U &&
+         first_start <= UINTPTR_MAX - first_size &&
+         second_start <= UINTPTR_MAX - second_size &&
+         first_start < second_start + second_size &&
+         second_start < first_start + first_size;
 }
 
 static bool prv_range_contains(uintptr_t base, size_t extent,
@@ -129,16 +211,15 @@ static void __attribute__((naked, used)) prv_drop_privilege(void) {
 }
 
 void z_arm_custom_thread_restore_hook(struct k_thread *incoming) {
-  uint32_t control;
-
   if (!atomic_get(&s_sandbox_ready)) {
     return;
   }
 
-  control = __get_CONTROL();
+  const uint32_t control = __get_CONTROL();
   if (incoming == s_app_thread) {
     const uint32_t arena_rbar =
-        (s_arena_start & MPU_RBAR_BASE_Msk) | P_RW_U_RW_Msk;
+        ((s_arena_start & MPU_RBAR_BASE_Msk) | P_RW_U_RW_Msk) &
+        ~MPU_RBAR_XN_Msk;
     const uint32_t arena_rlar =
         ((s_arena_start + s_arena_size - 1U) & MPU_RLAR_LIMIT_Msk) |
         (MPU_MAIR_INDEX_SRAM << MPU_RLAR_AttrIndx_Pos) | MPU_RLAR_EN_Msk;
@@ -149,7 +230,9 @@ void z_arm_custom_thread_restore_hook(struct k_thread *incoming) {
         ((s_stack_start + s_stack_size - 1U) & MPU_RLAR_LIMIT_Msk) |
         (MPU_MAIR_INDEX_SRAM << MPU_RLAR_AttrIndx_Pos) | MPU_RLAR_EN_Msk;
 
-    prv_mpu_region_write(s_code_region, s_app_code_rbar, s_app_code_rlar);
+    if (s_code_region_needed) {
+      prv_mpu_region_write(s_code_region, s_app_code_rbar, s_app_code_rlar);
+    }
     prv_mpu_region_write(s_ram_region, arena_rbar, arena_rlar);
     prv_mpu_region_write(s_stack_region, stack_rbar, stack_rlar);
     if (atomic_get(&s_syscall_active)) {
@@ -161,7 +244,10 @@ void z_arm_custom_thread_restore_hook(struct k_thread *incoming) {
     prv_mpu_region_write(s_stack_region, s_saved_stack_rbar,
                          s_saved_stack_rlar);
     prv_mpu_region_write(s_ram_region, s_saved_ram_rbar, s_saved_ram_rlar);
-    prv_mpu_region_write(s_code_region, s_saved_code_rbar, s_saved_code_rlar);
+    if (s_code_region_needed) {
+      prv_mpu_region_write(s_code_region, s_saved_code_rbar,
+                           s_saved_code_rlar);
+    }
     __set_CONTROL(control & ~CONTROL_nPRIV_Msk);
   }
   __ISB();
@@ -169,28 +255,48 @@ void z_arm_custom_thread_restore_hook(struct k_thread *incoming) {
 
 int z_arm_custom_svc_hook(uint32_t *exc_frame, uint32_t exc_return,
                           uint8_t svc_num) {
-  const uintptr_t frame = (uintptr_t)exc_frame;
-  const uintptr_t stack_end = s_stack_start + s_stack_size;
-  const uintptr_t return_pc = exc_frame[6];
-  const uintptr_t svc_pc = return_pc - sizeof(uint16_t);
-  const size_t fp_frame_size =
-      (exc_return & SVC_EXC_RETURN_BASIC_FRAME) != 0U ? 0U : 18U * sizeof(uint32_t);
-  const size_t align_size =
-      (exc_frame[7] & XPSR_STACK_ALIGN) != 0U ? sizeof(uint32_t) : 0U;
-  const uintptr_t pre_svc_sp =
-      frame + 8U * sizeof(uint32_t) + fp_frame_size + align_size;
-  const uint16_t svc_instruction = *(const uint16_t *)svc_pc;
-  const uintptr_t msp = __get_MSP();
+  uintptr_t frame;
+  uintptr_t stack_end;
+  uintptr_t return_pc;
+  uintptr_t svc_pc;
+  uintptr_t msp;
+  size_t frame_size;
 
-  if (svc_num != 4U || k_current_get() != s_app_thread ||
-      (exc_return & SVC_EXC_RETURN_PSP) == 0U ||
-      !sandbox_thread_is_unprivileged() ||
-      frame < s_stack_start || frame + 8U * sizeof(uint32_t) > stack_end ||
-      pre_svc_sp > stack_end ||
-      (msp >= s_stack_start && msp < stack_end) ||
-      svc_pc < (uintptr_t)__sandbox_syscall_start ||
+  if (!atomic_get(&s_sandbox_ready)) {
+    return 0;
+  }
+  if (svc_num != 4U || k_current_get() != s_app_thread) {
+    return 0;
+  }
+
+  frame = (uintptr_t)exc_frame;
+  stack_end = s_stack_start + s_stack_size;
+  msp = __get_MSP();
+  if ((exc_return & SVC_EXC_RETURN_PSP) == 0U ||
+      !sandbox_thread_is_unprivileged() || frame < s_stack_start ||
+      frame > stack_end || stack_end - frame < 8U * sizeof(uint32_t) ||
+      (msp >= s_stack_start && msp < stack_end)) {
+    return 0;
+  }
+
+  frame_size = 8U * sizeof(uint32_t);
+  if ((exc_return & SVC_EXC_RETURN_BASIC_FRAME) == 0U) {
+    frame_size += 18U * sizeof(uint32_t);
+  }
+  if ((exc_frame[7] & XPSR_STACK_ALIGN) != 0U) {
+    frame_size += sizeof(uint32_t);
+  }
+  return_pc = exc_frame[6];
+  if (frame_size > stack_end - frame || return_pc < sizeof(uint16_t)) {
+    exc_frame[0] = UINT32_MAX;
+    return 1;
+  }
+
+  svc_pc = return_pc - sizeof(uint16_t);
+  if (svc_pc < (uintptr_t)__sandbox_syscall_start ||
       svc_pc >= (uintptr_t)__sandbox_syscall_end ||
-      svc_instruction != 0xdf04U || atomic_get(&s_syscall_active)) {
+      *(const uint16_t *)svc_pc != 0xdf04U ||
+      atomic_get(&s_syscall_active)) {
     exc_frame[0] = UINT32_MAX;
     return 1;
   }
@@ -203,6 +309,10 @@ int z_arm_custom_svc_hook(uint32_t *exc_frame, uint32_t exc_return,
   return 1;
 }
 
+void sandbox_arm(void) {
+  atomic_set(&s_sandbox_ready, 1);
+}
+
 bool sandbox_prepare(struct k_thread *app_thread, uintptr_t stack_start,
                      size_t stack_size) {
   const uint8_t regions =
@@ -213,17 +323,33 @@ bool sandbox_prepare(struct k_thread *app_thread, uintptr_t stack_start,
   bool ram_found = false;
   bool stack_slot_found = false;
   bool code_slot_found = false;
+  bool code_access_found = false;
   const uintptr_t code_start =
       ROUND_DOWN((uintptr_t)__rom_region_start, MPU_MIN_ALIGN);
   const uintptr_t code_end =
       ROUND_UP((uintptr_t)__rom_region_end, MPU_MIN_ALIGN);
 
-  if (regions < 4U || code_end <= code_start ||
+  if (regions < 4U) {
+    printk("SANDBOX_SETUP_FAIL %s:%d region_count=%u required=4\n",
+           __FILE_NAME__, __LINE__, regions);
+    return false;
+  }
+  if (code_end <= code_start ||
       (arena_start & (MPU_MIN_ALIGN - 1U)) != 0U ||
       (arena_size & (MPU_MIN_ALIGN - 1U)) != 0U ||
       (stack_start & (MPU_MIN_ALIGN - 1U)) != 0U ||
       (stack_size & (MPU_MIN_ALIGN - 1U)) != 0U) {
-    printk("SANDBOX_SETUP_FAIL alignment regions=%u\n", regions);
+    printk("SANDBOX_SETUP_FAIL %s:%d alignment code=%p..%p "
+           "arena=%p+%zu stack=%p+%zu align=%u\n",
+           __FILE_NAME__, __LINE__, (void *)code_start, (void *)code_end,
+           (void *)arena_start, arena_size, (void *)stack_start, stack_size,
+           MPU_MIN_ALIGN);
+    return false;
+  }
+  if (prv_ranges_overlap(arena_start, arena_size, stack_start, stack_size)) {
+    printk("SANDBOX_SETUP_FAIL %s:%d arena_stack_overlap arena=%p+%zu "
+           "stack=%p+%zu\n", __FILE_NAME__, __LINE__, (void *)arena_start,
+           arena_size, (void *)stack_start, stack_size);
     return false;
   }
 
@@ -237,6 +363,12 @@ bool sandbox_prepare(struct k_thread *app_thread, uintptr_t stack_start,
       s_saved_ram_rbar = rbar;
       s_saved_ram_rlar = rlar;
       ram_found = true;
+    }
+    if (prv_region_is_user_executable(rbar, rlar, code_start,
+                                      code_end - code_start)) {
+      code_access_found = true;
+      printk("SANDBOX_MPU_CODE_EXISTING region=%u rbar=0x%08x rlar=0x%08x\n",
+             i, rbar, rlar);
     }
   }
 
@@ -253,7 +385,7 @@ bool sandbox_prepare(struct k_thread *app_thread, uintptr_t stack_start,
     }
   }
 
-  for (int i = regions - 1; i >= 0; --i) {
+  for (int i = regions - 1; !code_access_found && i >= 0; --i) {
     uint32_t rbar;
     uint32_t rlar;
     prv_mpu_region_read((uint8_t)i, &rbar, &rlar);
@@ -266,27 +398,37 @@ bool sandbox_prepare(struct k_thread *app_thread, uintptr_t stack_start,
     }
   }
 
-  if (!ram_found || !stack_slot_found || !code_slot_found ||
-      s_stack_region == s_ram_region || s_code_region == s_ram_region) {
-    printk("SANDBOX_SETUP_FAIL mpu ram=%u stack=%u code=%u\n", ram_found,
-           stack_slot_found, code_slot_found);
+  if (!ram_found || !stack_slot_found ||
+      (!code_access_found && !code_slot_found) ||
+      s_stack_region == s_ram_region ||
+      (!code_access_found && s_code_region == s_ram_region)) {
+    printk("SANDBOX_SETUP_FAIL %s:%d slots ram_found=%u ram=%u "
+           "stack_found=%u stack=%u code_access=%u code_slot=%u code=%u\n",
+           __FILE_NAME__, __LINE__, ram_found, s_ram_region,
+           stack_slot_found, s_stack_region, code_access_found,
+           code_slot_found, s_code_region);
     return false;
   }
 
-  s_app_code_rbar = (code_start & MPU_RBAR_BASE_Msk) | P_RO_U_RO_Msk;
-  s_app_code_rlar =
-      ((code_end - 1U) & MPU_RLAR_LIMIT_Msk) |
-      (MPU_MAIR_INDEX_FLASH << MPU_RLAR_AttrIndx_Pos) | MPU_RLAR_EN_Msk;
+  s_code_region_needed = !code_access_found;
+  if (s_code_region_needed) {
+    s_app_code_rbar = (code_start & MPU_RBAR_BASE_Msk) | P_RO_U_RO_Msk;
+    s_app_code_rlar =
+        ((code_end - 1U) & MPU_RLAR_LIMIT_Msk) |
+        (MPU_MAIR_INDEX_FLASH << MPU_RLAR_AttrIndx_Pos) | MPU_RLAR_EN_Msk;
+  }
 
   s_app_thread = app_thread;
   s_stack_start = stack_start;
   s_stack_size = stack_size;
   s_arena_start = arena_start;
   s_arena_size = arena_size;
-  atomic_set(&s_sandbox_ready, 1);
-  printk("SANDBOX_MPU arena=%p+%zu stack=%p+%zu code=%p+%zu slots=%u,%u,%u\n",
+  printk("SANDBOX_MPU arena=%p+%zu stack=%p+%zu code=%p+%zu "
+         "slots=ram:%u stack:%u code:%s%u\n",
          (void *)s_arena_start, s_arena_size, (void *)s_stack_start,
-         s_stack_size, (void *)code_start, (size_t)(code_end - code_start), s_ram_region,
-         s_stack_region, s_code_region);
+         s_stack_size, (void *)code_start, (size_t)(code_end - code_start),
+         s_ram_region, s_stack_region,
+         s_code_region_needed ? "new:" : "existing:",
+         s_code_region_needed ? s_code_region : 0U);
   return true;
 }

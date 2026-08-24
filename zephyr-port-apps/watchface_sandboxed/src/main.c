@@ -159,8 +159,11 @@ static void prv_app_main(void *arg1, void *arg2, void *arg3) {
   ARG_UNUSED(arg3);
 
   int (*entry)(void) = arg1;
+  sandbox_app_runtime_init();
+  sandbox_mpu_readback();
   const int probe_result = sandbox_syscall_probe(21);
   (void)sandbox_syscall_probe(probe_result);
+  sandbox_app_step(SandboxStepAppEntry, (uintptr_t)entry);
   (void)entry();
   for (;;) {
     __WFE();
@@ -182,6 +185,10 @@ void watchface_port_push_frame(void) {
 }
 
 int main(void) {
+  printk("SANDBOX_BOOT\n");
+  memset(&g_sandbox_app_arena, 0, sizeof(g_sandbox_app_arena));
+  printk("SANDBOX_ARENA_OK %p+%zu\n", &g_sandbox_app_arena,
+         sizeof(g_sandbox_app_arena));
   watchface_port_graphics_init();
   size_t framebuffer_size;
   uint16_t framebuffer_stride;
@@ -208,8 +215,6 @@ int main(void) {
   }
   new_timer_service_init();
   regular_timer_init();
-  watchface_port_app_state_init();
-  tick_timer_service_init();
 
   PebbleProcessInfo info;
   if (!prv_load_pbw(&info)) {
@@ -233,6 +238,7 @@ int main(void) {
     return 0;
   }
   k_thread_start(&s_kernel_thread);
+  sandbox_arm();
   k_thread_start(&s_app_thread);
   return 0;
 }
