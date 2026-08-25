@@ -4,14 +4,16 @@
 	status = "okay";
 };
 
-/* Slot 0 starts at 0x12020000. Keep its header page outside Zephyr's ROM. */
+/* Slot 0 base 0x12020000. pblboot's 28-byte header sits at the base and the
+ * firmware body (vector table) begins at slot_base + 0x1000, matching pblboot
+ * CONFIG_FIRMWARE_OFFSET=4096. Reserve that 0x1000 header page outside ROM. */
 &gd25q256e {
 	partitions {
 		/delete-node/ partition@10000;
 
-		slot0_code: partition@20200 {
+		slot0_code: partition@21000 {
 			label = "slot0-code";
-			reg = <0x20200 0x2ffe00>;
+			reg = <0x21000 0x2ff000>;
 		};
 	};
 };

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 import argparse
-import struct
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 PEBBLEOS_ROOT = Path(__file__).resolve().parents[3]
@@ -16,9 +16,13 @@ def main() -> None:
     parser.add_argument("output", type=Path, help="output .pbz")
     parser.add_argument("--commit", required=True)
     parser.add_argument("--version", default="v9.9.9-dev")
+    parser.add_argument("--timestamp", type=int, default=int(time.time()))
     args = parser.parse_args()
 
-    timestamp = struct.unpack_from("<Q", args.firmware.read_bytes(), 8)[0]
+    # mkbundle computes the manifest firmware CRC (STM32/legacy) over the whole
+    # headered firmware.bin; that is the CRC PRF's PutBytes commit verifies, a
+    # separate layer from the zlib CRC inside the pblboot header.
+    timestamp = args.timestamp
     subprocess.run(
         [
             sys.executable,
