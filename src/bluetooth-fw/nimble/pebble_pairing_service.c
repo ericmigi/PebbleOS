@@ -18,6 +18,8 @@ PBL_LOG_MODULE_DECLARE(bt, CONFIG_BT_LOG_LEVEL);
 #define TRIGGER_PAIRING_NO_SEC_REQ    (1U << 1U)
 #define TRIGGER_PAIRING_FORCE_SEC_REQ (1U << 2U)
 
+static uint16_t s_conn_status_handle;
+
 static int pebble_pairing_service_get_connectivity_status(
     uint16_t conn_handle, PebblePairingServiceConnectivityStatus *status) {
   struct ble_gap_conn_desc desc;
@@ -44,6 +46,9 @@ static int pebble_pairing_service_get_connectivity_status(
   status->ble_is_encrypted = desc.sec_state.encrypted;
   status->has_bonded_gateway = (bond_count > 0);
   status->supports_pinning_without_security_request = true;
+  // SF32/PT2 always uses the reversed PPoGATT service (watch = GATT server);
+  // advertise that so the phone subscribes to it after encryption.
+  status->is_reversed_ppogatt_enabled = true;
 
   return 0;
 }
@@ -132,6 +137,7 @@ static const struct ble_gatt_svc_def pebble_pairing_svc[] = {
                         BLE_UUID_SWIZZLE(PEBBLE_BT_PAIRING_SERVICE_CONNECTION_STATUS_UUID)),
                     .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY,
                     .access_cb = prv_access_connection_status,
+                    .val_handle = &s_conn_status_handle,
                 },
                 {
                     .uuid = BLE_UUID128_DECLARE(
@@ -156,6 +162,13 @@ void pebble_pairing_service_init(void) {
   PBL_ASSERTN(rc == 0);
   rc = ble_gatts_add_svcs(pebble_pairing_svc);
   PBL_ASSERTN(rc == 0);
+}
+
+// Push a fresh connectivity-status notification to a subscribed phone. Call
+// after encryption completes so the phone learns reversed PPoGATT is available.
+void pebble_pairing_service_notify_connectivity(uint16_t conn_handle) {
+  (void)pebble_pairing_service_get_connectivity_send_notification(conn_handle,
+                                                                  s_conn_status_handle);
 }
 
 void prv_notify_chr_updated(const GAPLEConnection *connection, const ble_uuid_t *chr_uuid) {

@@ -35,6 +35,7 @@ target_include_directories(app BEFORE PRIVATE
   "${MBEDTLS}/mbedtls/include"
   "${MBEDTLS}/mbedtls/library"
   "${PEBBLEOS_ROOT}/include"
+  "${PEBBLEOS_ROOT}/include/pbl"
   "${PEBBLEOS_ROOT}/src/fw"
   "${SIFLI_SDK}/middleware/ipc_queue/porting/os/zephyr"
   "${SIFLI}/sf32lb52"
@@ -108,6 +109,7 @@ set_property(SOURCE
 target_sources(app PRIVATE
   src/main.c
   src/mbedtls_alloc.c
+  src/ram_store.c
   src/sifli_lrc_glue.c
   "${PEBBLEOS_ROOT}/lib/os/mutex_zephyr.c"
   "${PEBBLEOS_ROOT}/lib/os/platform_zephyr.c"
@@ -117,6 +119,9 @@ target_sources(app PRIVATE
   "${NIMBLE}/transport/hci_sf32lb52.c"
   "${PEBBLEOS_ROOT}/src/bluetooth-fw/nimble/advert.c"
   "${PEBBLEOS_ROOT}/src/bluetooth-fw/nimble/id.c"
+  "${PEBBLEOS_ROOT}/src/bluetooth-fw/nimble/pebble_pairing_service.c"
+  "${PEBBLEOS_ROOT}/src/bluetooth-fw/nimble/ppog_reversed_service.c"
+  "${PEBBLEOS_ROOT}/src/bluetooth-fw/nimble/nimble_type_conversions.c"
   ${NIMBLE_PORT_SOURCES}
   ${MBEDTLS_SOURCES}
 

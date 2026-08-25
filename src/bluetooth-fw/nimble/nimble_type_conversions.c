@@ -7,6 +7,7 @@
 #include <host/ble_gap.h>
 #include <string.h>
 #include <pbl/logging/logging.h>
+#include <system/passert.h>
 
 PBL_LOG_MODULE_DECLARE(bt, CONFIG_BT_LOG_LEVEL);
 

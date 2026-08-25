@@ -16,7 +16,10 @@
 
 #define PBL_LOG_MODULE_DECLARE(...)
 #define PBL_LOG_MODULE_DEFINE(...)
-#define PBL_SHOULD_LOG(level) true
+// Only WARNING(2)/ERROR(1)/ALWAYS(0). Gating out nimble's DEBUG/INFO MODLOG
+// (per-ACL byte dumps) keeps the 1Mbaud console from stalling the BLE task,
+// which was timing out the phone's PPoGATT CCCD subscribe.
+#define PBL_SHOULD_LOG(level) ((level) <= LOG_LEVEL_WARNING)
 
 static inline void pbl_log_vargs(int level, const char *file, int line,
                                  const char *fmt, va_list args) {
