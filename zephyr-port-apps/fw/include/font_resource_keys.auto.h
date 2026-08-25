@@ -2,12 +2,9 @@
 #pragma once
 
 // Port shadow of the generated font-key table (fw/include is first on the
-// include path). The port's fonts_get_system_font() (watchface_sandboxed/port.c)
-// ignores the key and returns the single loaded GOTHIC_14 face, so these are
-// only string tokens the app sources need to compile. Real per-key faces are a
-// follow-up once a resource/font pipeline exists.
-// ponytail: all keys resolve to one GOTHIC_14 face; add a real font loader when
-// per-key rendering matters.
+// include path). fonts_get_system_font() (watchface_sandboxed/port.c) matches
+// these keys to the real embedded GOTHIC faces; unembedded keys (e.g. LECO) fall
+// back to GOTHIC_14.
 
 #define FONT_KEY_GOTHIC_14 "RESOURCE_ID_GOTHIC_14"
 #define FONT_KEY_GOTHIC_14_BOLD "RESOURCE_ID_GOTHIC_14_BOLD"

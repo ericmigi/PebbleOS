@@ -47,6 +47,8 @@
 
 #include "process_management/pebble_process_md.h"
 
+#include "shell/system_theme.h"
+
 #include "app_registry.h"
 #include "button_input.h"
 #include "launcher_ui.h"
@@ -208,7 +210,9 @@ static void prv_draw_row(GContext *ctx, const Layer *cell_layer, MenuIndex *cell
     return;
   }
   // menu_layer sets the text colour (normal vs highlighted) before this call.
-  GFont font = fonts_get_system_font("RESOURCE_ID_GOTHIC_14");
+  // Launcher rows are menu-cell titles: use the shipping MenuCellTitle face
+  // (GOTHIC_24_BOLD at the port's Large content size) instead of the fallback.
+  GFont font = system_theme_get_font_for_default_size(TextStyleFont_MenuCellTitle);
   GRect box = cell_layer->bounds;
   box.origin.x += 4;
   box.size.w -= 4;

@@ -136,14 +136,46 @@ bool app_install_entry_is_hidden(const AppInstallEntry *entry) {
 }
 
 // ---------------------------------------------------------------------------
-// system_theme font lookup used by menu_layer_system_cells.c. The port has one
-// system font (GOTHIC_14, served by watchface_sandboxed/port.c); return it for
-// every text style.
-// ponytail: single font. Load the real per-style fonts for correct sizing.
+// system_theme font lookup used by menu_layer_system_cells.c. Mirror the real
+// s_text_styles[PreferredContentSizeLarge] table (system_theme.c) — the port's
+// default content size is Large — so each style resolves to the shipping GOTHIC
+// face. fonts_get_system_font() (watchface_sandboxed/port.c) turns the key into
+// the matching loaded FontInfo.
+// ponytail: LECO time-header numbers aren't embedded; they fall back to GOTHIC_14.
 // ---------------------------------------------------------------------------
 GFont system_theme_get_font_for_default_size(TextStyleFont font) {
-  (void)font;
-  return fonts_get_system_font("RESOURCE_ID_GOTHIC_14");
+  const char *key;
+  switch (font) {
+#if !defined(CONFIG_RECOVERY_FW)
+    case TextStyleFont_Title:
+      key = FONT_KEY_GOTHIC_28_BOLD;
+      break;
+    case TextStyleFont_Body:
+      key = FONT_KEY_GOTHIC_28;
+      break;
+#endif
+    case TextStyleFont_Subtitle:
+      key = FONT_KEY_GOTHIC_28;
+      break;
+    case TextStyleFont_Header:
+    case TextStyleFont_MenuCellTitle:
+      key = FONT_KEY_GOTHIC_24_BOLD;
+      break;
+    case TextStyleFont_MenuCellSubtitle:
+    case TextStyleFont_PinSubtitle:
+      key = FONT_KEY_GOTHIC_24;
+      break;
+    case TextStyleFont_TimeHeaderWords:
+    case TextStyleFont_ParagraphHeader:
+      key = FONT_KEY_GOTHIC_18_BOLD;
+      break;
+    case TextStyleFont_Caption:
+    case TextStyleFont_Footer:
+    default:
+      key = FONT_KEY_GOTHIC_18;
+      break;
+  }
+  return fonts_get_system_font(key);
 }
 
 // Icons are cosmetic in the port; graphics_draw_bitmap_in_rect is a no-op

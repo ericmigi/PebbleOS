@@ -317,6 +317,10 @@ generate_inc_file_for_target(app
   "${PEBBLEOS_ROOT}/resources/normal/base/pbf/GOTHIC_28_BOLD.pbf"
   "${CMAKE_BINARY_DIR}/include/generated/fw_gothic_28_bold.pbf.inc"
 )
+generate_inc_file_for_target(app
+  "${PEBBLEOS_ROOT}/resources/common/base/pbf/GOTHIC_24.pbf"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_gothic_24.pbf.inc"
+)
 
 # Real Music action-bar icons: the firmware build converts these PNGs to pbi8,
 # but gbitmap_init_with_resource() auto-detects the embedded PNG bytes, so embed

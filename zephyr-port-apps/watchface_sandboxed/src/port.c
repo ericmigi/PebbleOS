@@ -85,6 +85,7 @@ static const uint8_t s_font_system_data[] __aligned(4) = {
 #define FW_RES_GOTHIC_24_BOLD 260U
 #define FW_RES_GOTHIC_28 261U
 #define FW_RES_GOTHIC_28_BOLD 262U
+#define FW_RES_GOTHIC_24 263U
 
 #define FW_RES_MUSIC_ICON_PLAY 270U
 #define FW_RES_MUSIC_ICON_PAUSE 271U
@@ -113,6 +114,9 @@ static const uint8_t s_fw_gothic_28[] __aligned(4) = {
 };
 static const uint8_t s_fw_gothic_28_bold[] __aligned(4) = {
 #include "fw_gothic_28_bold.pbf.inc"
+};
+static const uint8_t s_fw_gothic_24[] __aligned(4) = {
+#include "fw_gothic_24.pbf.inc"
 };
 static const uint8_t s_fw_music_icon_play[] __aligned(4) = {
 #include "fw_music_icon_play.png.inc"
@@ -156,6 +160,7 @@ static const FwResource s_fw_resources[] = {
     FW_RES_ENTRY(FW_RES_GOTHIC_24_BOLD, s_fw_gothic_24_bold),
     FW_RES_ENTRY(FW_RES_GOTHIC_28, s_fw_gothic_28),
     FW_RES_ENTRY(FW_RES_GOTHIC_28_BOLD, s_fw_gothic_28_bold),
+    FW_RES_ENTRY(FW_RES_GOTHIC_24, s_fw_gothic_24),
     FW_RES_ENTRY(FW_RES_MUSIC_ICON_PLAY, s_fw_music_icon_play),
     FW_RES_ENTRY(FW_RES_MUSIC_ICON_PAUSE, s_fw_music_icon_pause),
     FW_RES_ENTRY(FW_RES_MUSIC_ICON_FAST_FORWARD, s_fw_music_icon_fast_forward),
@@ -182,6 +187,7 @@ static FontInfo s_font_g18_bold;
 static FontInfo s_font_g24_bold;
 static FontInfo s_font_g28;
 static FontInfo s_font_g28_bold;
+static FontInfo s_font_g24;
 #endif  // PBL_WATCHFACE_IN_FW
 
 static FrameBuffer s_framebuffer;
@@ -335,7 +341,8 @@ void watchface_port_graphics_init(void) {
       !text_resources_init_font(SYSTEM_APP, FW_RES_GOTHIC_18_BOLD, 0, &s_font_g18_bold) ||
       !text_resources_init_font(SYSTEM_APP, FW_RES_GOTHIC_24_BOLD, 0, &s_font_g24_bold) ||
       !text_resources_init_font(SYSTEM_APP, FW_RES_GOTHIC_28, 0, &s_font_g28) ||
-      !text_resources_init_font(SYSTEM_APP, FW_RES_GOTHIC_28_BOLD, 0, &s_font_g28_bold)) {
+      !text_resources_init_font(SYSTEM_APP, FW_RES_GOTHIC_28_BOLD, 0, &s_font_g28_bold) ||
+      !text_resources_init_font(SYSTEM_APP, FW_RES_GOTHIC_24, 0, &s_font_g24)) {
     printk("FW_FONT_FAIL\n");
     k_panic();
   }
@@ -772,6 +779,9 @@ GFont fonts_get_system_font(const char *font_key) {
     }
     if (!strcmp(font_key, "RESOURCE_ID_GOTHIC_28_BOLD")) {
       return &s_font_g28_bold;
+    }
+    if (!strcmp(font_key, "RESOURCE_ID_GOTHIC_24")) {
+      return &s_font_g24;
     }
   }
   return &s_font_system;
