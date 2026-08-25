@@ -356,7 +356,7 @@ GBitmap *app_menu_data_source_get_node_icon(AppMenuDataSource *source, AppMenuNo
 
 STUB_SUBMODULE(settings_bluetooth_get_info, "Bluetooth", SettingsMenuItemBluetooth)
 STUB_SUBMODULE(settings_notifications_get_info, "Notifications", SettingsMenuItemNotifications)
-STUB_SUBMODULE(settings_vibe_patterns_get_info, "Vibrations", SettingsMenuItemVibrations)
+STUB_SUBMODULE(settings_vibe_patterns_get_info, "Sounds & Haptics", SettingsMenuItemVibrations)
 STUB_SUBMODULE(settings_quiet_time_get_info, "Quiet Time", SettingsMenuItemQuietTime)
 STUB_SUBMODULE(settings_timeline_get_info, "Timeline", SettingsMenuItemTimeline)
 STUB_SUBMODULE(settings_activity_tracker_get_info, "Background App", SettingsMenuItemActivity)
