@@ -26,10 +26,3 @@ bool app_install_do_callbacks(InstallEventType event_type, AppInstallId install_
 
 void app_install_clear_app_db(void) {
 }
-
-void task_watchdog_pause(unsigned int seconds) {
-  (void)seconds;
-}
-
-void task_watchdog_resume(void) {
-}
