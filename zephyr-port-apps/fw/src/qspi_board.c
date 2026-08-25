@@ -51,12 +51,8 @@ static QSPIFlash QSPI_FLASH_DEVICE = {
 };
 QSPIFlash *const QSPI_FLASH = &QSPI_FLASH_DEVICE;
 
-// The shipping flash HAL (bf0_hal.c) provides these as __weak; we override them
-// with Zephyr-backed versions so we don't have to drag in HAL_Init and its
-// SysTick machinery.
-uint32_t HAL_GetTick(void) { return (uint32_t)k_uptime_get_32(); }
-
-void HAL_Delay_us(uint32_t us) { k_busy_wait(us); }
+// sifli_lrc_glue.c provides the Zephyr-backed HAL tick and calibrated
+// microsecond-delay overrides shared by QSPI and BLE controller bring-up.
 
 // Initialize the QSPI flash handle WITHOUT re-running HAL_FLASH_Init /
 // HAL_QSPI_Init. The MPI2 controller is already configured for XIP by pblboot;

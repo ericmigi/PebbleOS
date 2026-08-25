@@ -7,6 +7,7 @@
 #include "app_registry.h"
 #include "applib/tick_timer_service.h"
 #include "applib/tick_timer_service_private.h"
+#include "ble_comm.h"
 #include "button_input.h"
 #include "fw_ota_boot.h"
 #include "kernel/event_loop.h"
@@ -94,6 +95,11 @@ static void prv_kernel_main(void *parameter) {
   PBL_ANALYTICS_SET_UNSIGNED(uptime_s, 0U);
   board_init();
 
+  // Controller calibration and NimBLE host startup run on dedicated Zephyr
+  // threads. Keep this after PFS and board initialization so shared-RAM/radio
+  // bring-up cannot perturb the clean state required by the filesystem mount.
+  fw_ble_init();
+
   task_watchdog_mask_set(PebbleTask_KernelMain);
   task_watchdog_resume();
   PBL_LOG_ALWAYS("FW_WATCHDOG_OK");
@@ -111,9 +117,6 @@ static void prv_log_stubs(void) {
   // ponytail: the port writes Pebble framebuffers directly with Zephyr's JDI
   // display driver. Add the real compositor and kernel-ui service graph here.
   PBL_LOG_ALWAYS("FW_STUB display_compositor");
-  // ponytail: BLE currently runs in zephyr-port-apps/ble as a separate image.
-  // Add the inter-core transport, then bind Pebble comm sessions in this app.
-  PBL_LOG_ALWAYS("FW_STUB ble_comm");
 }
 
 int main(void) {
