@@ -10,3 +10,15 @@
 // should reconcile the restrict qualifiers in the real header instead of adding
 // them here.
 #include <time.h>
+
+// DayInWeek is pulled in by pbl/services/activity/activity.h (health settings).
+// Mirrors the shipping util/time/time.h enum.
+typedef enum DayInWeek {
+  Sunday = 0,
+  Monday,
+  Tuesday,
+  Wednesday,
+  Thursday,
+  Friday,
+  Saturday,
+} DayInWeek;

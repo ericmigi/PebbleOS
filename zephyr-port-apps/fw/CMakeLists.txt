@@ -70,6 +70,17 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/apps/watch/tictoc/tictoc.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/watch/tictoc/default/tictoc_default.c"
 
+  # Watchfaces picker + Settings shell (real app code) and their port backends
+  # (prefs/i18n/app_menu_data_source/status_bar/settings-submodule stubs).
+  src/apps_port_glue.c
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/watchfaces.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/settings.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/menu.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/window.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/health.c"
+  # (menu_layer_system_cells.c is added next to menu_layer.c below, in the
+  #  graphics app-state group, since it touches GContext internals the same way.)
+
   "${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/src/port.c"
   "${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/src/sandbox.c"
   "${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/src/sandbox_bridge.c"
@@ -129,10 +140,12 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/text_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/menu_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/menu_layer_system_cells.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/scroll_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/inverter_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/animation_timing.c"
   "${PEBBLEOS_ROOT}/lib/util/crc32.c"
+  "${PEBBLEOS_ROOT}/lib/util/hash.c"
   "${PEBBLEOS_ROOT}/lib/util/keyed_circular_cache.c"
   "${PEBBLEOS_ROOT}/lib/util/iterator.c"
   "${PEBBLEOS_ROOT}/lib/util/math.c"
@@ -174,6 +187,7 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/text_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/menu_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/menu_layer_system_cells.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/scroll_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/inverter_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/animation_timing.c"
@@ -234,6 +248,34 @@ set_source_files_properties(
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/apps/watch/tictoc/default/tictoc_default.c"
   PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-include;pbl/drivers/rtc.h"
+)
+
+# Watchfaces + Settings real app sources and the port glue pull both Zephyr (via
+# FreeRTOS.h) and Pebble headers, so they need fw_zephyr_pre.h for the
+# sign_extend collision. They also include "process_state/app_state/app_state.h"
+# and expect the PORT app_state (app_state_get_user_data etc.), so -iquote the
+# watchface_sandboxed include dir ahead of the real fw one.
+set(FW_APP_IQUOTE "${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include")
+set_source_files_properties(
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/apps_port_glue.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/watchfaces.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/settings.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/menu.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/window.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/health.c"
+  PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
+)
+
+# The port has no generated resource IDs; the launcher menu + settings menu draw
+# names, not icons. Define the launcher-icon IDs these mds reference to 0.
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/watchfaces.c"
+  PROPERTIES COMPILE_DEFINITIONS
+    "RESOURCE_ID_WATCHFACES_APP_GLANCE=0;RESOURCE_ID_MENU_LAYER_GENERIC_WATCHFACE_ICON=0"
+)
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/settings.c"
+  PROPERTIES COMPILE_DEFINITIONS "RESOURCE_ID_SETTINGS_TINY=0"
 )
 
 # The port has no unobstructed-area service and runs system apps on the KernelMain

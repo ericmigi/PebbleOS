@@ -29,3 +29,8 @@ Layer **app_state_get_layer_tree_stack(void);
 UnobstructedAreaState *app_state_get_unobstructed_area_state(void);
 bool process_manager_compiled_with_legacy2_sdk(void);
 
+// The single per-(privileged)-app user-data slot (system_app.c). Used by the
+// real system apps (settings/window.c stashes its SettingsData here).
+void *app_state_get_user_data(void);
+void app_state_set_user_data(void *data);
+

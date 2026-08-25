@@ -153,9 +153,8 @@ uint32_t interpolate_moook_duration(void) {
 }
 
 // --- misc cosmetic bits -----------------------------------------------------
-int16_t menu_cell_basic_cell_height(void) {
-  return 44;
-}
+// menu_cell_basic_cell_height() now comes from the real menu_layer_system_cells.c
+// (compiled for the settings/watchfaces menus).
 
 void vibes_enqueue_custom_pattern(VibePattern pattern) {
   (void)pattern;

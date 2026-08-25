@@ -113,3 +113,104 @@ Three edits, no launch-core changes:
   `localtime_r`/`gmtime_r` without Zephyr libc's `restrict` qualifiers. A ported
   app needing the shipping extras (TimezoneInfo, `time_t_to_string`) must
   reconcile those qualifiers in the real header instead.
+
+## Watchfaces picker + Settings shell (menu apps + nested navigation)
+
+_Owner: menu-app fan-out. Status: WATCHFACES picker and the SETTINGS shell (top
+menu + all 11 submodule entries) launch from the launcher through their real
+`*_get_app_info()` and render on the panel; build green on `pt2`
+(FLASH 164952 B, RAM unchanged). Health settings is a real submodule; the other
+10 are navigable "Not ported" stubs (real settings window shell, deferred
+service backends)._
+
+### What shipping does (reference)
+
+Both are single-`main` `ProcessTypeApp` system apps that push a `Window` holding a
+`MenuLayer` and call `app_event_loop()`. Watchfaces (`apps/system/watchfaces.c`)
+lists installed watchfaces via `AppMenuDataSource` and sets the active face on
+SELECT. Settings (`apps/system/settings/settings.c`) is an umbrella: its top menu
+(`settings.c` + `menu.c`) draws one row per `SettingsMenuItem`, and SELECT calls
+`settings_menu_push(row)` → the submodule's `init()` → a shared settings window
+(`settings/window.c`, a `StatusBarLayer` + `MenuLayer` dispatching to
+`SettingsCallbacks`) pushed onto the app window stack. BACK pops it.
+
+### Nested window stack (the one launch-core change)
+
+The foundation launch core pushed a system app's single window once from
+`app_event_loop()`. Menu apps push a SECOND window (settings menu → submodule),
+so the shared stack now tracks every `app_window_stack_push`:
+
+- `app_window_stack_push()` (`watchface_sandboxed/src/port.c`), when privileged,
+  runs the window's load+appear then calls `fw_window_stack_push()` — so nested
+  pushes ride the same stack + click config + render.
+- `app_event_loop()` (`system_app.c`) no longer pushes; it records
+  `s_app_base_depth` (set by `fw_system_app_launch` before `main_func`) and pumps
+  until BACK has popped every window the app pushed (depth back to base).
+- `prv_window_pop()` (`launcher_ui.c`) now runs the popped window's
+  disappear+unload handlers (mirrors shipping stack pop) so a submodule window
+  frees its data / deinits its menu and BACK returns to the parent menu.
+
+### Registration (the 3-edit hook, per app)
+
+1. `app_registry.c`: `#include "apps/system/watchfaces.h"` +
+   `"apps/system/settings/settings.h"`; rows
+   `{ -6, "Watchfaces", watchfaces_get_app_info }` and
+   `{ -7, "Settings", settings_get_app_info }`.
+2. `CMakeLists.txt` `target_sources`: `src/apps_port_glue.c`, `watchfaces.c`,
+   `settings/settings.c`, `settings/menu.c`, `settings/window.c`,
+   `settings/health.c`, and `applib/ui/menu_layer_system_cells.c` (added to the
+   graphics app-state group next to `menu_layer.c`), plus `lib/util/hash.c`
+   (pulled by `text_layout.c`'s `graphics_text_layout_get_max_used_size`).
+3. Per-file props: the real app sources + `apps_port_glue.c` get
+   `-include fw_zephyr_pre.h` and `-iquote <watchface_sandboxed/include>` (so
+   `process_state/app_state/app_state.h` resolves to the PORT app_state, which
+   now also declares `app_state_get/set_user_data`). Resource IDs:
+   `watchfaces.c` → `RESOURCE_ID_WATCHFACES_APP_GLANCE=0`,
+   `RESOURCE_ID_MENU_LAYER_GENERIC_WATCHFACE_ICON=0`; `settings.c` →
+   `RESOURCE_ID_SETTINGS_TINY=0`.
+
+### Port backends (`src/apps_port_glue.c`) and ceilings
+
+- **`AppMenuDataSource`** — port impl of the public API backed by the fw registry
+  (lists entries whose md is `ProcessTypeWatchface`, synthesizing an
+  `AppInstallEntry` so watchfaces.c's real filter runs). Keeps watchfaces.c 1:1.
+  _ponytail: static list, no install/remove events, no per-app icons._
+- **`shell/prefs`, `i18n`, `activity_prefs`, `watchface_get/set_default`** — RAM
+  stores / identity functions. _ponytail: not persisted; no translation catalog;
+  no real activity tracking._
+- **`app_manager_put_launch_app_event`** — records the SELECTed watchface as the
+  default + logs `WATCHFACE_SET <id>`. _ponytail: does not switch the running
+  face; route through the shell once it's ported._
+- **`StatusBarLayer`** — lean port drawing the title (real struct); the shipping
+  `status_bar_layer.c` clock/window-stack machinery is skipped.
+  _ponytail: title-only, no clock/animation._
+- **Settings submodule stubs** — `settings_{bluetooth,notifications,vibe_patterns,
+  quiet_time,timeline,activity_tracker,quick_launch,time,display,system}_get_info`
+  each open a real `settings_window` with one "Not ported" row.
+  _ponytail: replace each with its real submodule .c as its service deps land._
+- Port header shadows extended (all under `zephyr-port-apps/**`, additive):
+  `kernel/events.h` (+`PEBBLE_PREF_CHANGE_EVENT`), `kernel/pbl_malloc.h`
+  (+`app_malloc`/`app_malloc_check`), `process_management/app_manager.h`
+  (+`AppLaunchEventConfig`/`app_manager_put_launch_app_event`),
+  `util/time/time.h` (+`DayInWeek`), `font_resource_keys.auto.h` (+GOTHIC keys).
+
+### Real vs deferred
+
+- **Watchfaces:** real (`watchfaces.c` verbatim). **Settings shell:** real
+  (`settings.c`, `menu.c`, `window.c` verbatim). **Settings submodules:** Health
+  real (`health.c`, no-HRM path); the other 10 are navigable stubs (see above).
+
+### UART markers (what the orchestrator sees on hardware)
+
+`LAUNCHER_SEL Watchfaces` / `LAUNCHER_SEL Settings` → `SYS_APP_LAUNCH <name>` →
+`SYS_APP_LOOP depth=2`; entering a settings submodule → `WINDOW_PUSH … depth=3`;
+BACK → `WINDOW_POP … depth=2`; BACK past root → `SYS_APP_EXIT <name>`. Selecting a
+watchface additionally logs `WATCHFACE_SET <install_id>`.
+
+### Known extra ceiling
+
+- **Settings submodule window is pushed directly from the MenuLayer SELECT click
+  callback** (`settings_menu_push`), i.e. the shared ClickManager is
+  reconfigured while still inside the parent's click dispatch. Works for simple
+  SELECT; if click-state corruption shows on hardware, defer the push to the loop
+  top level the way the launcher defers `s_pending_md`.

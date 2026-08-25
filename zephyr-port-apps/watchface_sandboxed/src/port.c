@@ -706,6 +706,11 @@ void window_schedule_render(Window *window) {
 // must never be invoked from kernel context.
 bool g_fw_privileged_window;
 
+// Provided by launcher_ui.c: push onto the shared launcher window stack (applies
+// the window's click config + renders it). Declared here to avoid pulling the fw
+// launcher header into the watchface port TU.
+void fw_window_stack_push(Window *window);
+
 void app_window_stack_push(Window *window, bool animated) {
   ARG_UNUSED(animated);
   s_top_window = window;
@@ -718,6 +723,10 @@ void app_window_stack_push(Window *window, bool animated) {
     if (window->window_handlers.appear) {
       window->window_handlers.appear(window);
     }
+    // Load ran first (it wires up the window's ClickConfigProvider), so the
+    // shared stack push can now apply the click config + render. This makes
+    // nested pushes (settings menu -> submenu) ride the same stack + BACK pump.
+    fw_window_stack_push(window);
   }
   window_schedule_render(window);
 }
@@ -781,6 +790,15 @@ bool animation_unschedule(Animation *animation) {
     animation->implementation->teardown(animation);
   }
   return was_scheduled;
+}
+
+bool animation_destroy(Animation *animation) {
+  if (!animation) {
+    return false;
+  }
+  animation_unschedule(animation);
+  applib_free(animation);
+  return true;
 }
 
 int32_t watchface_port_time(int32_t *tloc) {

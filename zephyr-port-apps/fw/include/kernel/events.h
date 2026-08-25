@@ -18,6 +18,10 @@ typedef enum {
   PEBBLE_TICK_EVENT = 15,
   PEBBLE_CALLBACK_EVENT = 27,
   PEBBLE_SUBSCRIPTION_EVENT = 29,
+  // Subscribed to by the settings shared window to refresh on remote pref
+  // changes; never fired in the port (prefs are set locally), just needs a
+  // distinct enum slot for event_service.
+  PEBBLE_PREF_CHANGE_EVENT = 46,
   PEBBLE_NUM_EVENTS = 80,
 } PebbleEventType;
 
