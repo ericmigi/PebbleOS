@@ -28,7 +28,7 @@ extern void pbl_analytics_external_collect_vibe_stats(void);
 extern void pbl_analytics_external_collect_speaker_stats(void);
 extern void pbl_analytics_external_collect_settings(void);
 
-#if defined(ANALYTICS_NATIVE) || defined(ANALYTICS_MEMFAULT)
+#if defined(ANALYTICS_NATIVE) || defined(ANALYTICS_MEMFAULT) || defined(ANALYTICS_ZEPHYR)
 
 #ifdef ANALYTICS_NATIVE
 extern void pbl_analytics__native_init(void);
@@ -44,6 +44,13 @@ extern void pbl_analytics__memfault_heartbeat(void);
 extern const struct pbl_analytics_backend_ops pbl_analytics__memfault_ops;
 #endif
 
+#ifdef ANALYTICS_ZEPHYR
+extern void pbl_analytics__zephyr_init(void);
+extern void pbl_analytics__zephyr_heartbeat(void);
+
+extern const struct pbl_analytics_backend_ops pbl_analytics__zephyr_ops;
+#endif
+
 static TimerID s_heartbeat_timer;
 
 static void (*const s_init[])(void) = {
@@ -52,6 +59,9 @@ static void (*const s_init[])(void) = {
 #endif
 #ifdef ANALYTICS_MEMFAULT
     pbl_analytics__memfault_init,
+#endif
+#ifdef ANALYTICS_ZEPHYR
+    pbl_analytics__zephyr_init,
 #endif
 };
 
@@ -62,6 +72,9 @@ static void (*const s_heartbeat[])(void) = {
 #ifdef ANALYTICS_MEMFAULT
     pbl_analytics__memfault_heartbeat,
 #endif
+#ifdef ANALYTICS_ZEPHYR
+    pbl_analytics__zephyr_heartbeat,
+#endif
 };
 
 static const struct pbl_analytics_backend_ops *s_backend_ops[] = {
@@ -71,9 +84,13 @@ static const struct pbl_analytics_backend_ops *s_backend_ops[] = {
 #ifdef ANALYTICS_MEMFAULT
     &pbl_analytics__memfault_ops,
 #endif
+#ifdef ANALYTICS_ZEPHYR
+    &pbl_analytics__zephyr_ops,
+#endif
 };
 
 static void prv_heartbeat_system_task_cb(void *data) {
+#ifndef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
   static bool s_reboot_reason_counted = false;
 
   PBL_ANALYTICS_SET_STRING(fw_version, TINTIN_METADATA.version_tag);
@@ -97,6 +114,7 @@ static void prv_heartbeat_system_task_cb(void *data) {
   pbl_analytics_external_collect_vibe_stats();
   pbl_analytics_external_collect_speaker_stats();
   pbl_analytics_external_collect_settings();
+#endif
 
   for (size_t i = 0U; i < ARRAY_LENGTH(s_heartbeat); i++) {
     s_heartbeat[i]();
@@ -154,12 +172,14 @@ DEFINE_SYSCALL(void, sys_pbl_analytics_set_string, enum pbl_analytics_key key,
   if (!prv_analytics_key_in_range(key)) {
     return;
   }
+#ifndef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
   if (PRIVILEGE_WAS_ELEVATED) {
     if (!memory_layout_is_cstring_in_region(
           memory_layout_get_app_region(), value, ANALYTICS_STRING_MAX_LEN)) {
       syscall_failed();
     }
   }
+#endif
 
   for (size_t i = 0U; i < ARRAY_LENGTH(s_backend_ops); i++) {
     s_backend_ops[i]->set_string(key, value);
