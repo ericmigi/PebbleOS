@@ -39,7 +39,7 @@ int fw_pfs_boot(void) {
     return prv_fail("flash_init", result);
   }
 
-  result = pfs_init(false);
+  result = pfs_init(true);
   if (result < 0 || !pfs_active()) {
     return prv_fail("mount", result < 0 ? result : -1);
   }
