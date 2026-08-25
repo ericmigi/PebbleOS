@@ -34,6 +34,7 @@
 #include "pbl/services/event_service.h"
 #include "pbl/util/attributes.h"
 #include "pbl/util/crc32.h"
+#include "pbl/util/size.h"
 #include "process_state/app_state/app_state.h"
 #include "resource/resource.h"
 #include "sandbox.h"
@@ -70,6 +71,118 @@ struct Animation {
 static const uint8_t s_font_system_data[] __aligned(4) = {
 #include "watchface_font_small.pbf.inc"
 };
+
+#if defined(PBL_WATCHFACE_IN_FW)
+// Real system fonts + Music action-bar icons embedded for the in-fw system apps
+// (launcher / Settings / Music / Alarms). IDs are chosen above the 256-entry
+// pbpack app-table range so they never collide with the sliding_text pbpack
+// resource IDs served below. fonts_get_system_font() maps FONT_KEY_* strings to
+// these faces; Music loads its icons through gbitmap_init_with_resource(), which
+// auto-detects the embedded PNG bytes.
+#define FW_RES_GOTHIC_14_BOLD 257U
+#define FW_RES_GOTHIC_18 258U
+#define FW_RES_GOTHIC_18_BOLD 259U
+#define FW_RES_GOTHIC_24_BOLD 260U
+#define FW_RES_GOTHIC_28 261U
+#define FW_RES_GOTHIC_28_BOLD 262U
+
+#define FW_RES_MUSIC_ICON_PLAY 270U
+#define FW_RES_MUSIC_ICON_PAUSE 271U
+#define FW_RES_MUSIC_ICON_FAST_FORWARD 272U
+#define FW_RES_MUSIC_ICON_REWIND 273U
+#define FW_RES_MUSIC_ICON_SKIP_FORWARD 274U
+#define FW_RES_MUSIC_ICON_SKIP_BACKWARD 275U
+#define FW_RES_MUSIC_ICON_VOLUME_UP 276U
+#define FW_RES_MUSIC_ICON_VOLUME_DOWN 277U
+#define FW_RES_MUSIC_ICON_ELLIPSIS 278U
+
+static const uint8_t s_fw_gothic_14_bold[] __aligned(4) = {
+#include "fw_gothic_14_bold.pbf.inc"
+};
+static const uint8_t s_fw_gothic_18[] __aligned(4) = {
+#include "fw_gothic_18.pbf.inc"
+};
+static const uint8_t s_fw_gothic_18_bold[] __aligned(4) = {
+#include "fw_gothic_18_bold.pbf.inc"
+};
+static const uint8_t s_fw_gothic_24_bold[] __aligned(4) = {
+#include "fw_gothic_24_bold.pbf.inc"
+};
+static const uint8_t s_fw_gothic_28[] __aligned(4) = {
+#include "fw_gothic_28.pbf.inc"
+};
+static const uint8_t s_fw_gothic_28_bold[] __aligned(4) = {
+#include "fw_gothic_28_bold.pbf.inc"
+};
+static const uint8_t s_fw_music_icon_play[] __aligned(4) = {
+#include "fw_music_icon_play.png.inc"
+};
+static const uint8_t s_fw_music_icon_pause[] __aligned(4) = {
+#include "fw_music_icon_pause.png.inc"
+};
+static const uint8_t s_fw_music_icon_fast_forward[] __aligned(4) = {
+#include "fw_music_icon_fast_forward.png.inc"
+};
+static const uint8_t s_fw_music_icon_rewind[] __aligned(4) = {
+#include "fw_music_icon_rewind.png.inc"
+};
+static const uint8_t s_fw_music_icon_skip_forward[] __aligned(4) = {
+#include "fw_music_icon_skip_forward.png.inc"
+};
+static const uint8_t s_fw_music_icon_skip_backward[] __aligned(4) = {
+#include "fw_music_icon_skip_backward.png.inc"
+};
+static const uint8_t s_fw_music_icon_volume_up[] __aligned(4) = {
+#include "fw_music_icon_volume_up.png.inc"
+};
+static const uint8_t s_fw_music_icon_volume_down[] __aligned(4) = {
+#include "fw_music_icon_volume_down.png.inc"
+};
+static const uint8_t s_fw_music_icon_ellipsis[] __aligned(4) = {
+#include "fw_music_icon_ellipsis.png.inc"
+};
+
+typedef struct {
+  uint32_t id;
+  const uint8_t *data;
+  size_t size;
+} FwResource;
+
+#define FW_RES_ENTRY(id, arr) {(id), (arr), sizeof(arr)}
+static const FwResource s_fw_resources[] = {
+    FW_RES_ENTRY(FW_RES_GOTHIC_14_BOLD, s_fw_gothic_14_bold),
+    FW_RES_ENTRY(FW_RES_GOTHIC_18, s_fw_gothic_18),
+    FW_RES_ENTRY(FW_RES_GOTHIC_18_BOLD, s_fw_gothic_18_bold),
+    FW_RES_ENTRY(FW_RES_GOTHIC_24_BOLD, s_fw_gothic_24_bold),
+    FW_RES_ENTRY(FW_RES_GOTHIC_28, s_fw_gothic_28),
+    FW_RES_ENTRY(FW_RES_GOTHIC_28_BOLD, s_fw_gothic_28_bold),
+    FW_RES_ENTRY(FW_RES_MUSIC_ICON_PLAY, s_fw_music_icon_play),
+    FW_RES_ENTRY(FW_RES_MUSIC_ICON_PAUSE, s_fw_music_icon_pause),
+    FW_RES_ENTRY(FW_RES_MUSIC_ICON_FAST_FORWARD, s_fw_music_icon_fast_forward),
+    FW_RES_ENTRY(FW_RES_MUSIC_ICON_REWIND, s_fw_music_icon_rewind),
+    FW_RES_ENTRY(FW_RES_MUSIC_ICON_SKIP_FORWARD, s_fw_music_icon_skip_forward),
+    FW_RES_ENTRY(FW_RES_MUSIC_ICON_SKIP_BACKWARD, s_fw_music_icon_skip_backward),
+    FW_RES_ENTRY(FW_RES_MUSIC_ICON_VOLUME_UP, s_fw_music_icon_volume_up),
+    FW_RES_ENTRY(FW_RES_MUSIC_ICON_VOLUME_DOWN, s_fw_music_icon_volume_down),
+    FW_RES_ENTRY(FW_RES_MUSIC_ICON_ELLIPSIS, s_fw_music_icon_ellipsis),
+};
+
+static const FwResource *prv_fw_resource(uint32_t resource_id) {
+  for (size_t i = 0; i < ARRAY_LENGTH(s_fw_resources); ++i) {
+    if (s_fw_resources[i].id == resource_id) {
+      return &s_fw_resources[i];
+    }
+  }
+  return NULL;
+}
+
+static FontInfo s_font_g14_bold;
+static FontInfo s_font_g18;
+static FontInfo s_font_g18_bold;
+static FontInfo s_font_g24_bold;
+static FontInfo s_font_g28;
+static FontInfo s_font_g28_bold;
+#endif  // PBL_WATCHFACE_IN_FW
 
 static FrameBuffer s_framebuffer;
 static GContext s_context;
@@ -111,6 +224,15 @@ static const uint8_t *prv_resource_data(uint32_t resource_id, size_t *size_out) 
   const uint8_t *data = NULL;
   size_t size = 0;
 
+#if defined(PBL_WATCHFACE_IN_FW)
+  const FwResource *fw_res = prv_fw_resource(resource_id);
+  if (fw_res != NULL) {
+    if (size_out) {
+      *size_out = fw_res->size;
+    }
+    return fw_res->data;
+  }
+#endif
   if (resource_id == SYSTEM_FONT_RESOURCE_GOTHIC_14) {
     data = s_font_system_data;
     size = sizeof(s_font_system_data);
@@ -207,6 +329,17 @@ void watchface_port_graphics_init(void) {
     printk("WATCHFACE_FONT_FAIL\n");
     k_panic();
   }
+#if defined(PBL_WATCHFACE_IN_FW)
+  if (!text_resources_init_font(SYSTEM_APP, FW_RES_GOTHIC_14_BOLD, 0, &s_font_g14_bold) ||
+      !text_resources_init_font(SYSTEM_APP, FW_RES_GOTHIC_18, 0, &s_font_g18) ||
+      !text_resources_init_font(SYSTEM_APP, FW_RES_GOTHIC_18_BOLD, 0, &s_font_g18_bold) ||
+      !text_resources_init_font(SYSTEM_APP, FW_RES_GOTHIC_24_BOLD, 0, &s_font_g24_bold) ||
+      !text_resources_init_font(SYSTEM_APP, FW_RES_GOTHIC_28, 0, &s_font_g28) ||
+      !text_resources_init_font(SYSTEM_APP, FW_RES_GOTHIC_28_BOLD, 0, &s_font_g28_bold)) {
+    printk("FW_FONT_FAIL\n");
+    k_panic();
+  }
+#endif
 }
 
 void watchface_port_app_state_init(void) {
@@ -556,6 +689,14 @@ const uint8_t *sys_resource_read_only_bytes(ResAppNum app_num, uint32_t resource
 
 bool sys_resource_bytes_are_readonly(void *bytes) {
   const uintptr_t address = (uintptr_t)bytes;
+#if defined(PBL_WATCHFACE_IN_FW)
+  for (size_t i = 0; i < ARRAY_LENGTH(s_fw_resources); ++i) {
+    const uintptr_t start = (uintptr_t)s_fw_resources[i].data;
+    if (address >= start && address < start + s_fw_resources[i].size) {
+      return true;
+    }
+  }
+#endif
   return (address >= (uintptr_t)sliding_text_emery_resources &&
           address < (uintptr_t)(sliding_text_emery_resources + sliding_text_emery_resources_len)) ||
          (address >= (uintptr_t)s_font_system_data &&
@@ -610,8 +751,34 @@ ResHandle applib_resource_get_handle(uint32_t resource_id) {
 }
 
 GFont fonts_get_system_font(const char *font_key) {
+#if defined(PBL_WATCHFACE_IN_FW)
+  // Compare against the literal font-key strings (FONT_KEY_GOTHIC_18 etc. expand
+  // to "RESOURCE_ID_GOTHIC_18") so this TU needs no generated key header.
+  if (font_key != NULL) {
+    if (!strcmp(font_key, "RESOURCE_ID_GOTHIC_14_BOLD")) {
+      return &s_font_g14_bold;
+    }
+    if (!strcmp(font_key, "RESOURCE_ID_GOTHIC_18")) {
+      return &s_font_g18;
+    }
+    if (!strcmp(font_key, "RESOURCE_ID_GOTHIC_18_BOLD")) {
+      return &s_font_g18_bold;
+    }
+    if (!strcmp(font_key, "RESOURCE_ID_GOTHIC_24_BOLD")) {
+      return &s_font_g24_bold;
+    }
+    if (!strcmp(font_key, "RESOURCE_ID_GOTHIC_28")) {
+      return &s_font_g28;
+    }
+    if (!strcmp(font_key, "RESOURCE_ID_GOTHIC_28_BOLD")) {
+      return &s_font_g28_bold;
+    }
+  }
+  return &s_font_system;
+#else
   ARG_UNUSED(font_key);
   return &s_font_system;
+#endif
 }
 
 GFont sys_font_get_system_font(const char *font_key) {

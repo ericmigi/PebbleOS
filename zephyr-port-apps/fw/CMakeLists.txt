@@ -290,6 +290,44 @@ generate_inc_file_for_target(app
   "${CMAKE_BINARY_DIR}/include/generated/watchface_font_small.pbf.inc"
 )
 
+# Real system fonts used by the launcher menu + Settings/Music/Alarms cells,
+# embedded as .inc blobs and served by watchface_sandboxed/src/port.c (gated on
+# PBL_WATCHFACE_IN_FW). fonts_get_system_font() maps FONT_KEY_* -> these faces.
+generate_inc_file_for_target(app
+  "${PEBBLEOS_ROOT}/resources/normal/base/pbf/GOTHIC_14_BOLD.pbf"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_gothic_14_bold.pbf.inc"
+)
+generate_inc_file_for_target(app
+  "${PEBBLEOS_ROOT}/resources/normal/base/pbf/GOTHIC_18.pbf"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_gothic_18.pbf.inc"
+)
+generate_inc_file_for_target(app
+  "${PEBBLEOS_ROOT}/resources/common/base/pbf/GOTHIC_18_BOLD.pbf"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_gothic_18_bold.pbf.inc"
+)
+generate_inc_file_for_target(app
+  "${PEBBLEOS_ROOT}/resources/normal/base/pbf/GOTHIC_24_BOLD.pbf"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_gothic_24_bold.pbf.inc"
+)
+generate_inc_file_for_target(app
+  "${PEBBLEOS_ROOT}/resources/normal/base/pbf/GOTHIC_28.pbf"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_gothic_28.pbf.inc"
+)
+generate_inc_file_for_target(app
+  "${PEBBLEOS_ROOT}/resources/normal/base/pbf/GOTHIC_28_BOLD.pbf"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_gothic_28_bold.pbf.inc"
+)
+
+# Real Music action-bar icons: the firmware build converts these PNGs to pbi8,
+# but gbitmap_init_with_resource() auto-detects the embedded PNG bytes, so embed
+# the source PNGs directly.
+foreach(icon play pause fast_forward rewind skip_forward skip_backward volume_up volume_down ellipsis)
+  generate_inc_file_for_target(app
+    "${PEBBLEOS_ROOT}/resources/normal/base/images/music_icon_${icon}.png"
+    "${CMAKE_BINARY_DIR}/include/generated/fw_music_icon_${icon}.png.inc"
+  )
+endforeach()
+
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/kernel/task_timer.c"
   "${PEBBLEOS_ROOT}/src/fw/services/regular_timer/service.c"
@@ -372,7 +410,7 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/apps/system/music.c"
   PROPERTIES
     COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
-    COMPILE_DEFINITIONS "RESOURCE_ID_AUDIO_CASSETTE_TINY=0;RESOURCE_ID_MUSIC_ICON_ELLIPSIS=0;RESOURCE_ID_MUSIC_ICON_FAST_FORWARD=0;RESOURCE_ID_MUSIC_ICON_PAUSE=0;RESOURCE_ID_MUSIC_ICON_PLAY=0;RESOURCE_ID_MUSIC_ICON_PLAY_PAUSE=0;RESOURCE_ID_MUSIC_ICON_REWIND=0;RESOURCE_ID_MUSIC_ICON_SKIP_BACKWARD=0;RESOURCE_ID_MUSIC_ICON_SKIP_FORWARD=0;RESOURCE_ID_MUSIC_ICON_VOLUME_DOWN=0;RESOURCE_ID_MUSIC_ICON_VOLUME_UP=0;RESOURCE_ID_MUSIC_IMAGE_NO_MUSIC=0;RESOURCE_ID_MUSIC_LARGE_CASSETTE=0;RESOURCE_ID_MUSIC_LARGE_PAUSED=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_DOWN=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_UP=0;RESOURCE_ID_VIBE_SCORE_HAPTIC_FEEDBACK=0;SECONDS_PER_HOUR=3600;SECONDS_PER_MINUTE=60"
+    COMPILE_DEFINITIONS "RESOURCE_ID_AUDIO_CASSETTE_TINY=0;RESOURCE_ID_MUSIC_ICON_ELLIPSIS=278;RESOURCE_ID_MUSIC_ICON_FAST_FORWARD=272;RESOURCE_ID_MUSIC_ICON_PAUSE=271;RESOURCE_ID_MUSIC_ICON_PLAY=270;RESOURCE_ID_MUSIC_ICON_PLAY_PAUSE=0;RESOURCE_ID_MUSIC_ICON_REWIND=273;RESOURCE_ID_MUSIC_ICON_SKIP_BACKWARD=275;RESOURCE_ID_MUSIC_ICON_SKIP_FORWARD=274;RESOURCE_ID_MUSIC_ICON_VOLUME_DOWN=277;RESOURCE_ID_MUSIC_ICON_VOLUME_UP=276;RESOURCE_ID_MUSIC_IMAGE_NO_MUSIC=0;RESOURCE_ID_MUSIC_LARGE_CASSETTE=0;RESOURCE_ID_MUSIC_LARGE_PAUSED=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_DOWN=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_UP=0;RESOURCE_ID_VIBE_SCORE_HAPTIC_FEEDBACK=0;SECONDS_PER_HOUR=3600;SECONDS_PER_MINUTE=60"
 )
 
 # Alarms app trio: same sign_extend pre-include as music, with its launcher /
