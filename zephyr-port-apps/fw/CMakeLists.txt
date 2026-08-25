@@ -180,6 +180,7 @@ target_sources(app PRIVATE
   "${GFX}/gbitmap.c"
   "${GFX}/gcolor_definitions.c"
   "${GFX}/graphics.c"
+  "${GFX}/graphics_bitmap.c"
   "${GFX}/graphics_circle.c"
   "${GFX}/graphics_line.c"
   "${GFX}/graphics_private.c"
@@ -241,6 +242,7 @@ set_source_files_properties(
   "${GFX}/gbitmap.c"
   "${GFX}/gcolor_definitions.c"
   "${GFX}/graphics.c"
+  "${GFX}/graphics_bitmap.c"
   "${GFX}/graphics_circle.c"
   "${GFX}/graphics_line.c"
   "${GFX}/graphics_private.c"
@@ -340,6 +342,41 @@ foreach(icon play pause fast_forward rewind skip_forward skip_backward volume_up
     "${CMAKE_BINARY_DIR}/include/generated/fw_music_icon_${icon}.png.inc"
   )
 endforeach()
+
+# Launcher per-row app icons + status-bar BT glyph, embedded as PNG blobs and
+# served through the same sys_resource_* path as the fonts/music icons (see
+# watchface_sandboxed/src/port.c). Real launcher-glance PNGs are used where they
+# exist (notifications/watchfaces/generic); the Settings/Music/Alarms launcher
+# icons ship as vector PDC in the resource pack, so their 25x25 source SVGs were
+# rasterised to PNG under assets/launcher_icons/ (no PDC renderer in the port).
+generate_inc_file_for_target(app
+  "${CMAKE_CURRENT_SOURCE_DIR}/assets/launcher_icons/settings_tiny.png"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_icon_settings.png.inc"
+)
+generate_inc_file_for_target(app
+  "${CMAKE_CURRENT_SOURCE_DIR}/assets/launcher_icons/audio_cassette_tiny.png"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_icon_music.png.inc"
+)
+generate_inc_file_for_target(app
+  "${CMAKE_CURRENT_SOURCE_DIR}/assets/launcher_icons/alarm_clock_tiny.png"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_icon_alarms.png.inc"
+)
+generate_inc_file_for_target(app
+  "${CMAKE_CURRENT_SOURCE_DIR}/assets/launcher_icons/notifications.png"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_icon_notifications.png.inc"
+)
+generate_inc_file_for_target(app
+  "${CMAKE_CURRENT_SOURCE_DIR}/assets/launcher_icons/watchfaces.png"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_icon_watchfaces.png.inc"
+)
+generate_inc_file_for_target(app
+  "${CMAKE_CURRENT_SOURCE_DIR}/assets/launcher_icons/generic.png"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_icon_generic.png.inc"
+)
+generate_inc_file_for_target(app
+  "${CMAKE_CURRENT_SOURCE_DIR}/assets/launcher_icons/bt_disconnected.png"
+  "${CMAKE_BINARY_DIR}/include/generated/fw_icon_bt_disconnected.png.inc"
+)
 
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/kernel/task_timer.c"

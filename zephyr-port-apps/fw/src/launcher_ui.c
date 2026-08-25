@@ -22,6 +22,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 // Zephyr and Pebble both declare sign_extend() with different signatures; load
 // Zephyr's under a private name before the Pebble graphics headers (mirrors
@@ -32,12 +33,14 @@
 #include <zephyr/sys/printk.h>
 
 #include "applib/fonts/fonts.h"
+#include "applib/graphics/gtypes.h"
 #include "applib/graphics/graphics.h"
 #include "applib/graphics/text.h"
 #include "applib/ui/click.h"
 #include "applib/ui/click_internal.h"
 #include "applib/ui/layer.h"
 #include "applib/ui/menu_layer.h"
+#include "applib/ui/status_bar_layer.h"
 #include "applib/ui/window.h"
 
 #include "kernel/events.h"
@@ -203,19 +206,82 @@ static int16_t prv_get_cell_height(struct MenuLayer *menu_layer, MenuIndex *cell
   return 32;
 }
 
+// Per-row app icon, drawn left of the name like shipping's launcher glances.
+// Map each app to an embedded icon resource (served by port.c through
+// sys_resource_*); apps we have no dedicated icon for fall back to the generic
+// watch-app glyph. See launcher_ui.h for the FW_RES_ICON_* IDs.
+#define LAUNCHER_ICON_SIZE 25
+#define LAUNCHER_ICON_LEFT 6
+#define LAUNCHER_TEXT_LEFT (LAUNCHER_ICON_LEFT + LAUNCHER_ICON_SIZE + 5)
+
+static uint32_t prv_icon_res_for_app(const FwAppRegistryEntry *entry) {
+  switch (entry->install_id) {
+    case -7: return FW_RES_ICON_SETTINGS;
+    case -3: return FW_RES_ICON_MUSIC;
+    case -4: return FW_RES_ICON_NOTIFICATIONS;
+    case -5: return FW_RES_ICON_ALARMS;
+    case -6: return FW_RES_ICON_WATCHFACES;
+    default: return FW_RES_ICON_GENERIC;
+  }
+}
+
+// Lazily decode + cache each icon once (keyed by resource id). PNG decode on
+// every render would be wasteful; the cache keeps redraws cheap.
+// ponytail: fixed small cache; the launcher only uses a handful of distinct icons.
+#define ICON_CACHE_MAX 8
+static struct { uint32_t id; GBitmap bmp; bool valid; } s_icon_cache[ICON_CACHE_MAX];
+
+static GBitmap *prv_get_icon(uint32_t resource_id) {
+  for (int i = 0; i < ICON_CACHE_MAX; ++i) {
+    if (s_icon_cache[i].valid && s_icon_cache[i].id == resource_id) {
+      return &s_icon_cache[i].bmp;
+    }
+  }
+  for (int i = 0; i < ICON_CACHE_MAX; ++i) {
+    if (!s_icon_cache[i].valid) {
+      if (!gbitmap_init_with_resource(&s_icon_cache[i].bmp, resource_id)) {
+        return NULL;
+      }
+      s_icon_cache[i].id = resource_id;
+      s_icon_cache[i].valid = true;
+      return &s_icon_cache[i].bmp;
+    }
+  }
+  return NULL;
+}
+
+static void prv_draw_icon(GContext *ctx, const GRect *cell_bounds, uint32_t resource_id) {
+  GBitmap *icon = prv_get_icon(resource_id);
+  if (!icon) {
+    return;
+  }
+  const GRect src = icon->bounds;
+  GRect dst = {
+    .origin = { cell_bounds->origin.x + LAUNCHER_ICON_LEFT,
+                cell_bounds->origin.y + (cell_bounds->size.h - src.size.h) / 2 },
+    .size = src.size,
+  };
+  // Icons are black-on-transparent PNGs; GCompOpSet honours the alpha so the
+  // cell background (white / highlight) shows through.
+  graphics_context_set_compositing_mode(ctx, GCompOpSet);
+  graphics_draw_bitmap_in_rect(ctx, icon, &dst);
+}
+
 static void prv_draw_row(GContext *ctx, const Layer *cell_layer, MenuIndex *cell_index,
                          void *context) {
   const FwAppRegistryEntry *entry = fw_app_registry_get(cell_index->row);
   if (!entry) {
     return;
   }
+  prv_draw_icon(ctx, &cell_layer->bounds, prv_icon_res_for_app(entry));
+
   // menu_layer sets the text colour (normal vs highlighted) before this call.
   // Launcher rows are menu-cell titles: use the shipping MenuCellTitle face
   // (GOTHIC_24_BOLD at the port's Large content size) instead of the fallback.
   GFont font = system_theme_get_font_for_default_size(TextStyleFont_MenuCellTitle);
   GRect box = cell_layer->bounds;
-  box.origin.x += 4;
-  box.size.w -= 4;
+  box.origin.x += LAUNCHER_TEXT_LEFT;
+  box.size.w -= LAUNCHER_TEXT_LEFT;
   graphics_draw_text(ctx, entry->name, font, box, GTextOverflowModeTrailingEllipsis,
                      GTextAlignmentLeft, NULL);
 }
@@ -327,6 +393,67 @@ void fw_window_stack_push(Window *window) { prv_window_push(window); }
 
 int fw_window_stack_depth(void) { return s_stack_top + 1; }
 
+// ---------------------------------------------------------------------------
+// Launcher status bar (top strip): BT status glyph on the left, battery percent
+// + battery glyph on the right, mirroring shipping's launcher chrome. The applib
+// StatusBarLayer only renders a clock/title, so the battery + BT indicators are
+// drawn here directly. STATUS_BAR_LAYER_HEIGHT keeps the strip height matched to
+// the platform's real status bar.
+// ---------------------------------------------------------------------------
+static Layer s_status_layer;
+
+// ponytail: this recovery FW has no battery or BLE service wired, so the battery
+// reads a full placeholder and BT is drawn disconnected (which is accurate here).
+// Point these at battery_state_service_peek() / connection_service_peek() once
+// those services are ported.
+static uint8_t prv_battery_percent(void) { return 100; }
+static bool prv_bt_connected(void) { return false; }
+
+static void prv_status_update_proc(Layer *layer, GContext *ctx) {
+  const GRect b = layer->bounds;
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_fill_rect(ctx, &b);
+
+  // BT glyph (16x16) at the left, vertically centred. Only the disconnected
+  // glyph is embedded (accurate for this recovery FW); embed the connected one
+  // and switch on prv_bt_connected() when BLE is wired.
+  (void)prv_bt_connected;
+  GBitmap *bt = prv_get_icon(FW_RES_ICON_BT_DISCONNECTED);
+  if (bt) {
+    GRect dst = { .origin = { b.origin.x + 3,
+                              b.origin.y + (b.size.h - bt->bounds.size.h) / 2 },
+                  .size = bt->bounds.size };
+    graphics_context_set_compositing_mode(ctx, GCompOpSet);
+    graphics_draw_bitmap_in_rect(ctx, bt, &dst);
+  }
+
+  // Battery glyph on the right: outline body + terminal nub + proportional fill.
+  graphics_context_set_stroke_color(ctx, GColorBlack);
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  const int16_t body_w = 20, body_h = 10;
+  const int16_t bx = b.origin.x + b.size.w - 3 - body_w;
+  const int16_t by = b.origin.y + (b.size.h - body_h) / 2;
+  GRect body = { { bx, by }, { body_w, body_h } };
+  graphics_draw_rect(ctx, &body);
+  GRect nub = { { bx + body_w, by + 3 }, { 2, body_h - 6 } };
+  graphics_fill_rect(ctx, &nub);
+  const uint8_t pct = prv_battery_percent();
+  const int16_t fill_w = ((body_w - 4) * pct) / 100;
+  if (fill_w > 0) {
+    GRect fill = { { bx + 2, by + 2 }, { fill_w, body_h - 4 } };
+    graphics_fill_rect(ctx, &fill);
+  }
+
+  // Percentage text, right-aligned just left of the battery glyph.
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%u%%", pct);
+  GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+  graphics_context_set_text_color(ctx, GColorBlack);
+  GRect txt = { { b.origin.x, b.origin.y - 2 }, { bx - 3, b.size.h } };
+  graphics_draw_text(ctx, buf, font, txt, GTextOverflowModeTrailingEllipsis,
+                     GTextAlignmentRight, NULL);
+}
+
 static void prv_launcher_setup(void) {
   // input_service_init() (called from main.c) already brought up the shared
   // ClickManager; here we bring up the panel and let the launcher window's
@@ -336,15 +463,26 @@ static void prv_launcher_setup(void) {
   s_launcher_window = window_create();
   window_set_background_color(s_launcher_window, GColorWhite);
 
-  GRect bounds = window_get_root_layer(s_launcher_window)->bounds;
-  menu_layer_init(&s_menu, &bounds);
+  Layer *root = window_get_root_layer(s_launcher_window);
+  GRect bounds = root->bounds;
+
+  // Reserve the top strip for the status bar; the menu fills the rest.
+  const int16_t status_h = STATUS_BAR_LAYER_HEIGHT;
+  GRect status_frame = { bounds.origin, { bounds.size.w, status_h } };
+  layer_init(&s_status_layer, &status_frame);
+  layer_set_update_proc(&s_status_layer, prv_status_update_proc);
+
+  GRect menu_frame = { { bounds.origin.x, bounds.origin.y + status_h },
+                       { bounds.size.w, bounds.size.h - status_h } };
+  menu_layer_init(&s_menu, &menu_frame);
   menu_layer_set_callbacks(&s_menu, &s_menu, &(MenuLayerCallbacks){
     .get_num_sections = prv_get_num_sections,
     .get_num_rows = prv_get_num_rows,
     .get_cell_height = prv_get_cell_height,
     .draw_row = prv_draw_row,
   });
-  layer_add_child(window_get_root_layer(s_launcher_window), menu_layer_get_layer(&s_menu));
+  layer_add_child(root, menu_layer_get_layer(&s_menu));
+  layer_add_child(root, &s_status_layer);
   window_set_click_config_provider_with_context(s_launcher_window,
                                                 prv_launcher_click_config_provider, &s_menu);
 

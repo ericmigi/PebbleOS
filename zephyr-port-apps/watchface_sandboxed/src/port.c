@@ -73,6 +73,8 @@ static const uint8_t s_font_system_data[] __aligned(4) = {
 };
 
 #if defined(PBL_WATCHFACE_IN_FW)
+// Launcher app-icon / status-bar resource IDs (FW_RES_ICON_*).
+#include "launcher_ui.h"
 // Real system fonts + Music action-bar icons embedded for the in-fw system apps
 // (launcher / Settings / Music / Alarms). IDs are chosen above the 256-entry
 // pbpack app-table range so they never collide with the sliding_text pbpack
@@ -146,6 +148,30 @@ static const uint8_t s_fw_music_icon_ellipsis[] __aligned(4) = {
 #include "fw_music_icon_ellipsis.png.inc"
 };
 
+// Launcher per-row app icons + status-bar BT glyph (see launcher_ui.h / the
+// CMakeLists generate_inc_file_for_target block).
+static const uint8_t s_fw_icon_settings[] __aligned(4) = {
+#include "fw_icon_settings.png.inc"
+};
+static const uint8_t s_fw_icon_music[] __aligned(4) = {
+#include "fw_icon_music.png.inc"
+};
+static const uint8_t s_fw_icon_alarms[] __aligned(4) = {
+#include "fw_icon_alarms.png.inc"
+};
+static const uint8_t s_fw_icon_notifications[] __aligned(4) = {
+#include "fw_icon_notifications.png.inc"
+};
+static const uint8_t s_fw_icon_watchfaces[] __aligned(4) = {
+#include "fw_icon_watchfaces.png.inc"
+};
+static const uint8_t s_fw_icon_generic[] __aligned(4) = {
+#include "fw_icon_generic.png.inc"
+};
+static const uint8_t s_fw_icon_bt_disconnected[] __aligned(4) = {
+#include "fw_icon_bt_disconnected.png.inc"
+};
+
 typedef struct {
   uint32_t id;
   const uint8_t *data;
@@ -170,6 +196,13 @@ static const FwResource s_fw_resources[] = {
     FW_RES_ENTRY(FW_RES_MUSIC_ICON_VOLUME_UP, s_fw_music_icon_volume_up),
     FW_RES_ENTRY(FW_RES_MUSIC_ICON_VOLUME_DOWN, s_fw_music_icon_volume_down),
     FW_RES_ENTRY(FW_RES_MUSIC_ICON_ELLIPSIS, s_fw_music_icon_ellipsis),
+    FW_RES_ENTRY(FW_RES_ICON_SETTINGS, s_fw_icon_settings),
+    FW_RES_ENTRY(FW_RES_ICON_MUSIC, s_fw_icon_music),
+    FW_RES_ENTRY(FW_RES_ICON_ALARMS, s_fw_icon_alarms),
+    FW_RES_ENTRY(FW_RES_ICON_NOTIFICATIONS, s_fw_icon_notifications),
+    FW_RES_ENTRY(FW_RES_ICON_WATCHFACES, s_fw_icon_watchfaces),
+    FW_RES_ENTRY(FW_RES_ICON_GENERIC, s_fw_icon_generic),
+    FW_RES_ENTRY(FW_RES_ICON_BT_DISCONNECTED, s_fw_icon_bt_disconnected),
 };
 
 static const FwResource *prv_fw_resource(uint32_t resource_id) {

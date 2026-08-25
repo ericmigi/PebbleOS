@@ -160,9 +160,9 @@ void vibes_enqueue_custom_pattern(VibePattern pattern) {
   (void)pattern;
 }
 
-void graphics_draw_bitmap_in_rect(GContext *ctx, const GBitmap *bitmap, const GRect *rect) {
-  (void)ctx; (void)bitmap; (void)rect;
-}
+// graphics_draw_bitmap_in_rect() now comes from the real applib graphics_bitmap.c
+// (added to the build) so the launcher can draw app icons + the status-bar BT
+// glyph. It was previously a no-op because icons were cosmetic.
 
 GBitmap *shadow_get_top(void) {
   return NULL;

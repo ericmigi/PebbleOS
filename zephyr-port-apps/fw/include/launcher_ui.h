@@ -1,6 +1,18 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #pragma once
 
+// Port-local resource IDs for the launcher's per-row app icons + status-bar BT
+// glyph. These blobs are embedded in the FW and served through sys_resource_*
+// (watchface_sandboxed/src/port.c); the IDs live above the font/music-icon IDs
+// (257-278) so they never collide.
+#define FW_RES_ICON_SETTINGS 300U
+#define FW_RES_ICON_MUSIC 301U
+#define FW_RES_ICON_ALARMS 302U
+#define FW_RES_ICON_NOTIFICATIONS 303U
+#define FW_RES_ICON_WATCHFACES 304U
+#define FW_RES_ICON_GENERIC 305U
+#define FW_RES_ICON_BT_DISCONNECTED 306U
+
 // Stand up the real PebbleOS window stack + launcher menu (menu_layer) driven
 // by the real click service, and run the KernelMain UI event loop. Consumes
 // PEBBLE_BUTTON_DOWN/UP events from the shared event queue (fed by the obelix
