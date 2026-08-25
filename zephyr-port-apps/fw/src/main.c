@@ -59,14 +59,6 @@ static void prv_kernel_main(void *parameter) {
   (void)parameter;
   task_init();
 
-  task_watchdog_init();
-  task_watchdog_pause(30);
-  regular_timer_add_seconds_callback(&s_watchdog_timer);
-  pbl_analytics_init();
-  PBL_ANALYTICS_SET_UNSIGNED(uptime_s, 0U);
-
-  board_init();
-
   TickTimerServiceState *tick_state = kernel_applib_get_tick_timer_service_state();
   tick_timer_service_state_init(tick_state);
   tick_timer_service_init();
@@ -84,10 +76,22 @@ static void prv_kernel_main(void *parameter) {
   input_service_init();
   button_zephyr_init();
 
+  // PFS must mount and the app registry must enumerate before board drivers,
+  // the watchdog, or analytics run. Bringing those up first (as the un-stub
+  // originally did) perturbs the system out of the clean state PFS mounts in
+  // and the filesystem fails to mount (apps=0). Keep filesystem-first ordering.
   if (fw_pfs_boot() == 0) {
     PBL_LOG_ALWAYS("FW_PFS_UP");
     fw_app_registry_init();
   }
+
+  // Board drivers / watchdog / analytics: real Zephyr-backed bring-up, after PFS.
+  task_watchdog_init();
+  task_watchdog_pause(30);
+  regular_timer_add_seconds_callback(&s_watchdog_timer);
+  pbl_analytics_init();
+  PBL_ANALYTICS_SET_UNSIGNED(uptime_s, 0U);
+  board_init();
 
   task_watchdog_mask_set(PebbleTask_KernelMain);
   task_watchdog_resume();
