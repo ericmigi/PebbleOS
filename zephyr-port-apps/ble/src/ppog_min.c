@@ -29,6 +29,11 @@
 
 static uint8_t s_pp_buf[1024];
 static uint16_t s_pp_len;
+static uint8_t s_tx_sn;   // our PPoGATT Data sequence number
+static bool s_session_open;
+
+// Pebble Protocol endpoints we care about for the demo.
+#define PP_ENDPOINT_PHONE_VERSION 0x0011
 
 static void prv_send(uint16_t conn, uint8_t type, uint8_t sn, const uint8_t *pl,
                      uint16_t pl_len) {
@@ -44,6 +49,43 @@ static void prv_send(uint16_t conn, uint8_t type, uint8_t sn, const uint8_t *pl,
   if (rc != BTErrnoOK) {
     printk("BLE_PPOG_TX_ERR type=%u rc=%d\n", type, (int)rc);
   }
+}
+
+// Send a Pebble Protocol message as a PPoGATT Data packet.
+// PP framing: [be16 length][be16 endpoint][payload]; PPoGATT: [type|sn<<3] + PP.
+static void prv_send_pp(uint16_t conn, uint16_t endpoint, const uint8_t *payload,
+                        uint16_t payload_len) {
+  uint8_t pkt[32];
+  if (1U + 4U + payload_len > sizeof(pkt)) {
+    return;
+  }
+  pkt[0] = PPOG_HDR(PPOG_TYPE_DATA, s_tx_sn);
+  pkt[1] = payload_len >> 8;
+  pkt[2] = payload_len & 0xFF;
+  pkt[3] = endpoint >> 8;
+  pkt[4] = endpoint & 0xFF;
+  if (payload_len) {
+    memcpy(pkt + 5, payload, payload_len);
+  }
+  BTErrno rc = bt_driver_ppog_reversed_notify(conn, pkt, 5U + payload_len);
+  printk("BLE_PP_TX endpoint=0x%04x sn=%u len=%u rc=%d\n", endpoint, s_tx_sn,
+         payload_len, (int)rc);
+  s_tx_sn = (s_tx_sn + 1) & 0x1F;
+}
+
+// After the PPoGATT session opens, the watch drives the app-layer handshake by
+// requesting the phone's version (endpoint 0x11, command 0x00). CoreApp gates
+// notification delivery on this exchange completing.
+static void prv_session_opened(uint16_t conn) {
+  if (s_session_open) {
+    return;
+  }
+  s_session_open = true;
+  s_tx_sn = 0;
+  const uint8_t version_request[1] = {0x00};  // CommSessionVersionCommandRequest
+  prv_send_pp(conn, PP_ENDPOINT_PHONE_VERSION, version_request,
+              sizeof(version_request));
+  printk("BLE_PP_SESSION_OPEN sent phone-version request\n");
 }
 
 // Reassemble the Pebble Protocol stream: [be16 length][be16 endpoint][payload].
@@ -76,11 +118,14 @@ void bt_driver_cb_ppog_reversed_subscribed(const BTDeviceInternal *device,
                                            uint16_t conn_handle) {
   (void)device;
   s_pp_len = 0;
+  s_session_open = false;
+  s_tx_sn = 0;
   printk("BLE_PPOG_SUBSCRIBED conn=%u\n", (unsigned int)conn_handle);
 }
 
 void bt_driver_cb_ppog_reversed_unsubscribed(uint16_t conn_handle) {
   s_pp_len = 0;
+  s_session_open = false;
   printk("BLE_PPOG_UNSUBSCRIBED conn=%u\n", (unsigned int)conn_handle);
 }
 
@@ -97,18 +142,22 @@ void bt_driver_cb_ppog_reversed_data_written(uint16_t conn_handle, uint8_t *buf,
   switch (type) {
     case PPOG_TYPE_RESET_REQUEST: {
       s_pp_len = 0;
+      s_session_open = false;
       const uint8_t rc_payload[2] = {PPOG_WINDOW, PPOG_WINDOW};
       prv_send(conn_handle, PPOG_TYPE_RESET_COMPLETE, 0, rc_payload,
                sizeof(rc_payload));
       printk("BLE_PPOG_RESET_COMPLETE_SENT\n");
       break;
     }
+    case PPOG_TYPE_RESET_COMPLETE:
+      // Both sides have reset; the session is open. Drive the app handshake.
+      prv_session_opened(conn_handle);
+      break;
     case PPOG_TYPE_DATA:
       prv_pp_feed(buf + 1, len - 1);
       prv_send(conn_handle, PPOG_TYPE_ACK, sn, NULL, 0);
       break;
     case PPOG_TYPE_ACK:
-    case PPOG_TYPE_RESET_COMPLETE:
     default:
       break;
   }
