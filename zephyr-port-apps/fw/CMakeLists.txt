@@ -6,6 +6,8 @@ set(USER_CACHE_DIR "${CMAKE_BINARY_DIR}/.cache" CACHE PATH "Zephyr cache directo
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(pebbleos_zephyr_fw)
 
+option(FW_OTA_TEST_INJECT "Write a non-executable OTA test image at boot" OFF)
+
 get_filename_component(PEBBLEOS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 string(TIMESTAMP FW_BUILD_EPOCH "%s" UTC)
 set(GFX "${PEBBLEOS_ROOT}/src/fw/applib/graphics")
@@ -65,6 +67,10 @@ target_compile_definitions(app PRIVATE
   HAL_TICK_PER_SECOND=1024
 )
 
+if(FW_OTA_TEST_INJECT)
+  target_compile_definitions(app PRIVATE FW_OTA_TEST_INJECT=1)
+endif()
+
 target_compile_options(app PRIVATE
   -include string.h
   -Wno-address-of-packed-member
@@ -83,6 +89,7 @@ target_sources(app PRIVATE
   src/flash_shim.c
   src/qspi_board.c
   src/freertos_compat.c
+  src/fw_ota_boot.c
   src/main.c
   src/pfs_boot.c
   src/port.c
@@ -135,6 +142,8 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/kernel/events.c"
   "${PEBBLEOS_ROOT}/src/fw/flash_region/filesystem_regions.c"
   "${PEBBLEOS_ROOT}/src/fw/flash_region/flash_region.c"
+  "${PEBBLEOS_ROOT}/src/fw/drivers/flash/flash_crc.c"
+  "${PEBBLEOS_ROOT}/src/fw/system/firmware_storage.c"
 
   # Shipping PebbleOS flash stack (flash_impl_* over the SiFli QSPI HAL). Same
   # driver obelix ships, replacing the Zephyr flash driver that could not persist

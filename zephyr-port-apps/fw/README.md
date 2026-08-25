@@ -14,6 +14,7 @@ Expected UART milestones are:
 
 ```text
 FW_BOOT
+FW_BOOT_SLOT normal|prf
 FW_TASK NewTimers up
 FW_TASK KernelBackground up
 FW_TASK KernelMain up
@@ -28,6 +29,32 @@ FW_EVENT_LOOP_UP
 FW_TICK HH:MM:SS
 FW_TIMER dispatched
 ```
+
+`FW_BOOT_SLOT` comes from a pblboot-compatible slot check: both normal slots
+(`0x12020000`, `0x12320000`) are read for a valid pblboot/PebbleOS firmware
+header + CRC, the higher-priority valid image wins, and PRF is reported when
+neither validates. These regions are read-only from this app.
+
+The OTA receive scaffold (`fw_ota_receive_image()`) validates a complete
+firmware blob's CRC, erases and writes the staging region through the real
+SiFli QSPI flash driver (via `flash_shim.c` -> `flash_impl_*`), re-validates the
+payload from flash, then writes the header last as the bootable commit marker.
+A successful call emits:
+
+```text
+FW_OTA_RECV
+FW_OTA_VALIDATED
+FW_OTA_SLOT_SET
+```
+
+Staging goes to a dedicated non-bootable OTA scratch region
+(`0x13d00000..0x13d40000`), clear of the PFS window, the pblboot slots, and PRF.
+pblboot's header format is identical to ours (same magic, priority-selected), so
+staging must never land in a real slot until images are executable and signed.
+Configure with `-DFW_OTA_TEST_INJECT=ON` to run a local, non-BLE flash-path test
+at boot that injects a CRC-valid, deliberately non-executable image through this
+path; it is off by default and safe across reboots because the scratch region is
+never booted.
 
 PFS mounts the QSPI NOR scratch region at `0x13e00000..0x13e40000` from the
 kernel-main task, then creates, writes, reads, verifies, and deletes a self-test
