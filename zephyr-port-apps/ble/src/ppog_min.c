@@ -134,6 +134,19 @@ static void prv_send_system_version(uint16_t conn) {
   m.running_fw_metadata.flags = 0x02;      // is_ble_firmware
   m.running_fw_metadata.hw_platform = 18;  // ObelixPVT
   m.running_fw_metadata.metadata_version = 1;
+  // Populate recovery_fw_metadata too. If it is left zeroed the phone parses
+  // recoveryFwVersion=null and PebbleConnector logs "No recovery FW installed!!!
+  // going into recovery mode" -> classifies the watch as
+  // ConnectedPebbleDeviceInRecovery, which suppresses notification (blob_db)
+  // delivery. A real watch always reports a PRF/recovery image; mirror that so
+  // CoreApp treats us as a normal ConnectedPebbleDevice and forwards blob_db.
+  strncpy(m.recovery_fw_metadata.version_tag, "v0.0.1-zephyr-prf",
+          sizeof(m.recovery_fw_metadata.version_tag) - 1);
+  strncpy(m.recovery_fw_metadata.version_short, "v0.0.1",
+          sizeof(m.recovery_fw_metadata.version_short) - 1);
+  m.recovery_fw_metadata.flags = 0x03;      // is_recovery_firmware | is_ble_firmware
+  m.recovery_fw_metadata.hw_platform = 18;  // ObelixPVT
+  m.recovery_fw_metadata.metadata_version = 1;
   strncpy(m.hw_version, "obelix", sizeof(m.hw_version) - 1);
   strncpy(m.iso_locale, "en_US", sizeof(m.iso_locale) - 1);
   // Capabilities: run_state, log_dump, ext music, ext notification, lang_pack,
