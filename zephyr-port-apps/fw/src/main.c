@@ -125,6 +125,11 @@ int main(void) {
   new_timer_service_init();
   regular_timer_init();
   system_task_init();
+  // KernelBackground adds itself to the task-watchdog mask but only feeds its
+  // bit while running a callback; this registers the per-second idle feed that
+  // keeps the HW watchdog fed while KernelBackground sits idle. Without it the
+  // masked-but-unfed bit stalls the whole feed and the SoC resets ~10s in.
+  system_task_timer_init();
 
   TaskParameters_t main_task = {
     .pvTaskCode = prv_kernel_main,

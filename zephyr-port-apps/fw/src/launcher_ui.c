@@ -42,6 +42,7 @@
 
 #include "kernel/events.h"
 #include "pbl/drivers/button_id.h"
+#include "pbl/drivers/task_watchdog.h"
 #include "pbl/services/event_service.h"
 
 #include "process_management/pebble_process_md.h"
@@ -394,6 +395,12 @@ static void prv_start_selftest(void) {}
 // top window. Shared by the launcher loop and system_app.c's app_event_loop so a
 // launched app runs on exactly the same loop the launcher does.
 void fw_ui_pump_once(void) {
+  // KernelMain is in the task-watchdog mask; kick its bit every pump so the HW
+  // WDT stays fed while this loop runs. event_take_timeout blocks at most 1s, so
+  // the bit refreshes at least once per second even with no events; a genuinely
+  // hung loop stops kicking and the watchdog correctly resets.
+  task_watchdog_bit_set(PebbleTask_KernelMain);
+
   PebbleEvent event;
   if (!event_take_timeout(&event, 1000)) {
     return;
