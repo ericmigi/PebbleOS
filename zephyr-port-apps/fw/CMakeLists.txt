@@ -143,12 +143,19 @@ set_source_files_properties(
   src/ble_comm.c
   src/ppog_min.c
   src/ram_store.c
+  src/sprf_bond.c
   "${NIMBLE}/port/src/npl_os_zephyr.c"
   "${PEBBLEOS_ROOT}/src/bluetooth-fw/nimble/pebble_pairing_service.c"
   "${PEBBLEOS_ROOT}/src/bluetooth-fw/nimble/ppog_reversed_service.c"
   "${PEBBLEOS_ROOT}/src/bluetooth-fw/nimble/nimble_type_conversions.c"
   PROPERTIES COMPILE_OPTIONS
     "-include;${CMAKE_CURRENT_SOURCE_DIR}/include/nimble_zephyr_compat.h;-Wno-pointer-arith"
+)
+
+set_property(SOURCE
+  src/ram_store.c
+  src/sprf_bond.c
+  APPEND PROPERTY COMPILE_OPTIONS -fshort-enums
 )
 
 set_property(SOURCE
@@ -178,6 +185,7 @@ target_sources(app PRIVATE
   src/sandbox_launcher.c
   src/ppog_min.c
   src/ram_store.c
+  src/sprf_bond.c
   src/sifli_lrc_glue.c
   src/system_app.c
   src/wall_clock_zephyr.c

@@ -35,6 +35,10 @@
 #define FLASH_REGION_FILESYSTEM_END 0x13e40000u
 #define FLASH_FILESYSTEM_BLOCK_SIZE SUBSECTOR_SIZE_BYTES
 
+// Shipping obelix shared-PRF sector. Read-only in the Zephyr firmware app.
+#define FLASH_REGION_SHARED_PRF_STORAGE_BEGIN 0x13fff000u
+#define FLASH_REGION_SHARED_PRF_STORAGE_END 0x14000000u
+
 void flash_region_erase_optimal_range(uint32_t min_start, uint32_t max_start,
                                       uint32_t min_end, uint32_t max_end);
 void flash_region_erase_optimal_range_no_watchdog(uint32_t min_start,

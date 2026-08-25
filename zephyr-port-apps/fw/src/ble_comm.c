@@ -33,7 +33,7 @@ extern void ble_transport_sf32lb52_report_sync_timeout(void);
 extern void pebble_pairing_service_init(void);
 extern void pebble_pairing_service_notify_connectivity(uint16_t conn_handle);
 extern void ppog_reversed_service_init(void);
-extern void ram_store_init(void);
+extern bool ram_store_init(ble_addr_t *bond_address);
 
 K_THREAD_STACK_DEFINE(s_init_stack, BLE_INIT_STACK_SIZE);
 K_THREAD_STACK_DEFINE(s_host_stack, BLE_HOST_STACK_SIZE);
@@ -238,6 +238,7 @@ static void prv_host_main(void *arg1, void *arg2, void *arg3) {
 }
 
 static void prv_init_main(void *arg1, void *arg2, void *arg3) {
+  ble_addr_t bond_address;
   k_tid_t host_tid;
   int rc;
 
@@ -258,7 +259,14 @@ static void prv_init_main(void *arg1, void *arg2, void *arg3) {
   ble_svc_gatt_init();
   pebble_pairing_service_init();
   ppog_reversed_service_init();
-  ram_store_init();
+  if (ram_store_init(&bond_address)) {
+    printk("FW_BLE_BOND_LOADED peer=%02X:%02X:%02X:%02X:%02X:%02X type=%u\n",
+           bond_address.val[5], bond_address.val[4], bond_address.val[3],
+           bond_address.val[2], bond_address.val[1], bond_address.val[0],
+           bond_address.type);
+  } else {
+    printk("FW_BLE_BOND_NONE\n");
+  }
 
   ble_hs_cfg.sync_cb = prv_sync_cb;
   ble_hs_cfg.reset_cb = prv_reset_cb;

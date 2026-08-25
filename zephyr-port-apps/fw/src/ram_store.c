@@ -1,9 +1,10 @@
 /* SPDX-FileCopyrightText: 2026 Core Devices LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
-// Phase 2 bond store. Security material and CCCDs survive reconnects during a
-// boot, but intentionally do not survive a reboot; Phase 3 will seed this from
-// the PRF bond stored in flash.
+// Security material is kept in RAM. At boot, the shipping PRF bond is imported
+// from shared flash; bonds created by this firmware are not written back.
+
+#include "sprf_bond.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -143,8 +144,27 @@ static int prv_delete(int obj_type, const union ble_store_key *key) {
   return BLE_HS_ENOENT;
 }
 
-void ram_store_init(void) {
+bool ram_store_init(ble_addr_t *bond_address) {
+  SprfBondStoreValues values;
+
+  s_our_sec_n = 0;
+  s_peer_sec_n = 0;
+  s_cccd_n = 0;
   ble_hs_cfg.store_read_cb = prv_read;
   ble_hs_cfg.store_write_cb = prv_write;
   ble_hs_cfg.store_delete_cb = prv_delete;
+
+  if (!sprf_bond_load(&values)) {
+    return false;
+  }
+  if (values.our_sec_present) {
+    s_our_sec[s_our_sec_n++] = values.our_sec;
+  }
+  if (values.peer_sec_present) {
+    s_peer_sec[s_peer_sec_n++] = values.peer_sec;
+  }
+
+  *bond_address = values.peer_sec_present ? values.peer_sec.peer_addr
+                                          : values.our_sec.peer_addr;
+  return true;
 }
