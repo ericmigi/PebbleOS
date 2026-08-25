@@ -68,6 +68,7 @@ struct PblAudio {
 
     QEMUTimer *drain_timer;
     bool running;
+    bool irq_armed; /* edge-trigger BUFAVAIL: one IRQ per refill cycle */
 
     char *audiodev; /* accepted and ignored */
 };
@@ -129,13 +130,19 @@ static void pbl_audio_drain_tick(void *opaque)
     }
     s->ring_count -= drain;
 
-    /* Only signal buffer-available while we are actually draining samples.
-     * Raising it every tick when the ring is idle (device enabled but nothing
-     * playing) floods the firmware's audio IRQ -> system-task callback ->
-     * light-mutex path and eventually trips a FreeRTOS assert. */
-    if (drain > 0 && pbl_audio_ring_free(s) >= IRQ_FREE_THRESHOLD) {
+    /* Edge-trigger buffer-available: raise it once when the ring frees past
+     * the threshold while draining, and don't raise it again until the
+     * firmware has refilled (free drops back below the threshold). Raising it
+     * every 10ms tick (or continuously when idle) floods the firmware's audio
+     * IRQ -> system-task callback -> light-mutex path, and combined with the
+     * touch IRQ stream that trips a FreeRTOS assert after ~30s of play. */
+    bool want_data = pbl_audio_ring_free(s) >= IRQ_FREE_THRESHOLD;
+    if (!want_data) {
+        s->irq_armed = false; /* firmware refilled — re-arm for the next cycle */
+    } else if (drain > 0 && !s->irq_armed) {
         s->intstat |= INT_BUFAVAIL;
         pbl_audio_update_irq(s);
+        s->irq_armed = true;
     }
 
     if (s->running) {
@@ -254,6 +261,7 @@ static void pbl_audio_reset(DeviceState *dev)
     PblAudio *s = PEBBLE_AUDIO(dev);
 
     pbl_audio_stop(s);
+    s->irq_armed = false;
     s->ctrl = 0;
     s->samplerate = 16000;
     s->intctrl = 0;
