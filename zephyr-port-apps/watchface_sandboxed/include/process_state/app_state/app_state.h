@@ -11,6 +11,7 @@ typedef struct GContext GContext;
 typedef struct Heap Heap;
 typedef struct Layer Layer;
 typedef struct UnobstructedAreaState UnobstructedAreaState;
+typedef struct WindowStack WindowStack;
 
 typedef struct TextRenderState {
   SpecialCodepointHandlerCb special_codepoint_handler_cb;
@@ -26,6 +27,7 @@ GBitmap *app_state_legacy2_get_2bit_framebuffer(void);
 Heap *app_state_get_heap(void);
 bool heap_is_allocated(Heap *heap, void *ptr);
 Layer **app_state_get_layer_tree_stack(void);
+WindowStack *app_state_get_window_stack(void);
 UnobstructedAreaState *app_state_get_unobstructed_area_state(void);
 bool process_manager_compiled_with_legacy2_sdk(void);
 
@@ -33,4 +35,3 @@ bool process_manager_compiled_with_legacy2_sdk(void);
 // real system apps (settings/window.c stashes its SettingsData here).
 void *app_state_get_user_data(void);
 void app_state_set_user_data(void *data);
-

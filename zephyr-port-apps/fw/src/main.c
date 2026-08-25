@@ -23,6 +23,8 @@
 #include "button_input.h"
 #include "launcher_ui.h"
 
+void notification_window_service_init(void);
+
 static TimerID s_probe_timer;
 
 static void prv_timer_dispatched(void *data) {
@@ -61,6 +63,8 @@ static void prv_kernel_main(void *parameter) {
   button_input_selfcheck();
   input_service_init();
   button_zephyr_init();
+
+  notification_window_service_init();
 
   if (fw_pfs_boot() == 0) {
     PBL_LOG_ALWAYS("FW_PFS_UP");

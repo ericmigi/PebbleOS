@@ -118,6 +118,10 @@ void *kernel_malloc_check(size_t size) {
   return memory;
 }
 
+void *kernel_realloc(void *ptr, size_t size) {
+  return k_realloc(ptr, size);
+}
+
 void *kernel_zalloc(size_t size) {
   return k_calloc(1, size);
 }

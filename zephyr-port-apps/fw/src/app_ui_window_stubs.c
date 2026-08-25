@@ -18,6 +18,8 @@
 #include <stdint.h>
 
 #include "applib/ui/action_menu_window.h"
+#include "applib/ui/action_menu_hierarchy.h"
+#include "applib/ui/dialogs/actionable_dialog.h"
 #include "applib/ui/day_picker.h"
 #include "applib/ui/dialogs/dialog.h"
 #include "applib/ui/dialogs/expandable_dialog.h"
@@ -26,6 +28,7 @@
 #include "applib/ui/time_selection_window.h"
 #include "applib/ui/window.h"
 #include "apps/system/settings/option_menu.h"
+#include "applib/app_exit_reason.h"
 
 // --- new-alarm editor: time selection + day picker --------------------------
 void time_selection_window_init(TimeSelectionWindowData *w, const TimeSelectionWindowConfig *c) {
@@ -158,3 +161,94 @@ void expandable_dialog_set_action_bar_background_color(ExpandableDialog *expanda
 }
 
 void expandable_dialog_pop(ExpandableDialog *expandable_dialog) { (void)expandable_dialog; }
+
+// ponytail: Notifications' Clear All confirmation and card action menus are
+// inert. Upgrade by compiling the actionable/simple dialog family,
+// action_menu_hierarchy.c, action_menu_window.c, and timeline_actions.c.
+ActionableDialog *actionable_dialog_create(const char *dialog_name) {
+  (void)dialog_name;
+  return NULL;
+}
+
+void actionable_dialog_set_click_config_provider(ActionableDialog *dialog,
+                                                 ClickConfigProvider provider) {
+  (void)dialog;
+  (void)provider;
+}
+
+void actionable_dialog_set_action_bar_type(ActionableDialog *dialog,
+                                           DialogActionBarType action_bar_type,
+                                           ActionBarLayer *action_bar) {
+  (void)dialog;
+  (void)action_bar_type;
+  (void)action_bar;
+}
+
+Dialog *actionable_dialog_get_dialog(ActionableDialog *dialog) {
+  (void)dialog;
+  return NULL;
+}
+
+void app_actionable_dialog_push(ActionableDialog *dialog) { (void)dialog; }
+void actionable_dialog_pop(ActionableDialog *dialog) { (void)dialog; }
+
+void dialog_set_icon_animate_direction(Dialog *dialog, DialogIconAnimationDirection direction) {
+  (void)dialog;
+  (void)direction;
+}
+
+void dialog_set_callbacks(Dialog *dialog, const DialogCallbacks *callbacks, void *context) {
+  (void)dialog;
+  (void)callbacks;
+  (void)context;
+}
+
+void dialog_set_text_color(Dialog *dialog, GColor text_color) {
+  (void)dialog;
+  (void)text_color;
+}
+
+void dialog_set_fullscreen(Dialog *dialog, bool fullscreen) {
+  (void)dialog;
+  (void)fullscreen;
+}
+
+void simple_dialog_push(SimpleDialog *dialog, WindowStack *window_stack) {
+  (void)dialog;
+  (void)window_stack;
+}
+
+void app_exit_reason_set(AppExitReason exit_reason) { (void)exit_reason; }
+
+bool action_menu_is_frozen(ActionMenu *action_menu) {
+  (void)action_menu;
+  return false;
+}
+
+void action_menu_close(ActionMenu *action_menu, bool animated) {
+  (void)action_menu;
+  (void)animated;
+}
+
+ActionMenuLevel *action_menu_level_create(uint16_t max_items) {
+  (void)max_items;
+  return NULL;
+}
+
+ActionMenuItem *action_menu_level_add_action(ActionMenuLevel *level, const char *label,
+                                             ActionMenuPerformActionCb callback,
+                                             void *action_data) {
+  (void)level;
+  (void)label;
+  (void)callback;
+  (void)action_data;
+  return NULL;
+}
+
+ActionMenuItem *action_menu_level_add_child(ActionMenuLevel *level, ActionMenuLevel *child,
+                                            const char *label) {
+  (void)level;
+  (void)child;
+  (void)label;
+  return NULL;
+}

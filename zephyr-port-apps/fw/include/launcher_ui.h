@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #pragma once
 
+#include <stdbool.h>
+
 // Stand up the real PebbleOS window stack + launcher menu (menu_layer) driven
 // by the real click service, and run the KernelMain UI event loop. Consumes
 // PEBBLE_BUTTON_DOWN/UP events from the shared event queue (fed by the obelix
@@ -20,6 +22,9 @@ void fw_ui_pump_once(void);
 // click config). Used by app_event_loop() to hand a system app's window to the
 // shared pump.
 void fw_window_stack_push(struct Window *window);
+
+// Remove the shared stack's top window when it matches `window`.
+bool fw_window_stack_remove(struct Window *window);
 
 // Current window-stack depth (1 = launcher root only). app_event_loop() uses it
 // to detect when its window has been popped (BACK).

@@ -8,6 +8,7 @@
 #include "FreeRTOS.h"
 #include "kernel/pebble_tasks.h"
 #include "pbl/util/list.h"
+#include "pbl/util/uuid.h"
 #include "pbl/services/music.h"
 #include <pbl/drivers/button_id.h>
 
@@ -16,11 +17,14 @@ typedef enum {
   // Values match the shipping kernel/events.h enum (button service compat).
   PEBBLE_BUTTON_DOWN_EVENT = 5,
   PEBBLE_BUTTON_UP_EVENT = 6,
+  PEBBLE_SYS_NOTIFICATION_EVENT = 11,
   PEBBLE_MEDIA_EVENT = 14,
   PEBBLE_TICK_EVENT = 15,
   PEBBLE_ALARM_CLOCK_EVENT = 22,
   PEBBLE_CALLBACK_EVENT = 27,
   PEBBLE_SUBSCRIPTION_EVENT = 29,
+  PEBBLE_DO_NOT_DISTURB_EVENT = 50,
+  PEBBLE_REMINDER_EVENT = 66,
   // Subscribed to by the settings shared window to refresh on remote pref
   // changes; never fired in the port (prefs are set locally), just needs a
   // distinct enum slot for event_service.
@@ -45,6 +49,36 @@ typedef struct {
     uint8_t volume_percent;
   };
 } PebbleMediaEvent;
+
+typedef enum {
+  NotificationAdded,
+  NotificationActedUpon,
+  NotificationRemoved,
+  NotificationActionResult,
+} PebbleSysNotificationType;
+
+typedef struct {
+  PebbleSysNotificationType type;
+  union {
+    Uuid *notification_id;
+    void *action_result;
+  };
+} PebbleSysNotificationEvent;
+
+typedef enum {
+  ReminderTriggered,
+  ReminderRemoved,
+  ReminderUpdated,
+} ReminderEventType;
+
+typedef struct {
+  ReminderEventType type;
+  Uuid *reminder_id;
+} PebbleReminderEvent;
+
+typedef struct { bool is_active; } PebbleDoNotDisturbEvent;
+typedef struct { bool is_event_ongoing; } PebbleCalendarEvent;
+typedef struct { uint8_t unused; } PebbleBlobDBEvent;
 
 typedef struct {
   const char *key;
@@ -80,6 +114,7 @@ typedef struct {
     PebbleSubscriptionEvent subscription;
     PebbleButtonEvent button;
     PebbleMediaEvent media;
+    PebbleSysNotificationEvent sys_notification;
     PebblePrefChangeEvent pref_change;
   };
   PebbleTaskBitset task_mask;

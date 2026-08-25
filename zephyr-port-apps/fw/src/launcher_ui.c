@@ -319,6 +319,14 @@ static void prv_window_pop(void) {
 // window rides the same window stack + pump as the launcher.
 void fw_window_stack_push(Window *window) { prv_window_push(window); }
 
+bool fw_window_stack_remove(Window *window) {
+  if (window != prv_top_window()) {
+    return false;
+  }
+  prv_window_pop();
+  return true;
+}
+
 int fw_window_stack_depth(void) { return s_stack_top + 1; }
 
 static void prv_launcher_setup(void) {

@@ -39,6 +39,8 @@
 // Provided by fw/src/port.c.
 time_t rtc_get_time(void);
 
+time_t time_local_to_utc(time_t local_time) { return local_time; }
+
 // ---------------------------------------------------------------------------
 // shell prefs: no persisted prefs DB in the port; return conservative defaults.
 // Album art off keeps the Music app on its text/stock layout (no imaging).
@@ -85,6 +87,21 @@ bool imaging_request_album_art(uint8_t token, ImagingFormat format, uint16_t wid
   (void)height;
   (void)title;
   (void)artist;
+  return false;
+}
+
+void imaging_register_handler(ImagingImageType image_type, ImagingReceivedHandler handler) {
+  (void)image_type;
+  (void)handler;
+}
+
+bool imaging_request_notification_image(uint8_t token, ImagingFormat format, uint16_t width,
+                                        uint16_t height, const Uuid *item_id) {
+  (void)token;
+  (void)format;
+  (void)width;
+  (void)height;
+  (void)item_id;
   return false;
 }
 
@@ -214,6 +231,14 @@ void window_set_status_bar_icon(Window *window, const GBitmap *icon) {
 // watchface_sandboxed/port.c.)
 PlatformType process_manager_current_platform(void) { return PBL_PLATFORM_TYPE_CURRENT; }
 
+void process_manager_send_callback_event_to_process(PebbleTask task,
+                                                    void (*callback)(void *), void *data) {
+  (void)task;
+  if (callback) {
+    callback(data);
+  }
+}
+
 // No userspace boundary in the kernel-context port; a failed syscall check is a
 // firmware bug, so trap loudly.
 void syscall_failed(void) {
@@ -268,6 +293,25 @@ void *task_malloc_check(size_t bytes) {
   void *memory = task_malloc(bytes);
   __builtin_expect(memory != NULL || bytes == 0, 1);
   return memory;
+}
+
+void *task_zalloc(size_t bytes) { return k_calloc(1, bytes); }
+
+void *task_zalloc_check(size_t bytes) {
+  void *memory = task_zalloc(bytes);
+  __builtin_expect(memory != NULL || bytes == 0, 1);
+  return memory;
+}
+
+void clock_get_since_time(char *buffer, int buf_size, time_t timestamp) {
+  (void)timestamp;
+  snprintf(buffer, (size_t)buf_size, "Now");
+}
+
+void clock_get_until_time(char *buffer, int buf_size, time_t timestamp, int max_relative_hrs) {
+  (void)timestamp;
+  (void)max_relative_hrs;
+  snprintf(buffer, (size_t)buf_size, "Now");
 }
 
 // Format explicit hours:minutes honoring 24h style (Alarms list rows).

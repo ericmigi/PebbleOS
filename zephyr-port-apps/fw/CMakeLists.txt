@@ -55,6 +55,7 @@ target_sources(app PRIVATE
   src/app_service_stubs.c
   src/app_alarm_stubs.c
   src/app_ui_window_stubs.c
+  src/notification_port_stubs.c
   src/button_zephyr.c
   src/input_service.c
   src/launcher_ui.c
@@ -74,6 +75,19 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/apps/watch/tictoc/tictoc.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/watch/tictoc/default/tictoc_default.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/music.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/notifications.c"
+  "${PEBBLEOS_ROOT}/src/fw/popups/notifications/notification_window.c"
+  "${PEBBLEOS_ROOT}/src/fw/popups/notifications/notifications_presented_list.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/item.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/attributes_actions.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute_group.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_node.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/swap_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/util/stringlist.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/timeline/text_node.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/alarms/alarms.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/alarms/alarm_editor.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/alarms/alarm_detail.c"
@@ -99,6 +113,7 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/lib/os/semaphore_zephyr.c"
   "${PEBBLEOS_ROOT}/lib/os/tick_zephyr.c"
   "${PEBBLEOS_ROOT}/lib/util/list.c"
+  "${PEBBLEOS_ROOT}/lib/util/uuid.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/event_service_client.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/tick_timer_service.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/click.c"
@@ -134,6 +149,7 @@ target_sources(app PRIVATE
   "${GFX}/graphics.c"
   "${GFX}/graphics_circle.c"
   "${GFX}/graphics_line.c"
+  "${GFX}/gpath.c"
   "${GFX}/graphics_private.c"
   "${GFX}/graphics_private_raw.c"
   "${GFX}/gtransform.c"
@@ -158,6 +174,7 @@ target_sources(app PRIVATE
   # shim layer already exist in the port (input_service.c / ui_shims.c / port.c);
   # only the missing entry points are supplied by the port shim below.
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/action_bar_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/action_button.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/bitmap_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/status_bar_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/progress_layer.c"
@@ -172,6 +189,10 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/lib/util/iterator.c"
   "${PEBBLEOS_ROOT}/lib/util/math.c"
   "${PEBBLEOS_ROOT}/lib/util/trig.c"
+)
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/swap_layer.c"
+  PROPERTIES COMPILE_DEFINITIONS "RESOURCE_ID_ARROW_DOWN=0"
 )
 
 set_source_files_properties(
@@ -275,6 +296,7 @@ set_source_files_properties(
   "${CMAKE_CURRENT_SOURCE_DIR}/src/animation_stubs.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/app_alarm_stubs.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/app_ui_window_stubs.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/notification_port_stubs.c"
   PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
 )
 
@@ -313,6 +335,37 @@ set_source_files_properties(
   PROPERTIES
     COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
     COMPILE_DEFINITIONS "RESOURCE_ID_AUDIO_CASSETTE_TINY=0;RESOURCE_ID_MUSIC_ICON_ELLIPSIS=0;RESOURCE_ID_MUSIC_ICON_FAST_FORWARD=0;RESOURCE_ID_MUSIC_ICON_PAUSE=0;RESOURCE_ID_MUSIC_ICON_PLAY=0;RESOURCE_ID_MUSIC_ICON_PLAY_PAUSE=0;RESOURCE_ID_MUSIC_ICON_REWIND=0;RESOURCE_ID_MUSIC_ICON_SKIP_BACKWARD=0;RESOURCE_ID_MUSIC_ICON_SKIP_FORWARD=0;RESOURCE_ID_MUSIC_ICON_VOLUME_DOWN=0;RESOURCE_ID_MUSIC_ICON_VOLUME_UP=0;RESOURCE_ID_MUSIC_IMAGE_NO_MUSIC=0;RESOURCE_ID_MUSIC_LARGE_CASSETTE=0;RESOURCE_ID_MUSIC_LARGE_PAUSED=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_DOWN=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_UP=0;RESOURCE_ID_VIBE_SCORE_HAPTIC_FEEDBACK=0;SECONDS_PER_HOUR=3600;SECONDS_PER_MINUTE=60"
+)
+
+# Notifications app + its real notification window/card renderer. The port has
+# no generated resources, so the launcher/dialog/status icons are cosmetic.
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/notifications.c"
+  "${PEBBLEOS_ROOT}/src/fw/popups/notifications/notification_window.c"
+  "${PEBBLEOS_ROOT}/src/fw/popups/notifications/notifications_presented_list.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_node.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/swap_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/timeline/text_node.c"
+  PROPERTIES COMPILE_OPTIONS
+    "-include;fw_zephyr_pre.h;-include;resource/timeline_resource_ids.auto.h;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include"
+)
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"
+  PROPERTIES COMPILE_DEFINITIONS
+    "INVALID_RESOURCE=0;TextStyleFont_Title=TextStyleFont_Subtitle;TextStyleFont_Body=TextStyleFont_Subtitle;RESOURCE_ID_EMOJI_HEART_LARGE=0;RESOURCE_ID_EMOJI_THUMBS_UP_LARGE=0;RESOURCE_ID_EMOJI_BIG_OPEN_SMILE_LARGE=0;RESOURCE_ID_EMOJI_SMILING_WITH_TEETH_LARGE=0;RESOURCE_ID_EMOJI_LAUGHING_WITH_TEARS_LARGE=0;RESOURCE_ID_EMOJI_BIG_SMILE_LARGE=0;RESOURCE_ID_EMOJI_WINK_LARGE=0;RESOURCE_ID_EMOJI_SMILING_BLUSH_LARGE=0;RESOURCE_ID_EMOJI_SMILING_HEARTS_LARGE=0;RESOURCE_ID_EMOJI_KISSING_WITH_HEART_LARGE=0;RESOURCE_ID_EMOJI_WINK_TONGUE_LARGE=0;RESOURCE_ID_EMOJI_SAD_LARGE=0"
+)
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/notifications.c"
+  "${PEBBLEOS_ROOT}/src/fw/popups/notifications/notification_window.c"
+  PROPERTIES COMPILE_DEFINITIONS
+    "RESOURCE_ID_NOTIFICATIONS_APP_GLANCE=0;RESOURCE_ID_RESULT_SHREDDED_LARGE=0;RESOURCE_ID_QUIET_TIME_STATUS_BAR=0;RESOURCE_ID_REMINDER_SNOOZE=0;RESOURCE_ID_RESULT_MUTE_LARGE=0"
+)
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/popups/notifications/notification_window.c"
+  PROPERTIES COMPILE_OPTIONS
+    "-include;fw_zephyr_pre.h;-include;pbl/services/regular_timer.h;-include;pbl/services/timeline/reminders.h;-include;resource/timeline_resource_ids.auto.h;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include"
 )
 
 # Alarms app trio: same sign_extend pre-include as music, with its launcher /

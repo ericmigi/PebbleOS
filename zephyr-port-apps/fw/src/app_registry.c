@@ -16,6 +16,7 @@
 // its sources to CMakeLists (see zephyr-port-notes/SYSTEM-APPS-BUILDOUT.md).
 #include "apps/system/alarms/alarms.h"
 #include "apps/system/music.h"
+#include "apps/system/notifications.h"
 #include "apps/watch/tictoc/tictoc.h"
 #include "apps/system/watchfaces.h"
 #include "apps/system/settings/settings.h"
@@ -42,7 +43,7 @@ static const FwSystemApp s_system_apps[] = {
   { -2, "Watch Only" },
   { -7, "Settings", settings_get_app_info },
   { -3, "Music", music_app_get_info },
-  { -4, "Notifications" },
+  { -4, "Notifications", notifications_app_get_info },
   { -5, "Alarms", alarms_app_get_info },
   { -6, "Watchfaces", watchfaces_get_app_info },
   { -9, "Quick Launch" },

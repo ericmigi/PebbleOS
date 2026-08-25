@@ -13,6 +13,7 @@
 #include <time.h>
 
 uint16_t time_ms(time_t *tloc, uint16_t *out_ms);
+time_t time_local_to_utc(time_t local_time);
 
 #define DAYS_PER_WEEK 7
 #define MONTHS_PER_YEAR 12

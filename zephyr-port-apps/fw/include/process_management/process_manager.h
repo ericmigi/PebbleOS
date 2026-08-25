@@ -9,7 +9,11 @@
 #include <stdbool.h>
 
 #include "applib/platform.h"
+#include "kernel/pebble_tasks.h"
 
 PlatformType process_manager_current_platform(void);
 
 bool process_manager_compiled_with_legacy2_sdk(void);
+
+void process_manager_send_callback_event_to_process(PebbleTask task,
+                                                    void (*callback)(void *), void *data);
