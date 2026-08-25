@@ -109,6 +109,7 @@ set_property(SOURCE
 target_sources(app PRIVATE
   src/main.c
   src/mbedtls_alloc.c
+  src/ppog_min.c
   src/ram_store.c
   src/sifli_lrc_glue.c
   "${PEBBLEOS_ROOT}/lib/os/mutex_zephyr.c"

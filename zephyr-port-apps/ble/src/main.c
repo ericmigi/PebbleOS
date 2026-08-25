@@ -54,24 +54,7 @@ static void prv_fail(const char *where, int code) {
   printk("BLE_FAIL %s %d\n", where, code);
 }
 
-// Stage-A stubs: prove CoreApp can connect, bond, subscribe and push PPoGATT
-// bytes. Real PPoGATT/comm handling is folded in next.
-void bt_driver_cb_ppog_reversed_subscribed(const BTDeviceInternal *device,
-                                           uint16_t conn_handle) {
-  (void)device;
-  printk("BLE_PPOG_SUBSCRIBED conn=%u\n", (unsigned int)conn_handle);
-}
-
-void bt_driver_cb_ppog_reversed_unsubscribed(uint16_t conn_handle) {
-  printk("BLE_PPOG_UNSUBSCRIBED conn=%u\n", (unsigned int)conn_handle);
-}
-
-void bt_driver_cb_ppog_reversed_data_written(uint16_t conn_handle, uint8_t *buf,
-                                             uint16_t len) {
-  printk("BLE_PPOG_RX conn=%u len=%u b0=%02x\n", (unsigned int)conn_handle,
-         (unsigned int)len, len ? buf[0] : 0);
-  free(buf);
-}
+// PPoGATT link handling lives in ppog_min.c (bt_driver_cb_ppog_reversed_*).
 
 static bool prv_npl_smoke_test(void) {
   struct ble_npl_mutex mutex;

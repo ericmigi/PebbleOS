@@ -78,7 +78,14 @@ static const struct ble_gatt_svc_def s_ppog_reversed_svc[] = {
                     .uuid = BLE_UUID128_DECLARE(BLE_UUID_SWIZZLE(PEBBLE_BT_UUID_EXPAND(
                         PEBBLE_BT_PPOGATT_WATCH_SERVER_DATA_WR_CHARACTERISTIC_UUID_32BIT))),
                     .access_cb = prv_access_data_write,
-                    .flags = BLE_GATT_CHR_F_WRITE_NO_RSP | BLE_GATT_CHR_F_WRITE_ENC,
+                    // Drop WRITE_ENC: on this port nimble silently drops the
+                    // encrypted write-without-response (same failure mode as the
+                    // F_READ_ENC CCCD), so PPoGATT ResetRequest never arrived.
+                    // The link is still encrypted (bonding is required to
+                    // connect), so data stays protected.
+                    // ponytail: restore WRITE_ENC once the att ENC-permission
+                    // path under Just-Works bonding is understood.
+                    .flags = BLE_GATT_CHR_F_WRITE_NO_RSP,
                     .val_handle = &s_data_write_handle,
                 },
                 {
