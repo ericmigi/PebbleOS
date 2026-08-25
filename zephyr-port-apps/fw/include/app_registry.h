@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "process_management/app_install_types.h"
+#include "process_management/pebble_process_md.h"
 #include "pbl/util/uuid.h"
 
 #define FW_APP_NAME_SIZE 96
@@ -16,6 +17,10 @@ typedef struct {
   uint32_t info_flags;
   bool installed;
   char name[FW_APP_NAME_SIZE + 1];
+  // Non-NULL for a privileged built-in system app: its real PebbleProcessMd.
+  // The launcher hands this to fw_system_app_launch() on SELECT. NULL entries
+  // fall back to the sandboxed PBW launch.
+  const PebbleProcessMd *md;
 } FwAppRegistryEntry;
 
 void fw_app_registry_init(void);

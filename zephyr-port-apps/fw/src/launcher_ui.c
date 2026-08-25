@@ -44,10 +44,13 @@
 #include "pbl/drivers/button_id.h"
 #include "pbl/services/event_service.h"
 
+#include "process_management/pebble_process_md.h"
+
 #include "app_registry.h"
 #include "button_input.h"
 #include "launcher_ui.h"
 #include "sandbox_launcher.h"
+#include "system_app.h"
 
 // Provided by input_service.c (the button/click-service agent): the single
 // ClickManager, and the button-event -> click_recognizer routing. Our launcher
@@ -175,8 +178,13 @@ void window_raw_click_subscribe(ButtonId button_id, ClickHandler down_handler,
 // ---------------------------------------------------------------------------
 static Window *s_launcher_window;
 static MenuLayer s_menu;
-// Once an app is launched it owns the panel; stop rendering the launcher over it.
+// Once a SANDBOXED app is launched it owns the panel; stop rendering the launcher
+// over it. Privileged system apps (fw_system_app_launch) instead ride the shared
+// window stack and are rendered by the normal pump, so they leave this false.
 static bool s_app_launched;
+// SELECT stashes the chosen system-app md here; the launcher loop launches it at
+// the top level (not nested inside the click callback).
+static const PebbleProcessMd *s_pending_md;
 
 static uint16_t prv_get_num_sections(struct MenuLayer *menu_layer, void *context) {
   return 1;
@@ -214,9 +222,17 @@ static void prv_launch_selected(void) {
     return;
   }
   printk("LAUNCHER_SEL %s\n", entry->name);
+
+  // A registry entry carrying a real PebbleProcessMd is a privileged built-in
+  // system app: launch it through the system-app path (deferred to the launcher
+  // loop's top level so it is not nested inside this click callback). Entries
+  // without an md fall back to the embedded sandboxed PBW, which reinitialises
+  // the display and owns the panel afterwards.
+  if (entry->md) {
+    s_pending_md = entry->md;
+    return;
+  }
   printk("WINDOW_PUSH %s\n", entry->name);
-  // Only the embedded sandboxed watchface has a launchable binary in the
-  // scaffold today; it reinitialises the display and owns the panel afterwards.
   s_app_launched = true;
   (void)fw_sandbox_launch();
 }
@@ -276,6 +292,12 @@ static void prv_window_pop(void) {
   prv_apply_click_config(prv_top_window());
   prv_render_top();
 }
+
+// Exposed to the system-app launch core (system_app.c) so a privileged app's
+// window rides the same window stack + pump as the launcher.
+void fw_window_stack_push(Window *window) { prv_window_push(window); }
+
+int fw_window_stack_depth(void) { return s_stack_top + 1; }
 
 static void prv_launcher_setup(void) {
   // input_service_init() (called from main.c) already brought up the shared
@@ -345,6 +367,48 @@ static void prv_start_selftest(void) {}
 // KernelMain UI event loop. Mirrors launcher_main_loop() but also routes button
 // events through the real click service (like applib/app.c) and renders.
 // ---------------------------------------------------------------------------
+// One iteration of the shared UI pump: take an event, drive BACK / the click
+// service / deferred callbacks, dispatch to event-service clients, and render the
+// top window. Shared by the launcher loop and system_app.c's app_event_loop so a
+// launched app runs on exactly the same loop the launcher does.
+void fw_ui_pump_once(void) {
+  PebbleEvent event;
+  if (!event_take_timeout(&event, 1000)) {
+    return;
+  }
+
+  switch (event.type) {
+    case PEBBLE_BUTTON_DOWN_EVENT:
+      // BACK pops the window stack (unless we're at the root), mirroring the
+      // default back-button behaviour in applib/app.c. Everything else is
+      // routed through the button/click-service agent's recognizer, which
+      // fires the current window's click handlers.
+      if (event.button.button_id == BUTTON_ID_BACK && s_stack_top > 0) {
+        prv_window_pop();
+      } else {
+        input_service_handle_button_event(&event);
+      }
+      break;
+    case PEBBLE_BUTTON_UP_EVENT:
+      input_service_handle_button_event(&event);
+      break;
+    case PEBBLE_CALLBACK_EVENT:
+      // click.c repeat/long/multi callbacks land here via app_timer.
+      if (event.callback.callback) {
+        event.callback.callback(event.callback.data);
+      }
+      break;
+    default:
+      break;
+  }
+
+  event_service_handle_event(&event);
+  event_cleanup(&event);
+
+  // Reflect any selection/window change onto the panel.
+  prv_render_top();
+}
+
 void fw_launcher_ui_run(void) {
   extern void pebble_zephyr_core_event_loop_init(void);
   pebble_zephyr_core_event_loop_init();
@@ -353,40 +417,15 @@ void fw_launcher_ui_run(void) {
   prv_start_selftest();
 
   while (true) {
-    PebbleEvent event;
-    if (!event_take_timeout(&event, 1000)) {
-      continue;
+    fw_ui_pump_once();
+
+    // SELECT on a system-app entry stashed its md; launch it here at the loop's
+    // top level. fw_system_app_launch runs the app on this same KernelMain loop
+    // and returns when the app exits (BACK past its root window).
+    if (s_pending_md) {
+      const PebbleProcessMd *md = s_pending_md;
+      s_pending_md = NULL;
+      fw_system_app_launch(md);
     }
-
-    switch (event.type) {
-      case PEBBLE_BUTTON_DOWN_EVENT:
-        // BACK pops the window stack (unless we're at the root), mirroring the
-        // default back-button behaviour in applib/app.c. Everything else is
-        // routed through the button/click-service agent's recognizer, which
-        // fires the menu's click handlers configured on the current window.
-        if (event.button.button_id == BUTTON_ID_BACK && s_stack_top > 0) {
-          prv_window_pop();
-        } else {
-          input_service_handle_button_event(&event);
-        }
-        break;
-      case PEBBLE_BUTTON_UP_EVENT:
-        input_service_handle_button_event(&event);
-        break;
-      case PEBBLE_CALLBACK_EVENT:
-        // click.c repeat/long/multi callbacks land here via app_timer.
-        if (event.callback.callback) {
-          event.callback.callback(event.callback.data);
-        }
-        break;
-      default:
-        break;
-    }
-
-    event_service_handle_event(&event);
-    event_cleanup(&event);
-
-    // Reflect any selection/window change onto the panel.
-    prv_render_top();
   }
 }

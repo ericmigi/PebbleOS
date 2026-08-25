@@ -61,7 +61,15 @@ target_sources(app PRIVATE
   src/pfs_boot.c
   src/port.c
   src/sandbox_launcher.c
+  src/system_app.c
   src/wall_clock_zephyr.c
+
+  # Privileged built-in system apps: real PebbleOS app code launched via their
+  # PebbleProcessMd through fw_system_app_launch(). Add new system apps here; see
+  # zephyr-port-notes/SYSTEM-APPS-BUILDOUT.md.
+  "${PEBBLEOS_ROOT}/src/fw/apps/watch/tictoc/tictoc.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/watch/tictoc/default/tictoc_default.c"
+
   "${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/src/port.c"
   "${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/src/sandbox.c"
   "${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/src/sandbox_bridge.c"
@@ -127,6 +135,7 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/lib/util/crc32.c"
   "${PEBBLEOS_ROOT}/lib/util/keyed_circular_cache.c"
   "${PEBBLEOS_ROOT}/lib/util/iterator.c"
+  "${PEBBLEOS_ROOT}/lib/util/math.c"
   "${PEBBLEOS_ROOT}/lib/util/trig.c"
 )
 
@@ -206,4 +215,33 @@ set_source_files_properties(
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/services/system_task/service.c"
   PROPERTIES COMPILE_OPTIONS "-include;zephyr/kernel.h;-include;system/reset.h"
+)
+
+# tictoc.c references RESOURCE_ID_MENU_ICON_TICTOC_WATCH only for its md's
+# launcher icon; the port has no generated resource IDs, so define it to 0 (the
+# launcher menu draws names, not icons). fw_zephyr_pre.h resolves the Zephyr vs
+# Pebble sign_extend() collision (both pulled by real app sources).
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/apps/watch/tictoc/tictoc.c"
+  PROPERTIES
+    COMPILE_DEFINITIONS "RESOURCE_ID_MENU_ICON_TICTOC_WATCH=0"
+    COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
+)
+
+# tictoc_default.c calls rtc_get_time_tm without including a header for it (in
+# shipping it rode an implicit declaration); force-include the port rtc header,
+# after fw_zephyr_pre.h.
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/apps/watch/tictoc/default/tictoc_default.c"
+  PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-include;pbl/drivers/rtc.h"
+)
+
+# The port has no unobstructed-area service and runs system apps on the KernelMain
+# UI loop, not a separate PebbleTask_App task, so applib/ui/layer.c's
+# layer_get_unobstructed_bounds* (which assert PebbleTask_App and pull the
+# unobstructed_area_service) are renamed out of this translation unit and replaced
+# by full-bounds shims in src/system_app.c. See SYSTEM-APPS-BUILDOUT.md.
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/layer.c"
+  PROPERTIES COMPILE_DEFINITIONS "layer_get_unobstructed_bounds=port_layer_gub_unused;layer_get_unobstructed_bounds_by_value=port_layer_gubv_unused"
 )

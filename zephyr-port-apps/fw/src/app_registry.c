@@ -9,20 +9,31 @@
 
 #include "pbl/services/blob_db/app_db.h"
 #include "process_management/pebble_process_info.h"
+#include "process_management/pebble_process_md.h"
+
+// System-app metadata providers (the real *_get_app_info()). Registering a new
+// privileged built-in app = add its header here + an md_fn in s_system_apps +
+// its sources to CMakeLists (see zephyr-port-notes/SYSTEM-APPS-BUILDOUT.md).
+#include "apps/watch/tictoc/tictoc.h"
 
 // A 20 KiB AppDB holds roughly 150 metadata records in production.
 #define FW_MAX_INSTALLED_APPS 150
 #define FW_ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
 
+typedef const PebbleProcessMd *(*FwSystemAppMdFn)(void);
+
 typedef struct {
   AppInstallId id;
   const char *name;
+  // Non-NULL => a privileged built-in system app launched via its real md.
+  // NULL => a not-yet-ported entry (launcher falls back to the sandboxed PBW).
+  FwSystemAppMdFn md_fn;
 } FwSystemApp;
 
 // Default-enabled normal-shell entries from system_app_registry_list.json.
 // Names mirror the PebbleProcessMdSystem metadata (Golf is a resource app).
 static const FwSystemApp s_system_apps[] = {
-  { -69, "TicToc" },
+  { -69, "TicToc", tictoc_get_app_info },
   { -98, "Kickstart" },
   { -2, "Watch Only" },
   { -7, "Settings" },
@@ -107,6 +118,7 @@ void fw_app_registry_init(void) {
     FwAppRegistryEntry *entry = &s_entries[s_entry_count++];
     *entry = (FwAppRegistryEntry) {
       .install_id = s_system_apps[i].id,
+      .md = s_system_apps[i].md_fn ? s_system_apps[i].md_fn() : NULL,
     };
     strncpy(entry->name, s_system_apps[i].name, FW_APP_NAME_SIZE);
   }

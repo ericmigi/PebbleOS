@@ -697,11 +697,33 @@ void window_schedule_render(Window *window) {
   }
 }
 
+// Set by the in-fw privileged system-app launcher (fw_system_app_launch) around
+// a system app's main(). When set, a pushed window's load/appear handlers run
+// synchronously here, matching shipping app_window_stack_push semantics that a
+// system app relies on (e.g. tictoc paints from its tick handler right after the
+// push, before the layer its load handler creates would otherwise exist).
+// A sandboxed PBW leaves this false: its handlers point into sandbox memory and
+// must never be invoked from kernel context.
+bool g_fw_privileged_window;
+
 void app_window_stack_push(Window *window, bool animated) {
   ARG_UNUSED(animated);
   s_top_window = window;
   window->on_screen = true;
+  if (g_fw_privileged_window && !window->is_loaded) {
+    window->is_loaded = true;
+    if (window->window_handlers.load) {
+      window->window_handlers.load(window);
+    }
+    if (window->window_handlers.appear) {
+      window->window_handlers.appear(window);
+    }
+  }
   window_schedule_render(window);
+}
+
+Window *app_window_stack_get_top_window(void) {
+  return s_top_window;
 }
 
 GRect watchface_layer_get_unobstructed_bounds_by_value(const Layer *layer) {
