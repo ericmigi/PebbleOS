@@ -290,6 +290,18 @@ static void prv_window_pop(void) {
   Window *window = s_stack[s_stack_top--];
   window->on_screen = false;
   printk("WINDOW_POP %p depth=%d\n", (void *)window, s_stack_top + 1);
+
+  // Run the real window's disappear + unload handlers (mirrors shipping window
+  // stack pop) so a system app's window frees its data / deinits its menu. This
+  // is what makes nested settings submenus pop cleanly back to the parent menu.
+  // Must be the last use of `window` — unload may free it.
+  if (window->window_handlers.disappear) {
+    window->window_handlers.disappear(window);
+  }
+  if (window->window_handlers.unload) {
+    window->window_handlers.unload(window);
+  }
+
   prv_apply_click_config(prv_top_window());
   prv_render_top();
 }

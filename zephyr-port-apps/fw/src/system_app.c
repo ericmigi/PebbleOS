@@ -76,6 +76,12 @@ void *app_zalloc_check(size_t size) {
   return memory;
 }
 
+void *app_malloc_check(size_t size) {
+  void *memory = k_malloc(size);
+  __ASSERT_NO_MSG(memory || size == 0);
+  return memory;
+}
+
 void app_free(void *ptr) { k_free(ptr); }
 
 // ---------------------------------------------------------------------------
@@ -150,23 +156,24 @@ void rtc_get_time_tm(struct tm *time_tm) {
   gmtime_r(&now, time_tm);
 }
 
+// Window-stack depth of the launcher at the moment a system app is launched
+// (before the app pushes its first window). app_event_loop pumps until the app
+// has popped every window it pushed, i.e. depth is back to this base.
+static int s_app_base_depth;
+
 // ---------------------------------------------------------------------------
-// app_event_loop: the applib entry a system app's main() calls. Hands the
-// app's window (just pushed via app_window_stack_push) to the shared launcher
-// window stack + pump, then pumps until BACK pops it (returns to main() ->
-// deinit -> fw_system_app_launch). Analog of shipping app.c:app_event_loop_common
-// looping on sys_get_pebble_event until PEBBLE_PROCESS_DEINIT_EVENT.
+// app_event_loop: the applib entry a system app's main() calls. By the time it
+// runs, the app has already pushed its root window via app_window_stack_push
+// (which now drives the shared window stack directly — see port.c). This just
+// pumps the shared UI loop until BACK has popped every window the app pushed
+// (depth returns to the launcher base). Analog of shipping
+// app.c:app_event_loop_common looping until PEBBLE_PROCESS_DEINIT_EVENT.
 // ---------------------------------------------------------------------------
 void app_event_loop(void) {
-  Window *window = app_window_stack_get_top_window();
-  const int base_depth = fw_window_stack_depth();
-  if (window) {
-    fw_window_stack_push(window);  // renders it + applies its (empty) click config
-  }
   printk("SYS_APP_LOOP depth=%d\n", fw_window_stack_depth());
 
-  // Pump until the app's window is popped by BACK (depth returns to base).
-  while (fw_window_stack_depth() > base_depth) {
+  // Pump until the app's window(s) are popped by BACK (depth returns to base).
+  while (fw_window_stack_depth() > s_app_base_depth) {
     fw_ui_pump_once();
   }
 }
@@ -187,6 +194,7 @@ void fw_system_app_launch(const PebbleProcessMd *md) {
   printk("SYS_APP_LAUNCH %s\n", name);
 
   s_app_user_data = NULL;
+  s_app_base_depth = fw_window_stack_depth();
   g_fw_privileged_window = true;
   md->main_func();  // push window (load runs) -> app_event_loop -> deinit
   g_fw_privileged_window = false;

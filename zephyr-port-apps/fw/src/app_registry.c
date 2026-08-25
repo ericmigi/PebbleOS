@@ -15,7 +15,11 @@
 // System-app metadata providers (the real *_get_app_info()). Registering a new
 // privileged built-in app = add its header here + an md_fn in s_system_apps +
 // its sources to CMakeLists (see zephyr-port-notes/SYSTEM-APPS-BUILDOUT.md).
+#include "apps/system/alarms/alarms.h"
+#include "apps/system/music.h"
 #include "apps/watch/tictoc/tictoc.h"
+#include "apps/system/watchfaces.h"
+#include "apps/system/settings/settings.h"
 
 // A 20 KiB AppDB holds roughly 150 metadata records in production.
 #define FW_MAX_INSTALLED_APPS 150
@@ -34,14 +38,14 @@ typedef struct {
 // Default-enabled normal-shell entries from system_app_registry_list.json.
 // Names mirror the PebbleProcessMdSystem metadata (Golf is a resource app).
 static const FwSystemApp s_system_apps[] = {
-  { -69, "TicToc", tictoc_get_app_info },
+  { -1, "TicToc", tictoc_get_app_info },
   { -98, "Kickstart" },
   { -2, "Watch Only" },
-  { -7, "Settings" },
-  { -3, "Music" },
+  { -7, "Settings", settings_get_app_info },
+  { -3, "Music", music_app_get_info },
   { -4, "Notifications" },
-  { -5, "Alarms" },
-  { -6, "Watchfaces" },
+  { -5, "Alarms", alarms_app_get_info },
+  { -6, "Watchfaces", watchfaces_get_app_info },
   { -9, "Quick Launch" },
   { -10, "Timeline Future" },
   { -96, "Timeline Past" },
