@@ -23,6 +23,7 @@ extern SandboxAppArena g_sandbox_app_arena;
 bool sandbox_prepare(struct k_thread *app_thread, uintptr_t stack_start,
                      size_t stack_size);
 void sandbox_arm(void);
+void sandbox_disarm(void);
 void sandbox_dump_active_mpu(void);
 bool sandbox_userspace_buffer_is_valid(const void *buffer, size_t size);
 bool sandbox_thread_is_unprivileged(void);
