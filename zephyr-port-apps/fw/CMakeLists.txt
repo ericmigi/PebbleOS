@@ -36,6 +36,7 @@ target_compile_definitions(app PRIVATE
   CONFIG_SERVICE_EVENT_SERVICE_LOG_LEVEL=0
   CONFIG_SERVICE_FILESYSTEM_LOG_LEVEL=0
   CONFIG_SERVICE_NEW_TIMER_LOG_LEVEL=0
+  CONFIG_SERVICE_PROCESS_MANAGEMENT_LOG_LEVEL=0
   CONFIG_SERVICE_REGULAR_TIMER_LOG_LEVEL=0
   CONFIG_SERVICE_SYSTEM_TASK_LOG_LEVEL=0
   CONFIG_SERVICE_TICK_TIMER_LOG_LEVEL=0
@@ -49,6 +50,7 @@ target_compile_options(app PRIVATE
 )
 
 target_sources(app PRIVATE
+  src/appdb_bootstrap.c
   src/app_registry.c
   src/app_registry_stubs.c
   src/button_zephyr.c
@@ -92,14 +94,21 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/kernel/task_timer.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/util/task_init.c"
   "${PEBBLEOS_ROOT}/src/fw/process_management/pebble_process_info.c"
+  "${PEBBLEOS_ROOT}/src/fw/process_management/pebble_process_md.c"
+  "${PEBBLEOS_ROOT}/src/fw/process_management/app_install_manager.c"
+  "${PEBBLEOS_ROOT}/src/fw/process_management/app_manager.c"
+  "${PEBBLEOS_ROOT}/src/fw/kernel/util/segment.c"
   "${PEBBLEOS_ROOT}/src/fw/services/blob_db/app_db.c"
   "${PEBBLEOS_ROOT}/src/fw/services/event_service/service.c"
   "${PEBBLEOS_ROOT}/src/fw/services/filesystem/flash_translation.c"
   "${PEBBLEOS_ROOT}/src/fw/services/filesystem/pfs.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/filesystem/app_file.c"
   "${PEBBLEOS_ROOT}/src/fw/services/new_timer/new_timer.c"
   "${PEBBLEOS_ROOT}/src/fw/services/regular_timer/service.c"
   "${PEBBLEOS_ROOT}/src/fw/services/settings/settings_file.c"
   "${PEBBLEOS_ROOT}/src/fw/services/settings/settings_raw_iter.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/process_management/app_storage.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/process_management/process_loader_storage.c"
   "${PEBBLEOS_ROOT}/src/fw/services/system_task/service.c"
   "${PEBBLEOS_ROOT}/src/fw/services/tick_timer/service.c"
   "${PEBBLEOS_ROOT}/src/fw/util/crc8.c"
@@ -133,10 +142,12 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/inverter_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/animation_timing.c"
   "${PEBBLEOS_ROOT}/lib/util/crc32.c"
+  "${PEBBLEOS_ROOT}/lib/util/build_id.c"
   "${PEBBLEOS_ROOT}/lib/util/keyed_circular_cache.c"
   "${PEBBLEOS_ROOT}/lib/util/iterator.c"
   "${PEBBLEOS_ROOT}/lib/util/math.c"
   "${PEBBLEOS_ROOT}/lib/util/trig.c"
+  "${PEBBLEOS_ROOT}/lib/util/uuid.c"
 )
 
 set_source_files_properties(

@@ -3,7 +3,9 @@
 
 #include <stdbool.h>
 
-bool fw_sandbox_launch(void);
+#include "process_management/app_install_types.h"
+
+bool fw_sandbox_launch(AppInstallId install_id);
 
 // Initialise the panel + applib graphics shell (framebuffer, GContext, fonts,
 // app heap) and turn the display on. Safe to call more than once.

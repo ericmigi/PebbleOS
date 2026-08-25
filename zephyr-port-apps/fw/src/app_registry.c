@@ -7,6 +7,7 @@
 
 #include <zephyr/sys/printk.h>
 
+#include "appdb_bootstrap.h"
 #include "pbl/services/blob_db/app_db.h"
 #include "process_management/pebble_process_info.h"
 #include "process_management/pebble_process_md.h"
@@ -26,7 +27,7 @@ typedef struct {
   AppInstallId id;
   const char *name;
   // Non-NULL => a privileged built-in system app launched via its real md.
-  // NULL => a not-yet-ported entry (launcher falls back to the sandboxed PBW).
+  // NULL => a not-yet-ported system entry (shown but not launchable).
   FwSystemAppMdFn md_fn;
 } FwSystemApp;
 
@@ -124,6 +125,7 @@ void fw_app_registry_init(void) {
   }
 
   app_db_init();
+  (void)fw_appdb_install_test_app();
   app_db_enumerate_entries(prv_add_installed_app, NULL);
   s_launch_candidate = prv_pick_app();
 

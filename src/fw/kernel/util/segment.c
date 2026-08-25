@@ -3,6 +3,10 @@
 
 #include "segment.h"
 
+#ifdef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+#include <stdint.h>
+#endif
+
 #include "system/passert.h"
 
 #include <stdalign.h>

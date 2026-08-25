@@ -18,8 +18,8 @@ typedef struct {
   bool installed;
   char name[FW_APP_NAME_SIZE + 1];
   // Non-NULL for a privileged built-in system app: its real PebbleProcessMd.
-  // The launcher hands this to fw_system_app_launch() on SELECT. NULL entries
-  // fall back to the sandboxed PBW launch.
+  // The launcher hands this to fw_system_app_launch() on SELECT. Installed
+  // NULL-md entries launch by AppInstallId; unported system entries are inert.
   const PebbleProcessMd *md;
 } FwAppRegistryEntry;
 
