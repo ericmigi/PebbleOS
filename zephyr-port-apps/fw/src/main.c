@@ -62,10 +62,13 @@ static void prv_kernel_main(void *parameter) {
   input_service_init();
   button_zephyr_init();
 
-  if (fw_pfs_boot() == 0) {
+  // The static system apps must reach the launcher even if PFS fails to mount,
+  // so registry init runs unconditionally; PFS status only gates the AppDB apps.
+  const bool pfs_up = (fw_pfs_boot() == 0);
+  if (pfs_up) {
     PBL_LOG_ALWAYS("FW_PFS_UP");
-    fw_app_registry_init();
   }
+  fw_app_registry_init(pfs_up);
 
   // Stand up the real window stack + launcher menu and run the KernelMain UI
   // event loop. Navigation consumes the button/click-service events wired above

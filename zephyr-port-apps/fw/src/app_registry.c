@@ -7,6 +7,7 @@
 
 #include <zephyr/sys/printk.h>
 
+#include "appdb_bootstrap.h"
 #include "pbl/services/blob_db/app_db.h"
 #include "process_management/pebble_process_info.h"
 #include "process_management/pebble_process_md.h"
@@ -30,7 +31,7 @@ typedef struct {
   AppInstallId id;
   const char *name;
   // Non-NULL => a privileged built-in system app launched via its real md.
-  // NULL => a not-yet-ported entry (launcher falls back to the sandboxed PBW).
+  // NULL => a not-yet-ported system entry (shown but not launchable).
   FwSystemAppMdFn md_fn;
 } FwSystemApp;
 
@@ -115,9 +116,12 @@ static const FwAppRegistryEntry *prv_pick_app(void) {
   return s_entry_count == 0 ? NULL : &s_entries[0];
 }
 
-void fw_app_registry_init(void) {
+void fw_app_registry_init(bool appdb_available) {
   s_entry_count = 0;
 
+  // Static system apps need no PFS/AppDB, so they populate the launcher
+  // unconditionally. This is the floor: the launcher is never empty even when
+  // PFS is down or the AppDB path below fails.
   for (size_t i = 0; i < FW_ARRAY_SIZE(s_system_apps); ++i) {
     FwAppRegistryEntry *entry = &s_entries[s_entry_count++];
     *entry = (FwAppRegistryEntry) {
@@ -127,8 +131,13 @@ void fw_app_registry_init(void) {
     strncpy(entry->name, s_system_apps[i].name, FW_APP_NAME_SIZE);
   }
 
-  app_db_init();
-  app_db_enumerate_entries(prv_add_installed_app, NULL);
+  // Best-effort: install + enumerate AppDB apps only when PFS is mounted.
+  // Any failure just leaves the static list intact.
+  if (appdb_available) {
+    app_db_init();
+    (void)fw_appdb_install_test_app();
+    app_db_enumerate_entries(prv_add_installed_app, NULL);
+  }
   s_launch_candidate = prv_pick_app();
 
   printk("FW_REGISTRY_UP\n");

@@ -225,15 +225,17 @@ static void prv_launch_selected(void) {
 
   // A registry entry carrying a real PebbleProcessMd is a privileged built-in
   // system app: launch it through the system-app path (deferred to the launcher
-  // loop's top level so it is not nested inside this click callback). Entries
-  // without an md fall back to the embedded sandboxed PBW, which reinitialises
-  // the display and owns the panel afterwards.
+  // loop's top level so it is not nested inside this click callback).
   if (entry->md) {
     s_pending_md = entry->md;
     return;
   }
+  if (!entry->installed) {
+    printk("LAUNCHER_UNAVAILABLE %s\n", entry->name);
+    return;
+  }
   printk("WINDOW_PUSH %s\n", entry->name);
-  s_app_launched = fw_sandbox_launch();
+  s_app_launched = fw_sandbox_launch(entry->install_id);
 }
 
 // Non-animated navigation handlers (see ponytail note at top of file).

@@ -3,7 +3,9 @@
 
 #include <stdbool.h>
 
-bool fw_sandbox_launch(void);
+#include "process_management/app_install_types.h"
+
+bool fw_sandbox_launch(AppInstallId install_id);
 void fw_sandbox_exit(void);
 
 // Initialise the panel + applib graphics shell (framebuffer, GContext, fonts,

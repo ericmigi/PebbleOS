@@ -16,6 +16,10 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifdef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+#include <zephyr/sys/printk.h>
+#endif
+
 PBL_LOG_MODULE_DECLARE(service_process_management, CONFIG_SERVICE_PROCESS_MANAGEMENT_LOG_LEVEL);
 
 //! This comes from the generated pebble.auto.c with all the exported functions in it.
@@ -251,10 +255,16 @@ static bool prv_load_from_flash(const PebbleProcessMd *app_md, PebbleTask task,
   }
   pfs_close(fd);
 
+#ifdef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+  printk("FW_CODE_BANK_READ id=%" PRId32 " file=%s bytes=%zu\n", app_id,
+         process_name, load_size);
+#endif
+
   return prv_intialize_sdk_process(task, &info, destination);
 }
 
 // ----------------------------------------------------------------------------------------------
+#ifndef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
 static bool prv_load_from_resource(const PebbleProcessMdResource *app_md,
                                    PebbleTask task,
                                    MemorySegment *destination) {
@@ -278,6 +288,7 @@ static bool prv_load_from_resource(const PebbleProcessMdResource *app_md,
   // Process the relocation entries
   return prv_intialize_sdk_process(task, &info, destination);
 }
+#endif
 
 void * process_loader_load(const PebbleProcessMd *app_md, PebbleTask task,
                            MemorySegment *destination) {
@@ -286,12 +297,15 @@ void * process_loader_load(const PebbleProcessMd *app_md, PebbleTask task,
     if (!prv_load_from_flash(app_md, task, destination)) {
       return NULL;
     }
-  } else if (app_md->process_storage == ProcessStorageResource) {
+  }
+#ifndef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+  else if (app_md->process_storage == ProcessStorageResource) {
     PebbleProcessMdResource *res_app_md = (PebbleProcessMdResource *)app_md;
     if (!prv_load_from_resource(res_app_md, task, destination)) {
       return NULL;
     }
   }
+#endif
 
   // The final process image size may be smaller than the amount of
   // memory required to load it, (the relocation table needs to be

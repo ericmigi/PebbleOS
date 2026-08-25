@@ -18,12 +18,15 @@ typedef struct {
   bool installed;
   char name[FW_APP_NAME_SIZE + 1];
   // Non-NULL for a privileged built-in system app: its real PebbleProcessMd.
-  // The launcher hands this to fw_system_app_launch() on SELECT. NULL entries
-  // fall back to the sandboxed PBW launch.
+  // The launcher hands this to fw_system_app_launch() on SELECT. Installed
+  // NULL-md entries launch by AppInstallId; unported system entries are inert.
   const PebbleProcessMd *md;
 } FwAppRegistryEntry;
 
-void fw_app_registry_init(void);
+// Always registers the static system apps. When appdb_available is true (PFS
+// mounted), it additionally best-effort installs + enumerates AppDB apps; an
+// AppDB failure never empties or gates the static list.
+void fw_app_registry_init(bool appdb_available);
 size_t fw_app_registry_count(void);
 const FwAppRegistryEntry *fw_app_registry_get(size_t index);
 const FwAppRegistryEntry *fw_launcher_pick_app(void);

@@ -1,6 +1,51 @@
 /* SPDX-FileCopyrightText: 2024 Google LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#ifdef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+
+#include <process_management/app_manager.h>
+
+#include <inttypes.h>
+
+#include <zephyr/sys/printk.h>
+
+#include "process_loader.h"
+#include "process_management/pebble_process_md.h"
+
+const PebbleProcessMd *app_install_get_md(AppInstallId id, bool worker);
+void app_install_release_md(const PebbleProcessMd *md);
+
+void *app_manager_load_code_bank(AppInstallId install_id,
+                                 MemorySegment *destination,
+                                 size_t *loaded_size_out) {
+  const PebbleProcessMd *md = app_install_get_md(install_id, false);
+  if (!md) {
+    return NULL;
+  }
+  if (md->process_storage != ProcessStorageFlash || !md->is_unprivileged) {
+    printk("FW_APP_MANAGER_LOAD_FAIL id=%" PRId32 " metadata\n", install_id);
+    app_install_release_md(md);
+    return NULL;
+  }
+
+  const size_t loaded_size = process_metadata_get_size_bytes(md);
+  void *entry = process_loader_load(md, PebbleTask_App, destination);
+  app_install_release_md(md);
+  if (!entry) {
+    printk("FW_APP_MANAGER_LOAD_FAIL id=%" PRId32 " loader\n", install_id);
+    return NULL;
+  }
+
+  if (loaded_size_out) {
+    *loaded_size_out = loaded_size;
+  }
+  printk("FW_APP_MANAGER_LOADED id=%" PRId32 " entry=%p bytes=%zu\n",
+         install_id, entry, loaded_size);
+  return entry;
+}
+
+#else
+
 #include "app_manager.h"
 #include "worker_manager.h"
 #include "process_loader.h"
@@ -925,3 +970,5 @@ DEFINE_SYSCALL(ResAppNum, sys_get_current_resource_num, void) {
 DEFINE_SYSCALL(AppInstallId, sys_app_manager_get_current_app_id, void) {
   return app_manager_get_current_app_id();
 }
+
+#endif  // CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
