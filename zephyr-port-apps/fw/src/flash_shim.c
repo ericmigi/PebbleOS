@@ -82,7 +82,16 @@ void flash_erase_subsector_blocking(uint32_t subsector_addr) {
 void flash_erase_sector_blocking(uint32_t sector_addr) {
   PBL_ASSERTN((sector_addr & (SECTOR_SIZE_BYTES - 1u)) == 0);
   prv_check_range(sector_addr, SECTOR_SIZE_BYTES, "flash_erase_64k");
-  prv_check_result("flash_erase_64k",
-                   flash_erase(s_flash, PFS_DEVICE_OFFSET(sector_addr),
-                               SECTOR_SIZE_BYTES));
+  // Clear the 64 KiB sector as 16 x 4 KiB subsector erases instead of one block
+  // erase. The subsector (SPI_NOR_CMD_SE) path is the only erase granularity
+  // exercised end-to-end during PFS bring-up; the block-erase (SPI_NOR_CMD_BE)
+  // opcode is never validated against dirty flash on a fresh unit (erasing
+  // already-0xFF flash succeeds regardless), so a faulty block erase corrupts
+  // the region the first time GC/format must actually clear written pages and
+  // pfs_init's format-on-empty then cannot recover it.
+  // ponytail: 16 blocking 4 KiB erases per sector; if a validated block-erase
+  // opcode lands in the driver, restore the single 64 KiB erase here.
+  for (uint32_t off = 0; off < SECTOR_SIZE_BYTES; off += SUBSECTOR_SIZE_BYTES) {
+    flash_erase_subsector_blocking(sector_addr + off);
+  }
 }
