@@ -273,6 +273,7 @@ static void prv_render_top(void) {
   layer_render_tree(window_get_root_layer(window), app_state_get_graphics_context());
   window->is_render_scheduled = false;
   watchface_port_push_frame();
+  fw_fb_dump_uart();
 }
 
 static void prv_window_push(Window *window) {
@@ -369,12 +370,15 @@ static void prv_inject_button(ButtonId button_id) {
 static void prv_selftest_thread(void *a, void *b, void *c) {
   k_msleep(3000);
   printk("LAUNCHER_SELFTEST begin\n");
+  // Registry menu order: TicToc(0), Kickstart(1), Watch Only(2), Settings(3).
+  // Walk down to Settings and launch it so the host can screenshot it. Long
+  // pauses so the framebuffer dump for each frame drains the UART first.
   prv_inject_button(BUTTON_ID_DOWN);
-  k_msleep(400);
+  k_msleep(1500);
   prv_inject_button(BUTTON_ID_DOWN);
-  k_msleep(400);
-  prv_inject_button(BUTTON_ID_UP);
-  k_msleep(400);
+  k_msleep(1500);
+  prv_inject_button(BUTTON_ID_DOWN);
+  k_msleep(1500);
   prv_inject_button(BUTTON_ID_SELECT);
   printk("LAUNCHER_SELFTEST end\n");
 }

@@ -12,6 +12,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/display.h>
 #include <zephyr/kernel.h>
+#include <zephyr/sys/crc.h>
 #include <zephyr/sys/printk.h>
 
 #include "kernel/pebble_tasks.h"
@@ -159,6 +160,58 @@ static void prv_app_main(void *arg1, void *arg2, void *arg3) {
   for (;;) {
     __WFE();
   }
+}
+
+// Dump the raw 8bpp Pebble framebuffer over the console UART, framed so the
+// host reconstructor can pick it out of interleaved logs and verify integrity.
+// Each screen render calls this; the host keeps the last complete block.
+//   FB_BEGIN seq=<n> w=.. h=.. bpp=8 stride=.. size=..
+//   FB <up to 64 bytes as hex>   (repeated)
+//   FB_END crc=0x........
+// crc is the standard CRC-32 (zlib) over the raw framebuffer bytes.
+void fw_fb_dump_uart(void) {
+  static uint32_t s_seq;
+  static uint32_t s_last_crc;
+  static bool s_have_last;
+  if (!s_display_ready || s_framebuffer == NULL) {
+    return;
+  }
+  const size_t size = s_display_desc.buf_size;
+  const uint32_t crc = crc32_ieee(s_framebuffer, size);
+  // prv_render_top() runs on every UI pump (each button + the per-second tick),
+  // but the screen only changes on navigation. Emit a frame only when the
+  // content actually changed so idle ticks don't spam the UART or stall the
+  // event loop (a full dump blocks KernelMain ~0.7s at 1Mbaud).
+  if (s_have_last && crc == s_last_crc) {
+    return;
+  }
+  s_last_crc = crc;
+  s_have_last = true;
+  printk("FB_BEGIN seq=%u w=%u h=%u bpp=8 stride=%u size=%zu\n", s_seq++,
+         (unsigned)s_display_desc.width, (unsigned)s_display_desc.height,
+         (unsigned)s_display_desc.pitch, size);
+  static const char hexdigits[] = "0123456789abcdef";
+  char line[3 + 64 * 2 + 1];
+  size_t off = 0;
+  while (off < size) {
+    size_t n = size - off;
+    if (n > 64) {
+      n = 64;
+    }
+    char *p = line;
+    *p++ = 'F';
+    *p++ = 'B';
+    *p++ = ' ';
+    for (size_t i = 0; i < n; ++i) {
+      const uint8_t byte = s_framebuffer[off + i];
+      *p++ = hexdigits[byte >> 4];
+      *p++ = hexdigits[byte & 0xf];
+    }
+    *p = '\0';
+    printk("%s\n", line);
+    off += n;
+  }
+  printk("FB_END crc=0x%08x\n", crc);
 }
 
 void watchface_port_push_frame(void) {
