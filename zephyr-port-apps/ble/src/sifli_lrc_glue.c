@@ -16,6 +16,18 @@ uint32_t HAL_GetTick(void) {
   return k_uptime_get_32();
 }
 
+/* SiFli's weak HAL_Delay_us() picks HAL_Delay_us2_() whenever SysTick is
+ * enabled -- which it always is under Zephyr -- and that path derives its busy
+ * window from SysTick->LOAD and the SDK's HAL_TICK_PER_SECOND. Zephyr programs
+ * SysTick for its own (tickless) kernel, so that assumption is wrong and every
+ * delay stretches by ~1000x. The RF full calibration (bt_ful_cal) issues many
+ * such delays, so LCPU bring-up took ~20s instead of ms and looked hung. Back
+ * the delay with Zephyr's calibrated busy-wait instead.
+ */
+void HAL_Delay_us(uint32_t us) {
+  k_busy_wait(us);
+}
+
 void HAL_DBG_printf(const char *fmt, ...) {
   (void)fmt;
 }
