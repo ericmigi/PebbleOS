@@ -64,9 +64,14 @@ static const struct ble_gatt_svc_def s_ppog_reversed_svc[] = {
                     .uuid = BLE_UUID128_DECLARE(BLE_UUID_SWIZZLE(PEBBLE_BT_UUID_EXPAND(
                         PEBBLE_BT_PPOGATT_WATCH_SERVER_DATA_CHARACTERISTIC_UUID_32BIT))),
                     .access_cb = prv_access_data_notify,
-                    // READ_ENC (without READ) gates the CCCD: subscribing
-                    // requires an encrypted link, explicit reads stay blocked.
-                    .flags = BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_READ_ENC,
+                    // Plain F_READ so nimble registers the CCCD as writable
+                    // without an encryption requirement. F_READ_ENC made the
+                    // CCCD write (subscribe) time out on the phone; the access
+                    // cb still refuses actual reads and the write char keeps
+                    // F_WRITE_ENC, so data still requires an encrypted link.
+                    // ponytail: re-tighten to READ_ENC once the CCCD-under-ENC
+                    // path is understood.
+                    .flags = BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_READ,
                     .val_handle = &s_data_notify_handle,
                 },
                 {
