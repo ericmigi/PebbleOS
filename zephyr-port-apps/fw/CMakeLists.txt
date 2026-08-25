@@ -53,6 +53,8 @@ target_sources(app PRIVATE
   src/app_registry.c
   src/app_registry_stubs.c
   src/app_service_stubs.c
+  src/app_alarm_stubs.c
+  src/app_ui_window_stubs.c
   src/button_zephyr.c
   src/input_service.c
   src/launcher_ui.c
@@ -72,6 +74,9 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/apps/watch/tictoc/tictoc.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/watch/tictoc/default/tictoc_default.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/music.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/alarms/alarms.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/alarms/alarm_editor.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/alarms/alarm_detail.c"
 
   "${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/src/port.c"
   "${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/src/sandbox.c"
@@ -132,6 +137,7 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/text_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/menu_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/menu_layer_system_cells.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/scroll_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/inverter_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/animation_timing.c"
@@ -255,6 +261,8 @@ set_source_files_properties(
 set_source_files_properties(
   "${CMAKE_CURRENT_SOURCE_DIR}/src/app_service_stubs.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/animation_stubs.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/app_alarm_stubs.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/app_ui_window_stubs.c"
   PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
 )
 
@@ -275,6 +283,7 @@ set(FW_UI_WITH_PORT_SHADOWS_OPTS
 )
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/action_bar_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/menu_layer_system_cells.c"
   PROPERTIES COMPILE_OPTIONS "${FW_UI_WITH_PORT_SHADOWS_OPTS}"
 )
 set_source_files_properties(
@@ -292,6 +301,18 @@ set_source_files_properties(
   PROPERTIES
     COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
     COMPILE_DEFINITIONS "RESOURCE_ID_AUDIO_CASSETTE_TINY=0;RESOURCE_ID_MUSIC_ICON_ELLIPSIS=0;RESOURCE_ID_MUSIC_ICON_FAST_FORWARD=0;RESOURCE_ID_MUSIC_ICON_PAUSE=0;RESOURCE_ID_MUSIC_ICON_PLAY=0;RESOURCE_ID_MUSIC_ICON_PLAY_PAUSE=0;RESOURCE_ID_MUSIC_ICON_REWIND=0;RESOURCE_ID_MUSIC_ICON_SKIP_BACKWARD=0;RESOURCE_ID_MUSIC_ICON_SKIP_FORWARD=0;RESOURCE_ID_MUSIC_ICON_VOLUME_DOWN=0;RESOURCE_ID_MUSIC_ICON_VOLUME_UP=0;RESOURCE_ID_MUSIC_IMAGE_NO_MUSIC=0;RESOURCE_ID_MUSIC_LARGE_CASSETTE=0;RESOURCE_ID_MUSIC_LARGE_PAUSED=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_DOWN=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_UP=0;RESOURCE_ID_VIBE_SCORE_HAPTIC_FEEDBACK=0;SECONDS_PER_HOUR=3600;SECONDS_PER_MINUTE=60"
+)
+
+# Alarms app trio: same sign_extend pre-include as music, with its launcher /
+# menu / dialog icon resource IDs defined to 0 (cosmetic; the port has no
+# generated resource IDs).
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/alarms/alarms.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/alarms/alarm_editor.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/alarms/alarm_detail.c"
+  PROPERTIES
+    COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-include;applib/app_launch_reason.h"
+    COMPILE_DEFINITIONS "RESOURCE_ID_ACTION_BAR_ICON_CHECK=0;RESOURCE_ID_ALARM_CLOCK_TINY=0;RESOURCE_ID_GENERIC_CONFIRMATION_LARGE=0;RESOURCE_ID_PLUS_ICON_BLACK=0;RESOURCE_ID_PLUS_ICON_DOTTED=0;RESOURCE_ID_RESULT_SHREDDED_LARGE=0;RESOURCE_ID_SMART_ALARM_ICON_BLACK=0;RESOURCE_ID_SMART_ALARM_TINY=0"
 )
 
 # tictoc_default.c calls rtc_get_time_tm without including a header for it (in

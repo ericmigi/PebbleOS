@@ -16,6 +16,7 @@ char *kernel_strdup_check(const char *string);
 // task_* map to the current task's heap; the applib UI shell (watchface port.c)
 // backs these with the app heap.
 void *task_malloc(size_t bytes);
+void *task_malloc_check(size_t bytes);
 void task_free(void *ptr);
 
 // app_* heap for privileged built-in system apps (system_app.c backs these with

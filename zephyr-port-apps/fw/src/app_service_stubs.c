@@ -19,6 +19,7 @@
 #include <time.h>
 
 #include "applib/accel_service.h"
+#include "applib/app_launch_reason.h"
 #include "applib/fonts/fonts.h"
 #include "applib/platform.h"
 #include "applib/ui/app_window_stack.h"
@@ -30,7 +31,10 @@
 #include "pbl/services/music.h"
 #include "pbl/services/vibes/vibe_score.h"
 #include "process_management/process_manager.h"
+#include "shell/prefs.h"
 #include "shell/system_theme.h"
+
+#include "kernel/pbl_malloc.h"
 
 // Provided by fw/src/port.c.
 time_t rtc_get_time(void);
@@ -281,3 +285,58 @@ bool window_stack_is_animating_with_fixed_status_bar(WindowStack *window_stack) 
 // WindowStack object. The one consumer (status bar) only passes the result to
 // window_stack_is_animating_with_fixed_status_bar above, which ignores it.
 WindowStack *app_state_get_window_stack(void) { return NULL; }
+
+// Checked task-heap alloc (the port backs task_malloc with the app/kernel heap).
+void *task_malloc_check(size_t bytes) {
+  void *memory = task_malloc(bytes);
+  __builtin_expect(memory != NULL || bytes == 0, 1);
+  return memory;
+}
+
+// Format explicit hours:minutes honoring 24h style (Alarms list rows).
+size_t clock_format_time(char *buffer, uint8_t size, int16_t hours, int16_t minutes,
+                         bool add_space) {
+  if (!buffer || size == 0) {
+    return 0;
+  }
+  if (clock_is_24h_style()) {
+    return (size_t)snprintf(buffer, size, "%d:%02d", hours, minutes);
+  }
+  int h12 = hours % 12;
+  if (h12 == 0) {
+    h12 = 12;
+  }
+  const char *suffix = (hours < 12) ? "AM" : "PM";
+  return (size_t)snprintf(buffer, size, "%d:%02d%s%s", h12, minutes, add_space ? " " : "", suffix);
+}
+
+// App-launch reason: the port launches system apps from the launcher menu only.
+// ponytail: wire real launch-reason plumbing if timeline-action launches matter.
+AppLaunchReason app_launch_reason(void) { return APP_LAUNCH_USER; }
+
+uint32_t app_launch_get_args(void) { return 0; }
+
+// Menu-scroll prefs the Alarms menu reads: wrap-around off, no scroll vibe.
+bool shell_prefs_get_menu_scroll_wrap_around_enable(void) { return false; }
+
+MenuScrollVibeBehavior shell_prefs_get_menu_scroll_vibe_behavior(void) {
+  return MenuScrollNoVibe;
+}
+
+// Activity/health tracking absent in the port; smart-alarm gating sees it off.
+bool activity_prefs_tracking_is_enabled(void) { return false; }
+
+// Would push a "turn on tracking" dialog; no-op in the port (interaction path).
+void health_tracking_ui_feature_show_disabled(void) {}
+
+// i18n: nothing is allocated, so freeing one owner is a no-op (see i18n_get).
+void i18n_free(const char *string, const void *owner) {
+  (void)string;
+  (void)owner;
+}
+
+// The port tracks a single visible window (launcher_ui.c); good enough to answer
+// "is this window somewhere in the stack" for the alarm editor's insert logic.
+bool app_window_stack_contains_window(Window *window) {
+  return window && window == app_window_stack_get_top_window();
+}

@@ -14,6 +14,7 @@
 // System-app metadata providers (the real *_get_app_info()). Registering a new
 // privileged built-in app = add its header here + an md_fn in s_system_apps +
 // its sources to CMakeLists (see zephyr-port-notes/SYSTEM-APPS-BUILDOUT.md).
+#include "apps/system/alarms/alarms.h"
 #include "apps/system/music.h"
 #include "apps/watch/tictoc/tictoc.h"
 
@@ -40,7 +41,7 @@ static const FwSystemApp s_system_apps[] = {
   { -7, "Settings" },
   { -3, "Music", music_app_get_info },
   { -4, "Notifications" },
-  { -5, "Alarms" },
+  { -5, "Alarms", alarms_app_get_info },
   { -6, "Watchfaces" },
   { -9, "Quick Launch" },
   { -10, "Timeline Future" },

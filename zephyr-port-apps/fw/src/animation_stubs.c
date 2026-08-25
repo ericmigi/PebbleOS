@@ -34,6 +34,11 @@ bool animation_set_play_count(Animation *animation, uint32_t play_count) {
   return false;
 }
 
+bool animation_destroy(Animation *animation) {
+  (void)animation;
+  return false;
+}
+
 PropertyAnimation *property_animation_create_bounds_origin(struct Layer *layer, GPoint *from,
                                                            GPoint *to) {
   (void)layer;
