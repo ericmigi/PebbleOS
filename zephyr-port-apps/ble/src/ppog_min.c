@@ -175,8 +175,11 @@ static void prv_pp_feed(uint16_t conn, const uint8_t *data, uint16_t len) {
       printk("BLE_PP_FACTORY_COLOR_SENT\n");
     } else if (endpoint == PP_ENDPOINT_APP_RUN_STATE && msg_len >= 1 &&
                s_pp_buf[4] == 0x03) {
-      // STATUS request: reply {state=RUNNING(0x01), 16-byte uuid} (zero uuid).
+      // STATUS request: reply AppRunStateStart {cmd=0x01, 16-byte uuid}. The
+      // phone's Negotiator only accepts cmd 0x01 + a NON-ZERO uuid, so fill a
+      // fixed non-zero uuid (no real app is running).
       uint8_t run_resp[17] = {0x01};
+      memset(run_resp + 1, 0x5a, 16);
       prv_send_pp(conn, PP_ENDPOINT_APP_RUN_STATE, run_resp, sizeof(run_resp));
       printk("BLE_PP_APP_RUN_STATE_SENT\n");
     }
