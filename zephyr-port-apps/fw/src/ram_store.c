@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include <host/ble_gatt.h>
 #include <host/ble_hs.h>
 #include <host/ble_store.h>
 
@@ -142,6 +143,22 @@ static int prv_delete(int obj_type, const union ble_store_key *key) {
     }
   }
   return BLE_HS_ENOENT;
+}
+
+int ram_store_seed_service_changed_cccd(uint16_t chr_val_handle) {
+  union ble_store_value value = {0};
+
+  if (s_peer_sec_n > 0) {
+    value.cccd.peer_addr = s_peer_sec[0].peer_addr;
+  } else if (s_our_sec_n > 0) {
+    value.cccd.peer_addr = s_our_sec[0].peer_addr;
+  } else {
+    return BLE_HS_ENOENT;
+  }
+
+  value.cccd.chr_val_handle = chr_val_handle;
+  value.cccd.flags = BLE_GATT_CCCD_INDICATE;
+  return prv_write(BLE_STORE_OBJ_TYPE_CCCD, &value);
 }
 
 bool ram_store_init(ble_addr_t *bond_address) {

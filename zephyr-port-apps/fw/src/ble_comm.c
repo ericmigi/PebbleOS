@@ -12,6 +12,7 @@
 #include <zephyr/kernel.h>
 
 #include <host/ble_gap.h>
+#include <host/ble_gatt.h>
 #include <host/ble_hs.h>
 #include <host/ble_hs_id.h>
 #include <host/ble_store.h>
@@ -34,6 +35,7 @@ extern void pebble_pairing_service_init(void);
 extern void pebble_pairing_service_notify_connectivity(uint16_t conn_handle);
 extern void ppog_reversed_service_init(void);
 extern bool ram_store_init(ble_addr_t *bond_address);
+extern int ram_store_seed_service_changed_cccd(uint16_t chr_val_handle);
 
 K_THREAD_STACK_DEFINE(s_init_stack, BLE_INIT_STACK_SIZE);
 K_THREAD_STACK_DEFINE(s_host_stack, BLE_HOST_STACK_SIZE);
@@ -42,6 +44,8 @@ static struct k_thread s_host_thread;
 static struct k_work_delayable s_sync_timeout;
 static bool s_init_started;
 static bool s_synchronized;
+static uint16_t s_service_changed_val_handle;
+static bool s_service_changed_cccd_seeded;
 
 static uint8_t s_advertisement[31];
 static uint8_t s_scan_response[23];
@@ -113,12 +117,37 @@ static int prv_gap_event(struct ble_gap_event *event, void *arg) {
       break;
     case BLE_GAP_EVENT_ENC_CHANGE:
       if (event->enc_change.status == 0) {
+        struct ble_gap_conn_desc desc;
+        int rc = ble_gap_conn_find(event->enc_change.conn_handle, &desc);
+
         printk("FW_BLE_ENCRYPTED handle=%u\n",
                (unsigned int)event->enc_change.conn_handle);
+        if (rc != 0) {
+          prv_fail("conn_find", rc);
+        } else if (desc.sec_state.bonded && s_service_changed_cccd_seeded &&
+                   s_service_changed_val_handle != 0) {
+          ble_svc_gatt_changed(0x0001, 0xffff);
+          printk("FW_BLE_SVC_CHANGED_QUEUED handle=%u\n",
+                 (unsigned int)event->enc_change.conn_handle);
+        }
         pebble_pairing_service_notify_connectivity(
             event->enc_change.conn_handle);
       } else {
         prv_fail("encryption", event->enc_change.status);
+      }
+      break;
+    case BLE_GAP_EVENT_NOTIFY_TX:
+      if (event->notify_tx.indication &&
+          event->notify_tx.attr_handle == s_service_changed_val_handle) {
+        if (event->notify_tx.status == 0) {
+          printk("FW_BLE_SVC_CHANGED_SENT handle=%u\n",
+                 (unsigned int)event->notify_tx.conn_handle);
+        } else if (event->notify_tx.status == BLE_HS_EDONE) {
+          printk("FW_BLE_SVC_CHANGED_ACK handle=%u\n",
+                 (unsigned int)event->notify_tx.conn_handle);
+        } else {
+          prv_fail("service_changed_tx", event->notify_tx.status);
+        }
       }
       break;
     case BLE_GAP_EVENT_PAIRING_COMPLETE:
@@ -213,6 +242,23 @@ static void prv_sync_cb(void) {
   if (rc != 0) {
     prv_fail("copy_addr", rc);
     return;
+  }
+
+  rc = ble_gatts_find_chr(
+      BLE_UUID16_DECLARE(BLE_GATT_SVC_UUID16),
+      BLE_UUID16_DECLARE(BLE_SVC_GATT_CHR_SERVICE_CHANGED_UUID16), NULL,
+      &s_service_changed_val_handle);
+  if (rc != 0) {
+    prv_fail("service_changed_handle", rc);
+  } else {
+    rc = ram_store_seed_service_changed_cccd(s_service_changed_val_handle);
+    if (rc == 0) {
+      s_service_changed_cccd_seeded = true;
+      printk("FW_BLE_SVC_CHANGED_READY value_handle=%u\n",
+             (unsigned int)s_service_changed_val_handle);
+    } else if (rc != BLE_HS_ENOENT) {
+      prv_fail("service_changed_cccd", rc);
+    }
   }
 
   snprintf(name, sizeof(name), "Pebble Time 2 %02X%02X", address[1],
