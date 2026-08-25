@@ -9,4 +9,10 @@
 // wants the standard time.h types. A future ported app that needs those extras
 // should reconcile the restrict qualifiers in the real header instead of adding
 // them here.
+#include <stdint.h>
 #include <time.h>
+
+// A couple of shipping time helpers the ported applib UI needs, kept here so the
+// rest of the shipping header (with its conflicting restrict-less redeclarations)
+// stays shadowed out. Implemented in fw/src/app_service_stubs.c.
+uint16_t time_ms(time_t *tloc, uint16_t *out_ms);

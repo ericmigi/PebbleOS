@@ -10,16 +10,46 @@
 #include "pbl/util/list.h"
 #include <pbl/drivers/button_id.h>
 
+#include "pbl/services/music.h"
+
 typedef enum {
   PEBBLE_NULL_EVENT = 0,
   // Values match the shipping kernel/events.h enum (button service compat).
   PEBBLE_BUTTON_DOWN_EVENT = 5,
   PEBBLE_BUTTON_UP_EVENT = 6,
+  PEBBLE_MEDIA_EVENT = 14,
   PEBBLE_TICK_EVENT = 15,
   PEBBLE_CALLBACK_EVENT = 27,
   PEBBLE_SUBSCRIPTION_EVENT = 29,
+  PEBBLE_PREF_CHANGE_EVENT = 68,
   PEBBLE_NUM_EVENTS = 80,
 } PebbleEventType;
+
+// Media (music now-playing) event, mirrored from shipping kernel/events.h. The
+// Music app subscribes to this; the port music service stub never posts one, so
+// the app renders its initial (no-music) state.
+typedef enum {
+  PebbleMediaEventTypeNowPlayingChanged,
+  PebbleMediaEventTypePlaybackStateChanged,
+  PebbleMediaEventTypeVolumeChanged,
+  PebbleMediaEventTypeServerConnected,
+  PebbleMediaEventTypeServerDisconnected,
+  PebbleMediaEventTypeTrackPosChanged,
+  PebbleMediaEventTypeAlbumArtUpdated,
+} PebbleMediaEventType;
+
+typedef struct {
+  PebbleMediaEventType type;
+  union {
+    MusicPlayState playback_state;
+    uint8_t volume_percent;
+  };
+} PebbleMediaEvent;
+
+typedef struct {
+  const char *key;
+  uint8_t key_len;
+} PebblePrefChangeEvent;
 
 typedef void (*CallbackEventCallback)(void *data);
 
@@ -49,6 +79,8 @@ typedef struct {
     PebbleCallbackEvent callback;
     PebbleSubscriptionEvent subscription;
     PebbleButtonEvent button;
+    PebbleMediaEvent media;
+    PebblePrefChangeEvent pref_change;
   };
   PebbleTaskBitset task_mask;
   PebbleEventType type : 8;

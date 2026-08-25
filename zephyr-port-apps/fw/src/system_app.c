@@ -76,6 +76,12 @@ void *app_zalloc_check(size_t size) {
   return memory;
 }
 
+void *app_malloc_check(size_t size) {
+  void *memory = k_malloc(size);
+  __ASSERT_NO_MSG(memory || size == 0);
+  return memory;
+}
+
 void app_free(void *ptr) { k_free(ptr); }
 
 // ---------------------------------------------------------------------------
