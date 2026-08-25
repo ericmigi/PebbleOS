@@ -23,10 +23,15 @@ typedef struct {
   const PebbleProcessMd *md;
 } FwAppRegistryEntry;
 
-// Always registers the static system apps. When appdb_available is true (PFS
-// mounted), it additionally best-effort installs + enumerates AppDB apps; an
-// AppDB failure never empties or gates the static list.
+// Registers the static system apps synchronously; records whether the AppDB is
+// available (PFS mounted) for the deferred load below. Never touches PFS/AppDB
+// itself, so it cannot block boot.
 void fw_app_registry_init(bool appdb_available);
+
+// Best-effort AppDB install + enumerate. Must run only AFTER the launcher is up
+// (deferred onto the launcher loop) so a slow/wedged PFS op can't gate boot.
+// Returns true if it added installed apps (caller should reload the menu).
+bool fw_app_registry_load_appdb(void);
 size_t fw_app_registry_count(void);
 const FwAppRegistryEntry *fw_app_registry_get(size_t index);
 const FwAppRegistryEntry *fw_launcher_pick_app(void);
