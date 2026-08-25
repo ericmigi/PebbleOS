@@ -13,7 +13,10 @@
 
 // Size of RAM
 // TODO: Do we have an equate for the total size of RAM somewhere else?
-#if defined(CONFIG_BOARD_QEMU_EMERY) || defined(CONFIG_BOARD_QEMU_GABBRO)
+#if defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
+// Match the production obelix HCPU capture range through 0x20045000.
+#define COREDUMP_RAM_SIZE (276 * 1024)
+#elif defined(CONFIG_BOARD_QEMU_EMERY) || defined(CONFIG_BOARD_QEMU_GABBRO)
 #define COREDUMP_RAM_SIZE (276 * 1024)
 #elif defined(CONFIG_BOARD_QEMU_FLINT)
 #define COREDUMP_RAM_SIZE (256 * 1024)

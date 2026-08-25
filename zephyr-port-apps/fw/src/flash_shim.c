@@ -23,9 +23,13 @@ void pfs_port_panic(const char *file, int line, const char *format, ...)
     __attribute__((noreturn, format(printf, 3, 4)));
 
 static void prv_check_range(uint32_t address, size_t size, const char *operation) {
-  if ((address < FLASH_REGION_FILESYSTEM_BEGIN) ||
-      (address > FLASH_REGION_FILESYSTEM_END) ||
-      (size > (FLASH_REGION_FILESYSTEM_END - address))) {
+  bool filesystem_range = address >= FLASH_REGION_FILESYSTEM_BEGIN &&
+                          address <= FLASH_REGION_FILESYSTEM_END &&
+                          size <= FLASH_REGION_FILESYSTEM_END - address;
+  bool coredump_range = address >= FLASH_REGION_CD_BEGIN &&
+                       address <= FLASH_REGION_CD_END &&
+                       size <= FLASH_REGION_CD_END - address;
+  if (!filesystem_range && !coredump_range) {
     pfs_port_panic(__FILE__, __LINE__, "%s out of range: %#x + %u",
                    operation, address, (unsigned int)size);
   }
@@ -48,7 +52,7 @@ int pfs_flash_shim_init(void) {
     return result;
   }
 
-  if (PFS_DEVICE_OFFSET(FLASH_REGION_FILESYSTEM_END) > flash_size) {
+  if (PFS_DEVICE_OFFSET(FLASH_REGION_CD_END) > flash_size) {
     return -ERANGE;
   }
 

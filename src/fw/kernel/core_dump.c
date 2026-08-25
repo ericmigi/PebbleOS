@@ -23,8 +23,10 @@ extern char *itoa(int value, char *str, int base);
 #include "kernel/core_dump_private.h"
 
 #include "console/dbgserial.h"
+#if !defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
 #include "logging/logging_private.h"
 #include "logging/pulse_logging.h"
+#endif
 
 #include <pbl/drivers/flash.h>
 #include <pbl/drivers/mpu.h>
@@ -33,7 +35,11 @@ extern char *itoa(int value, char *str, int base);
 
 #include "flash_region/flash_region.h"
 #include "kernel/pbl_malloc.h"
+#if !defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
 #include "mfg/mfg_serials.h"
+#else
+const char *mfg_get_serial_number(void);
+#endif
 
 #include "pebbleos/chip_id.h"
 #include "pbl/services/comm_session/session.h"
@@ -46,7 +52,9 @@ extern char *itoa(int value, char *str, int base);
 
 #include "pbl/util/attributes.h"
 #include "pbl/util/build_id.h"
+#if !defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
 #include "pbl/util/math.h"
+#endif
 #include "util/net.h"
 #include "pbl/util/size.h"
 #include "pbl/util/string.h"
@@ -93,6 +101,10 @@ static bool s_core_dump_is_forced = false;
 static bool s_test_force_bus_fault = false;     // Used for unit testing
 static bool s_test_force_inf_loop = false;      // Used for unit testing
 static bool s_test_force_assert = false;        // Used for unit testing
+#if defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
+static bool s_fault_registers_valid;
+static CoreDumpSavedRegisters s_fault_registers;
+#endif
 
 
 // List of memory regions to include in the core dump
@@ -116,7 +128,7 @@ static const MemoryRegion MEMORY_REGIONS_DUMP[] = {
   { .start = (void *)&NVIC->IABR, .length = sizeof(NVIC->IABR) },  // Active interrupts
 };
 
-#if defined(CONFIG_SOC_SF32LB52)
+#if defined(CONFIG_SOC_SF32LB52) && !defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
 // LCPU RAM is dumped last and only when its domain is up; see prv_dump_lcpu_ram().
 static const MemoryRegion LCPU_MEMORY_REGION = {
   .start = (void *)COREDUMP_LCPU_RAM_START, .length = COREDUMP_LCPU_RAM_SIZE,
@@ -158,7 +170,12 @@ static void prv_flash_read_bytes(void* buffer_ptr, uint32_t start_addr, uint32_t
 // NOTE: We are explicitly avoiding use of vsniprintf and cohorts to reduce our stack
 // requirements
 static void prv_debug_str(const char* msg) {
+#if defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
+  dbgserial_putstr(msg);
+  dbgserial_putstr("\n");
+#else
   kernel_pbl_log_from_fault_handler(__FILE_NAME__, 0, msg);
+#endif
 }
 
 
@@ -350,6 +367,12 @@ static void prvTaskInfoCallback( const xPORT_TASK_INFO * const task_info, void *
   // If this is the current task, adjust the registers based on whether or not we were handling
   //  an exception at the time core_dump_reset() was called.
   if (packed_info.running) {
+    #if defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
+    if (s_fault_registers_valid) {
+      memcpy(packed_info.registers, s_saved_registers.core_reg,
+             sizeof(packed_info.registers));
+    } else
+    #endif
     if (!RETURNS_TO_PSP(s_saved_registers.core_reg[portCANONICAL_REG_INDEX_LR])) {
       // The core dump handler got invoked from another exception, therefore the
       // running task was interrupted by an exception.
@@ -450,7 +473,7 @@ static void prv_write_memory_regions(const MemoryRegion *regions, unsigned int c
   }
 }
 
-#if defined(CONFIG_SOC_SF32LB52)
+#if defined(CONFIG_SOC_SF32LB52) && !defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
 // Wake the LCPU so its LPSYS RAM is reachable, letting BLE crashes (e.g. NimBLE
 // host asserts) capture the controller RAM. HAL_HPAON_WakeCore busy-waits for
 // the LCPU to ack; if it is fully powered down this blocks until the watchdog
@@ -538,17 +561,24 @@ EXTERNALLY_VISIBLE void core_dump_handler_c(void) {
   // Locate the stack pointer where the processor state was stacked before the
   // NMI handler was executed so that the saved state can be copied into
   // s_saved_registers.
-  uint32_t *process_sp = (uint32_t *)(
-    RETURNS_TO_PSP(s_saved_registers.core_reg[portCANONICAL_REG_INDEX_LR])?
-      s_saved_registers.extra_reg.psp : s_saved_registers.extra_reg.msp);
-  s_saved_registers.core_reg[portCANONICAL_REG_INDEX_R0] = process_sp[0];
-  s_saved_registers.core_reg[portCANONICAL_REG_INDEX_R1] = process_sp[1];
-  s_saved_registers.core_reg[portCANONICAL_REG_INDEX_R2] = process_sp[2];
-  s_saved_registers.core_reg[portCANONICAL_REG_INDEX_R3] = process_sp[3];
-  // Replace the r12 saved earlier with the real value.
-  s_saved_registers.core_reg[portCANONICAL_REG_INDEX_R12] = process_sp[4];
-  // Make it look like the processor had halted at the start of this function.
-  s_saved_registers.core_reg[portCANONICAL_REG_INDEX_PC] = (uint32_t)NMI_Handler;
+  #if defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
+  if (s_fault_registers_valid) {
+    s_saved_registers = s_fault_registers;
+  } else
+  #endif
+  {
+    uint32_t *process_sp = (uint32_t *)(
+      RETURNS_TO_PSP(s_saved_registers.core_reg[portCANONICAL_REG_INDEX_LR])?
+        s_saved_registers.extra_reg.psp : s_saved_registers.extra_reg.msp);
+    s_saved_registers.core_reg[portCANONICAL_REG_INDEX_R0] = process_sp[0];
+    s_saved_registers.core_reg[portCANONICAL_REG_INDEX_R1] = process_sp[1];
+    s_saved_registers.core_reg[portCANONICAL_REG_INDEX_R2] = process_sp[2];
+    s_saved_registers.core_reg[portCANONICAL_REG_INDEX_R3] = process_sp[3];
+    // Replace the r12 saved earlier with the real value.
+    s_saved_registers.core_reg[portCANONICAL_REG_INDEX_R12] = process_sp[4];
+    // Make it look like the processor halted at the writer entry point.
+    s_saved_registers.core_reg[portCANONICAL_REG_INDEX_PC] = (uint32_t)NMI_Handler;
+  }
   // Save the special registers that the C compiler won't clobber.
   s_saved_registers.extra_reg.primask = __get_PRIMASK();
   s_saved_registers.extra_reg.basepri = __get_BASEPRI();
@@ -667,7 +697,11 @@ EXTERNALLY_VISIBLE void core_dump_handler_c(void) {
   vTaskListWalk(prvTaskInfoCallback, NULL);
 
   // If we core dumped from an ISR, we make up a special "ISR" thread to hold the registers
-  if (!RETURNS_TO_PSP(s_saved_registers.core_reg[portCANONICAL_REG_INDEX_LR])) {
+  if (
+#if defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
+      !s_fault_registers_valid &&
+#endif
+      !RETURNS_TO_PSP(s_saved_registers.core_reg[portCANONICAL_REG_INDEX_LR])) {
     // Another exception invoked the core dump handler
     xPORT_TASK_INFO task_info;
     task_info.pcName = "ISR";
@@ -679,9 +713,13 @@ EXTERNALLY_VISIBLE void core_dump_handler_c(void) {
     prvTaskInfoCallback(&task_info, NULL);
   }
 
-#if defined(CONFIG_SOC_SF32LB52)
+#if defined(CONFIG_SOC_SF32LB52) && !defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
   // Last: its read can hang/fault, so do it after the essential chunks are saved.
   prv_dump_lcpu_ram(flash_base);
+#elif defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
+  // ponytail: the Zephyr port does not yet own the LCPU power-domain wake
+  // sequence, so retain the production HCPU RAM/register dump without risking
+  // a second fault while touching powered-down controller RAM.
 #endif
 
   // Write out chunk terminator
@@ -791,3 +829,10 @@ void core_dump_test_force_inf_loop(void) {
 void core_dump_test_force_assert(void) {
   s_test_force_assert = true;
 }
+
+#if defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
+void core_dump_set_fault_registers(const CoreDumpSavedRegisters *registers) {
+  s_fault_registers = *registers;
+  s_fault_registers_valid = true;
+}
+#endif

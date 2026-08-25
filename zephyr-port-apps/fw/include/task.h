@@ -2,6 +2,7 @@
 #pragma once
 
 #include "FreeRTOS.h"
+#include "portmacro.h"
 
 BaseType_t xTaskCreateRestricted(const TaskParameters_t *parameters, TaskHandle_t *handle);
 TaskHandle_t xTaskGetCurrentTaskHandle(void);

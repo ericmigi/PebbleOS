@@ -6,6 +6,16 @@ set(USER_CACHE_DIR "${CMAKE_BINARY_DIR}/.cache" CACHE PATH "Zephyr cache directo
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(pebbleos_zephyr_fw)
 
+# The SiFli HAL otherwise supplies a strong watchdog-oriented NMI handler. The
+# real PebbleOS coredump writer owns NMI in this image.
+zephyr_compile_definitions(HAL_NMI_HANLDER_OVERRIDED=1)
+# Zephyr's GNU linker defaults append --build-id=none. Override it at the end
+# of the linker target's base flags so the coredump and ELF share a real SHA-1.
+set_property(TARGET linker APPEND PROPERTY base "-Wl,--build-id=sha1")
+
+option(PEBBLE_COREDUMP_TEST_FAULT
+  "Deliberately fault once when no saved coredump exists" OFF)
+
 get_filename_component(PEBBLEOS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 string(TIMESTAMP FW_BUILD_EPOCH "%s" UTC)
 set(GFX "${PEBBLEOS_ROOT}/src/fw/applib/graphics")
@@ -43,6 +53,10 @@ target_compile_definitions(app PRIVATE
   PBL_WTF_CONTEXT=1
 )
 
+if(PEBBLE_COREDUMP_TEST_FAULT)
+  target_compile_definitions(app PRIVATE PEBBLE_COREDUMP_TEST_FAULT=1)
+endif()
+
 target_compile_options(app PRIVATE
   -include string.h
   -Wno-address-of-packed-member
@@ -52,6 +66,7 @@ target_sources(app PRIVATE
   src/app_registry.c
   src/app_registry_stubs.c
   src/button_zephyr.c
+  src/coredump_zephyr.c
   src/input_service.c
   src/launcher_ui.c
   src/ui_shims.c
@@ -85,6 +100,7 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/click.c"
   "${PEBBLEOS_ROOT}/src/fw/services/evented_timer/service.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/event_loop.c"
+  "${PEBBLEOS_ROOT}/src/fw/kernel/core_dump.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/events.c"
   "${PEBBLEOS_ROOT}/src/fw/flash_region/filesystem_regions.c"
   "${PEBBLEOS_ROOT}/src/fw/flash_region/flash_region.c"
@@ -184,6 +200,10 @@ set_source_files_properties(
 
 zephyr_linker_sources(ROM_SECTIONS
   "${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/src/sandbox_syscalls.ld"
+)
+
+zephyr_linker_sources(SECTIONS
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/coredump_build_id.ld"
 )
 
 generate_inc_file_for_target(app

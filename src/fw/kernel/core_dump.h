@@ -9,6 +9,13 @@
 
 #include <stdbool.h>
 
+#if defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
+#include "pebbleos/core_dump_structs.h"
+
+//! Supply the original Zephyr exception frame before entering the NMI writer.
+void core_dump_set_fault_registers(const CoreDumpSavedRegisters *registers);
+#endif
+
 //! NOTE: This function performs a hard reset after the core dump and never returns
 NORETURN core_dump_reset(bool is_forced);
 

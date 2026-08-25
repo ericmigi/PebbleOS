@@ -324,3 +324,14 @@ eTaskState eTaskGetState(TaskHandle_t handle) {
   ARG_UNUSED(handle);
   return eReady;
 }
+
+void vTaskListWalk(TaskListWalkCallback callback, void *context) {
+  // ponytail: walking Zephyr's global thread list from NMI context could
+  // deadlock on its object lock. The real writer still emits an exact current
+  // faulting-thread record from the ESF supplied by the fatal hook.
+  xPORT_TASK_INFO info = {
+    .pcName = pcTaskGetTaskName(k_current_get()),
+    .taskHandle = k_current_get(),
+  };
+  callback(&info, context);
+}

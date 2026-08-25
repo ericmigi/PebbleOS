@@ -21,6 +21,7 @@
 #include "pfs_boot.h"
 #include "sandbox_launcher.h"
 #include "button_input.h"
+#include "coredump_zephyr.h"
 #include "launcher_ui.h"
 
 static TimerID s_probe_timer;
@@ -85,6 +86,15 @@ static void prv_log_stubs(void) {
 int main(void) {
   PBL_LOG_ALWAYS("FW_BOOT");
   prv_log_stubs();
+
+  bool saved_coredump_present = coredump_zephyr_emit_uart();
+#if defined(PEBBLE_COREDUMP_TEST_FAULT)
+  if (!saved_coredump_present) {
+    coredump_zephyr_test_fault();
+  }
+#else
+  (void)saved_coredump_present;
+#endif
 
   events_init();
   event_service_system_init();

@@ -16,6 +16,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#if defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
+#include "coredump_zephyr.h"
+#endif
+
 #define MPU_MIN_ALIGN 32U
 #define SVC_EXC_RETURN_PSP BIT(2)
 #define SVC_EXC_RETURN_BASIC_FRAME BIT(4)
@@ -133,9 +137,13 @@ void k_sys_fatal_error_handler(unsigned int reason,
          (cfsr & SCB_CFSR_BFARVALID_Msk) != 0U, pc, lr, xpsr);
   prv_mpu_dump();
 
+#if defined(CONFIG_PEBBLE_ZEPHYR_CORE_BOOT)
+  coredump_zephyr_capture_fatal(reason, esf);
+#else
   if (reason == K_ERR_KERNEL_PANIC || k_current_get() != s_app_thread) {
     k_fatal_halt(reason);
   }
+#endif
 }
 
 static bool prv_region_contains(uint32_t rbar, uint32_t rlar, uintptr_t start,
