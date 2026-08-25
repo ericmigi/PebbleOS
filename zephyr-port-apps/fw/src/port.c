@@ -263,9 +263,6 @@ void mpu_set_task_configurable_regions(MemoryRegion_t *regions,
   memset(regions, 0, sizeof(MemoryRegion_t) * portNUM_CONFIGURABLE_REGIONS);
 }
 
-void task_watchdog_bit_set(PebbleTask task) { ARG_UNUSED(task); }
-void task_watchdog_mask_set(PebbleTask task) { ARG_UNUSED(task); }
-
 // evented_timer references this for App/Worker-targeted timers. The port only
 // registers KernelMain timers, so this path is never taken.
 bool process_manager_send_event_to_process(PebbleTask task, PebbleEvent *e) {

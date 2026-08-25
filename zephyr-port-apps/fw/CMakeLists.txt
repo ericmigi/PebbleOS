@@ -35,12 +35,14 @@ target_compile_definitions(app PRIVATE
   CONFIG_RELEASE=1
   CONFIG_TASK_TIMER_POOL_SIZE=16
   CONFIG_SERVICE_EVENT_SERVICE_LOG_LEVEL=0
+  CONFIG_SERVICE_ANALYTICS_LOG_LEVEL=0
   CONFIG_SERVICE_FILESYSTEM_LOG_LEVEL=0
   CONFIG_SERVICE_NEW_TIMER_LOG_LEVEL=0
   CONFIG_SERVICE_REGULAR_TIMER_LOG_LEVEL=0
   CONFIG_SERVICE_SYSTEM_TASK_LOG_LEVEL=0
   CONFIG_SERVICE_TICK_TIMER_LOG_LEVEL=0
   FW_BUILD_EPOCH=${FW_BUILD_EPOCH}
+  ANALYTICS_ZEPHYR=1
   PBL_WTF_CONTEXT=1
 )
 
@@ -67,6 +69,12 @@ target_sources(app PRIVATE
   src/sandbox_launcher.c
   src/system_app.c
   src/wall_clock_zephyr.c
+
+  "${PEBBLEOS_ROOT}/src/fw/board/boards/board_obelix_zephyr.c"
+  "${PEBBLEOS_ROOT}/src/fw/drivers/task_watchdog_zephyr.c"
+  "${PEBBLEOS_ROOT}/src/fw/drivers/watchdog/zephyr.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/analytics/analytics.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/analytics/zephyr.c"
 
   # Privileged built-in system apps: real PebbleOS app code launched via their
   # PebbleProcessMd through fw_system_app_launch(). Add new system apps here; see

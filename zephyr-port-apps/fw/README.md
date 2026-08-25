@@ -41,5 +41,9 @@ prefers the first visible installed app and falls back to TicToc; process loadin
 is the next slice.
 
 The boot also prints one `FW_STUB` line for each remaining intentionally
-deferred service family: board drivers, display/compositor, BLE/communications,
-and watchdog/analytics.
+deferred service family: display/compositor and BLE/communications. Obelix
+board initialization now binds the real pt2 I2C devices and performs the
+shipping legacy-accelerometer reset; mic/audio await Zephyr drivers. The real
+SF32 watchdog is fed through Pebble task check-ins, and the real analytics
+service records events into its in-RAM backend while the upload sink awaits a
+Memfault or native DLS transport.
