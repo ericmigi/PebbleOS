@@ -16,3 +16,7 @@
 time_t time_util_get_midnight_of(time_t ts);
 bool time_util_range_spans_day(time_t start, time_t end, time_t start_of_day);
 
+// Only reached for all-day/floating timeline items; notifications are neither,
+// so the shim is an identity pass-through.
+time_t time_local_to_utc(time_t local_time);
+

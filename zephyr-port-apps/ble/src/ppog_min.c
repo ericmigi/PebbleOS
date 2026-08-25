@@ -16,6 +16,8 @@
 #include <string.h>
 #include <zephyr/sys/printk.h>
 
+#include "notif_render.h"
+
 #define PPOG_TYPE_DATA 0x0
 #define PPOG_TYPE_ACK 0x1
 #define PPOG_TYPE_RESET_REQUEST 0x2
@@ -127,9 +129,14 @@ static void prv_send_system_version(uint16_t conn) {
   struct VersionsMessage m;
   memset(&m, 0, sizeof(m));
   m.command = 0x01;  // VERSION_RESPONSE
-  strncpy(m.running_fw_metadata.version_tag, "v0.0.1-zephyr",
+  // CoreApp's PebbleConnector rejects any running FW below v3.0 ("FW below v3.0
+  // isn't supported; going into recovery mode") and classifies the watch
+  // ConnectedPebbleDeviceInRecovery, which suppresses blob_db notification
+  // delivery. Report a >=3.0 running version so it classifies us a normal
+  // ConnectedPebbleDevice and forwards notifications.
+  strncpy(m.running_fw_metadata.version_tag, "v4.0.0-zephyr",
           sizeof(m.running_fw_metadata.version_tag) - 1);
-  strncpy(m.running_fw_metadata.version_short, "v0.0.1",
+  strncpy(m.running_fw_metadata.version_short, "v4.0.0",
           sizeof(m.running_fw_metadata.version_short) - 1);
   m.running_fw_metadata.flags = 0x02;      // is_ble_firmware
   m.running_fw_metadata.hw_platform = 18;  // ObelixPVT
@@ -151,10 +158,57 @@ static void prv_send_system_version(uint16_t conn) {
   strncpy(m.iso_locale, "en_US", sizeof(m.iso_locale) - 1);
   // Capabilities: run_state, log_dump, ext music, ext notification, lang_pack,
   // app_msg_8k, activity, voice, notif_filtering, unread_coredump, smooth_fw,
-  // custom_vibe, continue_fw, blob_db_version, weather_db_v4.
-  m.capabilities = 0x160C6FFULL;
+  // custom_vibe, continue_fw.
+  // NB: blob_db_version_support (bit 22, 0x400000) is intentionally CLEARED.
+  // With it set, CoreApp drives notifications over BlobDB v2 (endpoint 0xb2db)
+  // and first waits on a v2 version handshake this minimal firmware doesn't
+  // answer, so it never pushes the notification. Clearing it makes CoreApp use
+  // legacy BlobDB v1 (0xb1db), which pushes the INSERT directly -> rendered.
+  m.capabilities = 0x160C6FFULL & ~0x400000ULL;  // = 0x120C6FF
   prv_send_pp(conn, PP_ENDPOINT_SYSTEM_VERSION, (const uint8_t *)&m, sizeof(m));
   printk("BLE_PP_SYSVER_SENT len=%u\n", (unsigned int)sizeof(m));
+}
+
+// A CoreApp notification arrives as a blob_db INSERT on endpoint 0xb1db. Wire
+// layout of the payload (after the 4-byte PP header): [cmd:1][token:2][db_id:1]
+// then, for INSERT (0x01): [key_size:1][key][value_size:2 LE][value]; for
+// INSERT_WITH_TIMESTAMP (0x0D) a 4-byte timestamp sits before key_size. db_id
+// 0x04 is the notifications DB; the value is a serialized TimelineItem. Extract
+// it and hand the raw bytes to the folded PebbleOS render path.
+static void prv_handle_blob_db(uint16_t plen, const uint8_t *p) {
+  if (plen < 4) {
+    return;
+  }
+  uint8_t cmd = p[0];
+  uint8_t db_id = p[3];
+  uint16_t off = 4;  // past cmd + token(2) + db_id(1)
+  if (cmd == 0x0D) {
+    off += 4;  // INSERT_WITH_TIMESTAMP: skip the conflict-resolution timestamp
+  } else if (cmd != 0x01) {
+    printk("BLE_BLOB_SKIP cmd=0x%02x\n", cmd);
+    return;
+  }
+  if (db_id != 0x04) {  // BlobDBIdNotifs
+    printk("BLE_BLOB_OTHER_DB db=0x%02x\n", db_id);
+    return;
+  }
+  if (off + 1u > plen) {
+    return;
+  }
+  uint8_t key_size = p[off++];
+  off += key_size;  // skip the notification key (its uuid)
+  if (off + 2u > plen) {
+    return;
+  }
+  uint16_t value_size = (uint16_t)(p[off] | (p[off + 1] << 8));
+  off += 2;
+  if (off + value_size > plen) {
+    printk("BLE_BLOB_TRUNC off=%u val=%u plen=%u\n", off, value_size, plen);
+    return;
+  }
+  printk("BLE_BLOB_INSERT db=0x%02x key=%u val=%u\n", db_id, key_size,
+         value_size);
+  notif_render_blob_db_value(p + off, value_size);
 }
 
 // Reassemble the Pebble Protocol stream: [be16 length][be16 endpoint][payload].
@@ -195,6 +249,8 @@ static void prv_pp_feed(uint16_t conn, const uint8_t *data, uint16_t len) {
       memset(run_resp + 1, 0x5a, 16);
       prv_send_pp(conn, PP_ENDPOINT_APP_RUN_STATE, run_resp, sizeof(run_resp));
       printk("BLE_PP_APP_RUN_STATE_SENT\n");
+    } else if (endpoint == PP_ENDPOINT_BLOB_DB) {
+      prv_handle_blob_db(msg_len, &s_pp_buf[4]);
     }
     memmove(s_pp_buf, s_pp_buf + total, s_pp_len - total);
     s_pp_len -= total;

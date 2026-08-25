@@ -152,6 +152,18 @@ void *task_malloc(size_t size) {
   return applib_malloc(size);
 }
 
+void *task_malloc_check(size_t size) {
+  void *ptr = task_malloc(size);
+  PBL_ASSERTN(ptr);
+  return ptr;
+}
+
+// Timeline deserialize only calls this for all-day/floating items; notification
+// cards are neither, so an identity pass-through is correct here.
+time_t time_local_to_utc(time_t local_time) {
+  return local_time;
+}
+
 void *task_zalloc(size_t size) {
   return applib_zalloc(size);
 }
@@ -168,6 +180,12 @@ void task_free(void *ptr) {
 
 void *kernel_zalloc(size_t size) {
   return k_calloc(1, size);
+}
+
+void *kernel_zalloc_check(size_t size) {
+  void *ptr = kernel_zalloc(size);
+  PBL_ASSERTN(ptr);
+  return ptr;
 }
 
 void *kernel_realloc(void *ptr, size_t size) {
@@ -389,45 +407,9 @@ PreferredContentSize preferred_content_size(void) {
   return PreferredContentSizeLarge;
 }
 
-Attribute *attribute_find(const AttributeList *attr_list, AttributeId id) {
-  if (!attr_list) {
-    return NULL;
-  }
-  for (uint8_t i = 0; i < attr_list->num_attributes; ++i) {
-    if (attr_list->attributes[i].id == id) {
-      return &attr_list->attributes[i];
-    }
-  }
-  return NULL;
-}
-
-const char *attribute_get_string(const AttributeList *attr_list, AttributeId id,
-                                 char *default_value) {
-  Attribute *attribute = attribute_find(attr_list, id);
-  return attribute ? attribute->cstring : default_value;
-}
-
-StringList *attribute_get_string_list(const AttributeList *attr_list, AttributeId id) {
-  Attribute *attribute = attribute_find(attr_list, id);
-  return attribute ? attribute->string_list : NULL;
-}
-
-uint8_t attribute_get_uint8(const AttributeList *attr_list, AttributeId id,
-                            uint8_t default_value) {
-  Attribute *attribute = attribute_find(attr_list, id);
-  return attribute ? attribute->uint8 : default_value;
-}
-
-uint32_t attribute_get_uint32(const AttributeList *attr_list, AttributeId id,
-                              uint32_t default_value) {
-  Attribute *attribute = attribute_find(attr_list, id);
-  return attribute ? attribute->uint32 : default_value;
-}
-
-Uint32List *attribute_get_uint32_list(const AttributeList *attr_list, AttributeId id) {
-  Attribute *attribute = attribute_find(attr_list, id);
-  return attribute ? attribute->uint32_list : NULL;
-}
+// attribute_find / attribute_get_* now come from the real attribute.c that the
+// live-notification deserialize path pulls in; the former port stubs would
+// collide with them.
 
 size_t string_list_count(StringList *list) {
   ARG_UNUSED(list);
@@ -478,12 +460,7 @@ status_t pin_db_get(const TimelineItemId *id, TimelineItem *pin) {
   return -1;
 }
 
-void timeline_item_free_allocated_buffer(TimelineItem *item) {
-  if (item && item->allocated_buffer) {
-    kernel_free(item->allocated_buffer);
-    item->allocated_buffer = NULL;
-  }
-}
+// timeline_item_free_allocated_buffer now comes from the real item.c.
 
 bool alerts_preferences_get_notification_alternative_design(void) {
   return false;

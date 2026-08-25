@@ -2,7 +2,10 @@
 #pragma once
 
 #define LOG_DOMAIN_TEXT 0
+#define PBL_LOG_MODULE_DECLARE(...)
 #define PBL_LOG_D_DBG(domain, ...)
+#define PBL_LOG_D_ERR(domain, ...)
+#define PBL_LOG_D_WRN(domain, ...)
 #define PBL_LOG_DBG(...)
 #define PBL_LOG_WRN(...)
 #define PBL_LOG_ERR(...)

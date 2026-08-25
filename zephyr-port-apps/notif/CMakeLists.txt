@@ -38,6 +38,10 @@ target_sources(app PRIVATE
   src/render.c
 
   # PebbleOS notification card and its shared timeline/text-node machinery.
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/item.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/attributes_actions.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute_group.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_node.c"

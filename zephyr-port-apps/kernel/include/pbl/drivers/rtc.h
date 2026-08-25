@@ -12,3 +12,7 @@ typedef uint64_t RtcTicks;
 RtcTicks rtc_get_ticks(void);
 time_t rtc_get_time(void);
 void rtc_get_time_ms(time_t *seconds, uint16_t *milliseconds);
+
+// Used by timeline item deserialize for all-day/floating items only; the notif
+// render path never hits that branch, so the port provides an identity stub.
+time_t time_local_to_utc(time_t local_time);

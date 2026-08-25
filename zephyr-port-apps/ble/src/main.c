@@ -284,12 +284,13 @@ int main(void) {
   (void)k_work_schedule(&s_sync_timeout, K_SECONDS(5));
   ble_hs_sched_start();
 
-  // Phase 1: draw a real PebbleOS notification card on the panel from inside the
-  // connected BLE image, before any live delivery. Left up indefinitely (the
-  // memory-in-pixel JDI holds the last frame; no timeout/blanking).
-  printk("BLE_RENDER_DEMO_START\n");
-  notif_render_demo();
-  printk("BLE_RENDER_DEMO_DONE\n");
+  // Phase 2: nothing is drawn at boot. The panel stays blank until a real
+  // CoreApp notification is delivered over blob_db (0xb1db) and rendered from the
+  // received TimelineItem, so what's on screen is always a genuinely delivered
+  // notification, never a placeholder. notif_render_demo() remains available for
+  // standalone render bring-up but is intentionally not invoked here.
+  notif_render_init();
+  printk("BLE_NOTIF_WAIT\n");
 
   while (true) {
     k_sleep(K_SECONDS(60));

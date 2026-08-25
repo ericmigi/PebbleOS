@@ -118,10 +118,78 @@ static int notif_render_item(TimelineItem *item) {
   return 0;
 }
 
-// notif_render_blob_db_value() (Phase 2) is wired in once a real blob_db INSERT
-// is observed reaching the watch; it needs the timeline deserialize sources
-// (item.c / attributes_actions.c) folded into the build, which is deferred until
-// delivery is confirmed so Phase 1 stays a clean, dependency-light render proof.
+// Phase 2: a live CoreApp notification arrives as a blob_db INSERT whose value
+// is a serialized TimelineItem (SerializedTimelineItemHeader + payload). Parse
+// it with the real firmware deserializer and render it through the same card
+// path as the demo. Raw bytes in, so the BLE-side caller needs no pebble types.
+// Wire layout of the serialized TimelineItem header inside a blob_db value.
+// This is the canonical PebbleOS on-wire format, which uses a 4-byte timestamp.
+// It must be parsed by fixed offset, NOT by casting to SerializedTimelineItemHeader:
+// this port's time_t is 8 bytes, so the C struct is 4 bytes larger than the wire
+// and every field past the timestamp would be misread.
+#define WIRE_OFF_ID          0   // Uuid, 16 bytes
+#define WIRE_OFF_PARENT      16  // Uuid, 16 bytes
+#define WIRE_OFF_TIMESTAMP   32  // uint32 LE
+#define WIRE_OFF_DURATION    36  // uint16 LE
+#define WIRE_OFF_TYPE        38  // uint8
+#define WIRE_OFF_FLAGS       39  // uint8
+#define WIRE_OFF_STATUS      40  // uint8
+#define WIRE_OFF_LAYOUT      41  // uint8
+#define WIRE_OFF_PAYLOAD_LEN 42  // uint16 LE
+#define WIRE_OFF_NUM_ATTR    44  // uint8
+#define WIRE_OFF_NUM_ACTIONS 45  // uint8
+#define WIRE_HDR_SIZE        46
+
+static uint16_t prv_rd16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
+static uint32_t prv_rd32(const uint8_t *p) {
+  return (uint32_t)(p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24));
+}
+
+int notif_render_blob_db_value(const uint8_t *value, uint16_t value_len) {
+  if (value_len < WIRE_HDR_SIZE) {
+    printk("NOTIF_BLOB_SHORT len=%u\n", (unsigned)value_len);
+    return -EINVAL;
+  }
+  const uint16_t payload_length = prv_rd16(value + WIRE_OFF_PAYLOAD_LEN);
+  if ((uint32_t)WIRE_HDR_SIZE + payload_length > value_len) {
+    printk("NOTIF_BLOB_BADLEN payload=%u val=%u\n", (unsigned)payload_length,
+           (unsigned)value_len);
+    return -EINVAL;
+  }
+
+  // Rebuild the header into this build's native struct so the shared firmware
+  // deserializer reads correct field values regardless of time_t width.
+  SerializedTimelineItemHeader header;
+  memset(&header, 0, sizeof(header));
+  memcpy(&header.common.id, value + WIRE_OFF_ID, sizeof(Uuid));
+  memcpy(&header.common.parent_id, value + WIRE_OFF_PARENT, sizeof(Uuid));
+  header.common.timestamp = (time_t)prv_rd32(value + WIRE_OFF_TIMESTAMP);
+  header.common.duration = prv_rd16(value + WIRE_OFF_DURATION);
+  header.common.type = value[WIRE_OFF_TYPE];
+  header.common.flags = value[WIRE_OFF_FLAGS];
+  header.common.status = value[WIRE_OFF_STATUS];
+  header.common.layout = value[WIRE_OFF_LAYOUT];
+  header.payload_length = payload_length;
+  header.num_attributes = value[WIRE_OFF_NUM_ATTR];
+  header.num_actions = value[WIRE_OFF_NUM_ACTIONS];
+  const uint8_t *payload = value + WIRE_HDR_SIZE;
+
+  printk("NOTIF_BLOB attrs=%u actions=%u payload=%u\n",
+         (unsigned)header.num_attributes, (unsigned)header.num_actions,
+         (unsigned)header.payload_length);
+
+  TimelineItem item;
+  if (!timeline_item_deserialize_item(&item, &header, payload)) {
+    printk("NOTIF_BLOB_DESERIALIZE_FAIL\n");
+    return -EINVAL;
+  }
+  // A notification card is always the notification layout regardless of what the
+  // wire header carried.
+  item.header.layout = LayoutIdNotification;
+  int ret = notif_render_item(&item);
+  timeline_item_free_allocated_buffer(&item);
+  return ret;
+}
 
 void notif_render_demo(void) {
   static char s_app_name[] = "CoreApp";
