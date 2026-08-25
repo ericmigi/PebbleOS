@@ -33,7 +33,40 @@ static uint8_t s_tx_sn;   // our PPoGATT Data sequence number
 static bool s_session_open;
 
 // Pebble Protocol endpoints we care about for the demo.
-#define PP_ENDPOINT_PHONE_VERSION 0x0011
+#define PP_ENDPOINT_SYSTEM_VERSION 0x0010  // phone asks watch's version
+#define PP_ENDPOINT_PHONE_VERSION 0x0011   // watch asks phone's version
+#define PP_ENDPOINT_FACTORY_REGISTRY 0x1389  // phone reads mfg_color
+#define PP_ENDPOINT_APP_RUN_STATE 0x0034   // phone asks running app (STATUS)
+#define PP_ENDPOINT_BLOB_DB 0xb1db         // notifications (blob_db insert)
+
+// Wire layout of the watch's system-version (0x0010) response, mirrored from
+// src/fw/kernel/system_versions.c (struct VersionsMessage) + its sub-structs.
+struct __attribute__((__packed__)) FwMeta {
+  uint32_t version_timestamp;
+  char version_tag[32];
+  char version_short[8];
+  uint8_t flags;  // is_recovery/ble/dual/slot0 bitfield + reserved
+  uint8_t hw_platform;
+  uint8_t metadata_version;
+};
+
+struct __attribute__((__packed__)) VersionsMessage {
+  uint8_t command;
+  struct FwMeta running_fw_metadata;
+  struct FwMeta recovery_fw_metadata;
+  uint32_t boot_version;
+  char hw_version[9];
+  char serial_number[12];
+  uint8_t device_address[6];
+  uint32_t resources_crc;
+  uint32_t resources_timestamp;
+  char iso_locale[6];
+  uint16_t lang_version;
+  uint64_t capabilities;
+  uint8_t is_unfaithful;
+  uint16_t activity_insights_version;
+  uint16_t javascript_bytecode_version;
+};
 
 static void prv_send(uint16_t conn, uint8_t type, uint8_t sn, const uint8_t *pl,
                      uint16_t pl_len) {
@@ -55,7 +88,7 @@ static void prv_send(uint16_t conn, uint8_t type, uint8_t sn, const uint8_t *pl,
 // PP framing: [be16 length][be16 endpoint][payload]; PPoGATT: [type|sn<<3] + PP.
 static void prv_send_pp(uint16_t conn, uint16_t endpoint, const uint8_t *payload,
                         uint16_t payload_len) {
-  uint8_t pkt[32];
+  uint8_t pkt[260];
   if (1U + 4U + payload_len > sizeof(pkt)) {
     return;
   }
@@ -88,8 +121,31 @@ static void prv_session_opened(uint16_t conn) {
   printk("BLE_PP_SESSION_OPEN sent phone-version request\n");
 }
 
+// Reply to the phone's system-version request (endpoint 0x0010) with a valid
+// VersionsMessage so CoreApp marks the watch ready and starts sending data.
+static void prv_send_system_version(uint16_t conn) {
+  struct VersionsMessage m;
+  memset(&m, 0, sizeof(m));
+  m.command = 0x01;  // VERSION_RESPONSE
+  strncpy(m.running_fw_metadata.version_tag, "v0.0.1-zephyr",
+          sizeof(m.running_fw_metadata.version_tag) - 1);
+  strncpy(m.running_fw_metadata.version_short, "v0.0.1",
+          sizeof(m.running_fw_metadata.version_short) - 1);
+  m.running_fw_metadata.flags = 0x02;      // is_ble_firmware
+  m.running_fw_metadata.hw_platform = 18;  // ObelixPVT
+  m.running_fw_metadata.metadata_version = 1;
+  strncpy(m.hw_version, "obelix", sizeof(m.hw_version) - 1);
+  strncpy(m.iso_locale, "en_US", sizeof(m.iso_locale) - 1);
+  // Capabilities: run_state, log_dump, ext music, ext notification, lang_pack,
+  // app_msg_8k, activity, voice, notif_filtering, unread_coredump, smooth_fw,
+  // custom_vibe, continue_fw, blob_db_version, weather_db_v4.
+  m.capabilities = 0x160C6FFULL;
+  prv_send_pp(conn, PP_ENDPOINT_SYSTEM_VERSION, (const uint8_t *)&m, sizeof(m));
+  printk("BLE_PP_SYSVER_SENT len=%u\n", (unsigned int)sizeof(m));
+}
+
 // Reassemble the Pebble Protocol stream: [be16 length][be16 endpoint][payload].
-static void prv_pp_feed(const uint8_t *data, uint16_t len) {
+static void prv_pp_feed(uint16_t conn, const uint8_t *data, uint16_t len) {
   if (s_pp_len + len > sizeof(s_pp_buf)) {
     s_pp_len = 0;  // overflow guard; resync
     return;
@@ -107,6 +163,23 @@ static void prv_pp_feed(const uint8_t *data, uint16_t len) {
     printk("BLE_PP_MSG endpoint=0x%04x len=%u b0=%02x b1=%02x\n", endpoint,
            msg_len, msg_len > 0 ? s_pp_buf[4] : 0,
            msg_len > 1 ? s_pp_buf[5] : 0);
+    if (endpoint == PP_ENDPOINT_SYSTEM_VERSION && msg_len >= 1 &&
+        s_pp_buf[4] == 0x00) {
+      prv_send_system_version(conn);
+    } else if (endpoint == PP_ENDPOINT_FACTORY_REGISTRY && msg_len >= 1 &&
+               s_pp_buf[4] == 0x00) {
+      // Read of "mfg_color": reply {0x01, len=4, 0,0,0, color}.
+      const uint8_t color_resp[6] = {0x01, 0x04, 0x00, 0x00, 0x00, 0x01};
+      prv_send_pp(conn, PP_ENDPOINT_FACTORY_REGISTRY, color_resp,
+                  sizeof(color_resp));
+      printk("BLE_PP_FACTORY_COLOR_SENT\n");
+    } else if (endpoint == PP_ENDPOINT_APP_RUN_STATE && msg_len >= 1 &&
+               s_pp_buf[4] == 0x03) {
+      // STATUS request: reply {state=RUNNING(0x01), 16-byte uuid} (zero uuid).
+      uint8_t run_resp[17] = {0x01};
+      prv_send_pp(conn, PP_ENDPOINT_APP_RUN_STATE, run_resp, sizeof(run_resp));
+      printk("BLE_PP_APP_RUN_STATE_SENT\n");
+    }
     memmove(s_pp_buf, s_pp_buf + total, s_pp_len - total);
     s_pp_len -= total;
   }
@@ -154,7 +227,7 @@ void bt_driver_cb_ppog_reversed_data_written(uint16_t conn_handle, uint8_t *buf,
       prv_session_opened(conn_handle);
       break;
     case PPOG_TYPE_DATA:
-      prv_pp_feed(buf + 1, len - 1);
+      prv_pp_feed(conn_handle, buf + 1, len - 1);
       prv_send(conn_handle, PPOG_TYPE_ACK, sn, NULL, 0);
       break;
     case PPOG_TYPE_ACK:
