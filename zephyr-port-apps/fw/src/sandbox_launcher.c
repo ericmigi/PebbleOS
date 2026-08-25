@@ -38,6 +38,7 @@ static const struct device *const s_display =
 static const uint8_t *s_framebuffer;
 static struct display_buffer_descriptor s_display_desc;
 static bool s_display_ready;
+static bool s_app_active;
 
 static bool prv_range_fits(size_t offset, size_t size, size_t limit) {
   return offset <= limit && size <= limit - offset;
@@ -223,5 +224,18 @@ bool fw_sandbox_launch(void) {
   pebble_task_register(PebbleTask_App, &s_app_thread);
   sandbox_arm();
   k_thread_start(&s_app_thread);
+  s_app_active = true;
   return true;
+}
+
+void fw_sandbox_exit(void) {
+  if (!s_app_active) {
+    return;
+  }
+
+  k_thread_abort(&s_app_thread);
+  sandbox_disarm();
+  pebble_task_unregister(PebbleTask_App);
+  s_app_active = false;
+  printk("SANDBOX_EXIT\n");
 }

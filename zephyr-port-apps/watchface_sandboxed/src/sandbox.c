@@ -345,6 +345,12 @@ void sandbox_arm(void) {
   atomic_set(&s_sandbox_ready, 1);
 }
 
+void sandbox_disarm(void) {
+  atomic_clear(&s_sandbox_ready);
+  atomic_clear(&s_syscall_active);
+  s_app_thread = NULL;
+}
+
 bool sandbox_prepare(struct k_thread *app_thread, uintptr_t stack_start,
                      size_t stack_size) {
   const uint8_t regions =
