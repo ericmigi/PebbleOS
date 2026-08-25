@@ -16,6 +16,7 @@
 #include <string.h>
 #include <zephyr/sys/printk.h>
 
+#include "fw_ota.h"
 #include "notif_render.h"
 
 #define PPOG_TYPE_DATA 0x0
@@ -29,7 +30,9 @@
 
 #define PPOG_WINDOW 4
 
-static uint8_t s_pp_buf[1024];
+// Sized to reassemble a full PutBytes Put request (2044 data bytes + a 9-byte
+// PutRequest header) with headroom, so firmware chunks don't overflow.
+static uint8_t s_pp_buf[2560];
 static uint16_t s_pp_len;
 static uint8_t s_tx_sn;   // our PPoGATT Data sequence number
 static bool s_session_open;
@@ -40,6 +43,8 @@ static bool s_session_open;
 #define PP_ENDPOINT_FACTORY_REGISTRY 0x1389  // phone reads mfg_color
 #define PP_ENDPOINT_APP_RUN_STATE 0x0034   // phone asks running app (STATUS)
 #define PP_ENDPOINT_BLOB_DB 0xb1db         // notifications (blob_db insert)
+#define PP_ENDPOINT_SYSTEM_MESSAGE 0x0012  // FW update start/status/complete
+#define PP_ENDPOINT_PUT_BYTES 0xBEEF       // PutBytes object transfer
 
 // Wire layout of the watch's system-version (0x0010) response, mirrored from
 // src/fw/kernel/system_versions.c (struct VersionsMessage) + its sub-structs.
@@ -106,6 +111,13 @@ static void prv_send_pp(uint16_t conn, uint16_t endpoint, const uint8_t *payload
   printk("BLE_PP_TX endpoint=0x%04x sn=%u len=%u rc=%d\n", endpoint, s_tx_sn,
          payload_len, (int)rc);
   s_tx_sn = (s_tx_sn + 1) & 0x1F;
+}
+
+// Exposed to putbytes_min.c so the FW-update receive path can send its ACK/NACK
+// and system-message responses over the shared PPoGATT link.
+void ppog_min_send_pp(uint16_t conn, uint16_t endpoint, const uint8_t *payload,
+                      uint16_t payload_len) {
+  prv_send_pp(conn, endpoint, payload, payload_len);
 }
 
 // After the PPoGATT session opens, the watch drives the app-layer handshake by
@@ -251,6 +263,10 @@ static void prv_pp_feed(uint16_t conn, const uint8_t *data, uint16_t len) {
       printk("BLE_PP_APP_RUN_STATE_SENT\n");
     } else if (endpoint == PP_ENDPOINT_BLOB_DB) {
       prv_handle_blob_db(msg_len, &s_pp_buf[4]);
+    } else if (endpoint == PP_ENDPOINT_SYSTEM_MESSAGE) {
+      fw_ota_handle_system_msg(conn, &s_pp_buf[4], msg_len);
+    } else if (endpoint == PP_ENDPOINT_PUT_BYTES) {
+      fw_ota_handle_putbytes(conn, &s_pp_buf[4], msg_len);
     }
     memmove(s_pp_buf, s_pp_buf + total, s_pp_len - total);
     s_pp_len -= total;

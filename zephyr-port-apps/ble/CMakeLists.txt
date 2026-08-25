@@ -120,8 +120,11 @@ target_sources(app PRIVATE
   src/main.c
   src/mbedtls_alloc.c
   src/ppog_min.c
+  src/putbytes_min.c
   src/ram_store.c
   src/sifli_lrc_glue.c
+  # Real PebbleOS legacy commit checksum (self-contained, no fw deps).
+  "${PEBBLEOS_ROOT}/src/fw/util/legacy_checksum.c"
   "${PEBBLEOS_ROOT}/lib/os/mutex_zephyr.c"
   "${PEBBLEOS_ROOT}/lib/os/platform_zephyr.c"
   "${PEBBLEOS_ROOT}/lib/os/semaphore_zephyr.c"
