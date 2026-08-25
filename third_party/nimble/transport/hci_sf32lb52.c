@@ -594,13 +594,14 @@ void ble_transport_ll_reinit(void) {
   lcpu_custom_nvds_config();
 #ifdef __ZEPHYR__
   printk("BLE_LCPU_CFG_OK\n");
-  /* Zero the rev_b RX ring control (0x20402800) before releasing the LCPU. Per
-   * ipc_queue.c the SENDER (the LCPU) initializes this ring; the HCPU never
-   * does. So if the LCPU is actually executing its BLE/IPC init, it will
-   * populate a clean control here (rd_buf=addr+0x14, size=492). If it stays
-   * zero post-boot the LCPU never ran its stack. Decisive execution probe. */
-  memset((void *)(uintptr_t)s_rx_ring_addr, 0, 0x20);
-  printk("BLE_RXRING_ZEROED addr=0x%08x\n", (unsigned int)s_rx_ring_addr);
+  /* Do NOT touch the rev_b RX ring control at 0x20402800 here. On rev_b the
+   * whole LPSYS RAM is only 11KB (0x20400000..0x20402BFF) and this ring sits in
+   * its top 1KB, which the LCPU ROM/patch owns and initializes itself (per
+   * ipc_queue.c the receiver never inits the ring; the sender does). A former
+   * diagnostic zeroed 0x20 bytes here as an "LCPU execution probe"; it was inert
+   * only because the HCPU D-cache swallowed the write. Once CONFIG_DCACHE=n made
+   * HCPU writes reach LPSYS RAM, that memset corrupted LCPU boot RAM and
+   * lcpu_power_on() hung before release -> persistent BLE_RXRING_ZEROED stall. */
 #endif
   ret = lcpu_power_on();
   if (ret != 0) {
