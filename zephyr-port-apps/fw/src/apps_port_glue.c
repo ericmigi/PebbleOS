@@ -89,7 +89,9 @@ UnitsDistance shell_prefs_get_units_distance(void) { return s_units_distance; }
 void shell_prefs_set_units_distance(UnitsDistance unit) { s_units_distance = unit; }
 
 GColor shell_prefs_get_theme_highlight_color(void) {
-  return PBL_IF_COLOR_ELSE(GColorJazzberryJam, GColorBlack);
+  // Match shipping PebbleOS: the default menu selection accent is Vivid Cerulean
+  // (teal), not Jazzberry Jam (magenta). See shell/normal/prefs.c.
+  return PBL_IF_COLOR_ELSE(GColorVividCerulean, GColorBlack);
 }
 
 bool shell_prefs_get_menu_scroll_wrap_around_enable(void) { return false; }
