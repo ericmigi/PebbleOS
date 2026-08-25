@@ -9,6 +9,8 @@ project(pebbleos_zephyr_fw)
 get_filename_component(PEBBLEOS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 string(TIMESTAMP FW_BUILD_EPOCH "%s" UTC)
 set(GFX "${PEBBLEOS_ROOT}/src/fw/applib/graphics")
+set(SIFLI "${PEBBLEOS_ROOT}/third_party/hal_sifli")
+set(SIFLI_SDK "${SIFLI}/SiFli-SDK")
 
 target_include_directories(app PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -21,6 +23,16 @@ target_include_directories(app PRIVATE
   "${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/include"
   "${PEBBLEOS_ROOT}/zephyr-port-apps/gfx/include"
   "${CMAKE_BINARY_DIR}/include/generated"
+
+  # SiFli HAL + CMSIS, for the shipping QSPI flash driver (src/fw/drivers/*).
+  "${PEBBLEOS_ROOT}/include/pbl"
+  "${SIFLI}/sf32lb52"
+  "${SIFLI_SDK}/drivers/Include"
+  "${SIFLI_SDK}/drivers/cmsis/Include"
+  "${SIFLI_SDK}/drivers/cmsis/sf32lb52x"
+  "${SIFLI_SDK}/external/CMSIS/Include"
+  "${SIFLI_SDK}/customer/boards/include"
+  "${SIFLI_SDK}/middleware/include"
 )
 
 target_compile_definitions(app PRIVATE
@@ -44,6 +56,13 @@ target_compile_definitions(app PRIVATE
   FW_BUILD_EPOCH=${FW_BUILD_EPOCH}
   ANALYTICS_ZEPHYR=1
   PBL_WTF_CONTEXT=1
+
+  # SiFli HAL configuration for the shipping QSPI flash driver.
+  USE_HAL_DRIVER
+  SOC_BF0_HCPU
+  SF32LB52X
+  SF32LB52X_REV_AUTO
+  HAL_TICK_PER_SECOND=1024
 )
 
 target_compile_options(app PRIVATE
@@ -62,6 +81,7 @@ target_sources(app PRIVATE
   src/launcher_ui.c
   src/ui_shims.c
   src/flash_shim.c
+  src/qspi_board.c
   src/freertos_compat.c
   src/main.c
   src/pfs_boot.c
@@ -115,6 +135,17 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/kernel/events.c"
   "${PEBBLEOS_ROOT}/src/fw/flash_region/filesystem_regions.c"
   "${PEBBLEOS_ROOT}/src/fw/flash_region/flash_region.c"
+
+  # Shipping PebbleOS flash stack (flash_impl_* over the SiFli QSPI HAL). Same
+  # driver obelix ships, replacing the Zephyr flash driver that could not persist
+  # writes/erases at the filesystem region offset.
+  "${PEBBLEOS_ROOT}/src/fw/drivers/flash/gd25q256e.c"
+  "${PEBBLEOS_ROOT}/src/fw/drivers/sf32lb52/qspi.c"
+  "${PEBBLEOS_ROOT}/lib/os/mcu/cache_arm.c"
+  "${SIFLI_SDK}/drivers/hal/bf0_hal_mpi.c"
+  "${SIFLI_SDK}/drivers/hal/bf0_hal_mpi_ex.c"
+  "${SIFLI_SDK}/drivers/hal/bf0_hal_dma.c"
+  "${SIFLI_SDK}/drivers/hal/flash_table.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/pebble_tasks.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/task_timer.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/util/task_init.c"
@@ -227,6 +258,27 @@ set_source_files_properties(
   "${CMAKE_CURRENT_SOURCE_DIR}/src/ui_shims.c"
   PROPERTIES COMPILE_OPTIONS
     "-include;${FW_GRAPHICS_APP_STATE};-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/gfx/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/include"
+)
+
+# The shipping QSPI flash sources + the port's qspi_board.c need the SiFli HAL
+# umbrella included first (include-order), the Zephyr/Pebble sign_extend fix, the
+# board QSPI externs, and the FreeRTOS-style critical-section shim. flash_port_pre.h
+# provides all of that; force-include it ahead of each of these translation units.
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/drivers/flash/gd25q256e.c"
+  "${PEBBLEOS_ROOT}/src/fw/drivers/sf32lb52/qspi.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/qspi_board.c"
+  PROPERTIES COMPILE_OPTIONS "-include;flash_port_pre.h;-Wno-unused-function"
+)
+
+# SiFli HAL sources: quiet the vendor code's warnings so it builds under the
+# app's stricter flags.
+set_source_files_properties(
+  "${SIFLI_SDK}/drivers/hal/bf0_hal_mpi.c"
+  "${SIFLI_SDK}/drivers/hal/bf0_hal_mpi_ex.c"
+  "${SIFLI_SDK}/drivers/hal/bf0_hal_dma.c"
+  "${SIFLI_SDK}/drivers/hal/flash_table.c"
+  PROPERTIES COMPILE_OPTIONS "-Wno-unused-variable;-Wno-unused-function;-Wno-sign-compare;-Wno-pointer-arith;-Wno-old-style-declaration"
 )
 
 zephyr_linker_sources(ROM_SECTIONS

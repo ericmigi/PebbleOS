@@ -1,23 +1,23 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
+// PFS flash seam for the Zephyr fw app. Routes the filesystem's
+// flash_read_bytes / flash_write_bytes / flash_erase_* calls through the
+// shipping PebbleOS flash stack (flash_impl_* -> src/fw/drivers/flash/gd25q256e.c
+// -> src/fw/drivers/sf32lb52/qspi.c -> SiFli QSPI HAL), which is the driver that
+// provably erases/writes/reads the filesystem region on obelix. The previous
+// implementation went through the Zephyr flash driver, which silently failed to
+// persist writes/erases at the filesystem region device offset (~30MB), so
+// pfs_format() never produced a valid filesystem.
+
 #include "pfs_flash_shim.h"
 
-#include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
 
-#include <zephyr/device.h>
-#include <zephyr/devicetree.h>
-#include <zephyr/drivers/flash.h>
-
+#include <pbl/drivers/flash/flash_impl.h>
 #include "flash_region/flash_region.h"
 #include "system/passert.h"
-
-#define PFS_FLASH_NODE DT_NODELABEL(mpi2)
-
-#define PFS_DEVICE_OFFSET(address) ((address) - FLASH_REGION_BASE_ADDRESS)
-
-static const struct device *const s_flash = DEVICE_DT_GET(PFS_FLASH_NODE);
+#include "system/status_codes.h"
 
 void pfs_port_panic(const char *file, int line, const char *format, ...)
     __attribute__((noreturn, format(printf, 3, 4)));
@@ -31,58 +31,62 @@ static void prv_check_range(uint32_t address, size_t size, const char *operation
   }
 }
 
-static void prv_check_result(const char *operation, int result) {
-  if (result != 0) {
-    pfs_port_panic(__FILE__, __LINE__, "%s failed: %d", operation, result);
-  }
-}
-
 int pfs_flash_shim_init(void) {
-  if (!device_is_ready(s_flash)) {
-    return -ENODEV;
-  }
-
-  uint64_t flash_size;
-  int result = flash_get_size(s_flash, &flash_size);
-  if (result != 0) {
-    return result;
-  }
-
-  if (PFS_DEVICE_OFFSET(FLASH_REGION_FILESYSTEM_END) > flash_size) {
-    return -ERANGE;
-  }
-
+  // Populate the flash handle from the running controller. Do NOT call
+  // flash_impl_init() -> HAL_FLASH_Init(): re-initializing the live XIP
+  // controller corrupts fetch from this flash. See qspi_board_flash_init().
+  qspi_board_flash_init();
   return 0;
 }
 
-void flash_read_bytes(uint8_t *buffer, uint32_t start_addr,
-                      uint32_t buffer_size) {
+void flash_read_bytes(uint8_t *buffer, uint32_t start_addr, uint32_t buffer_size) {
   prv_check_range(start_addr, buffer_size, "flash_read");
-  prv_check_result("flash_read",
-                   flash_read(s_flash, PFS_DEVICE_OFFSET(start_addr), buffer,
-                              buffer_size));
+  status_t status = flash_impl_read_sync(buffer, start_addr, buffer_size);
+  if (FAILED(status)) {
+    pfs_port_panic(__FILE__, __LINE__, "flash_read failed: %d", (int)status);
+  }
 }
 
-void flash_write_bytes(const uint8_t *buffer, uint32_t start_addr,
-                       uint32_t buffer_size) {
+void flash_write_bytes(const uint8_t *buffer, uint32_t start_addr, uint32_t buffer_size) {
   prv_check_range(start_addr, buffer_size, "flash_write");
-  prv_check_result("flash_write",
-                   flash_write(s_flash, PFS_DEVICE_OFFSET(start_addr), buffer,
-                               buffer_size));
+  while (buffer_size > 0) {
+    int written = flash_impl_write_page_begin(buffer, start_addr, buffer_size);
+    if (written < 0) {
+      pfs_port_panic(__FILE__, __LINE__, "flash_write begin failed: %d", written);
+    }
+    status_t status;
+    while ((status = flash_impl_get_write_status()) == E_BUSY) {
+    }
+    if (FAILED(status)) {
+      pfs_port_panic(__FILE__, __LINE__, "flash_write status: %d", (int)status);
+    }
+    buffer += written;
+    start_addr += written;
+    buffer_size -= written;
+  }
+}
+
+static void prv_erase_blocking(uint32_t addr, bool is_subsector, const char *operation) {
+  status_t status = is_subsector ? flash_impl_erase_subsector_begin(addr)
+                                 : flash_impl_erase_sector_begin(addr);
+  if (FAILED(status)) {
+    pfs_port_panic(__FILE__, __LINE__, "%s begin failed: %d", operation, (int)status);
+  }
+  while ((status = flash_impl_get_erase_status()) == E_BUSY) {
+  }
+  if (FAILED(status)) {
+    pfs_port_panic(__FILE__, __LINE__, "%s status: %d", operation, (int)status);
+  }
 }
 
 void flash_erase_subsector_blocking(uint32_t subsector_addr) {
   PBL_ASSERTN((subsector_addr & (SUBSECTOR_SIZE_BYTES - 1u)) == 0);
   prv_check_range(subsector_addr, SUBSECTOR_SIZE_BYTES, "flash_erase_4k");
-  prv_check_result("flash_erase_4k",
-                   flash_erase(s_flash, PFS_DEVICE_OFFSET(subsector_addr),
-                               SUBSECTOR_SIZE_BYTES));
+  prv_erase_blocking(subsector_addr, true /* is_subsector */, "flash_erase_4k");
 }
 
 void flash_erase_sector_blocking(uint32_t sector_addr) {
   PBL_ASSERTN((sector_addr & (SECTOR_SIZE_BYTES - 1u)) == 0);
   prv_check_range(sector_addr, SECTOR_SIZE_BYTES, "flash_erase_64k");
-  prv_check_result("flash_erase_64k",
-                   flash_erase(s_flash, PFS_DEVICE_OFFSET(sector_addr),
-                               SECTOR_SIZE_BYTES));
+  prv_erase_blocking(sector_addr, false /* !is_subsector */, "flash_erase_64k");
 }
