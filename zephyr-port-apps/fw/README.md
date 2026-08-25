@@ -25,6 +25,12 @@ FW_PFS_UP
 FW_REGISTRY_UP
 FW_APP_COUNT <count>
 FW_APP <uuid-or-id> <name>
+FW_BLE_INIT
+FW_BLE_CONTROLLER_UP
+FW_BLE_ADV
+FW_BLE_CONNECTED handle=<handle>
+FW_BLE_PAIRED handle=<handle>
+FW_BLE_PPOG_UP handle=<handle>
 FW_EVENT_LOOP_UP
 FW_TICK HH:MM:SS
 FW_TIMER dispatched
@@ -67,10 +73,13 @@ default-enabled normal-shell system app list. The minimal launcher selection
 prefers the first visible installed app and falls back to TicToc; process loading
 is the next slice.
 
-The boot also prints one `FW_STUB` line for each remaining intentionally
-deferred service family: display/compositor and BLE/communications. Obelix
-board initialization now binds the real pt2 I2C devices and performs the
-shipping legacy-accelerometer reset; mic/audio await Zephyr drivers. The real
-SF32 watchdog is fed through Pebble task check-ins, and the real analytics
-service records events into its in-RAM backend while the upload sink awaits a
-Memfault or native DLS transport.
+The unified image starts the NimBLE host and SF32 LCPU controller after PFS and
+board initialization. It advertises the reversed PPoGATT and pairing services,
+uses a RAM-only bond store, and brings up a minimal Pebble Protocol endpoint
+router. Persistent PRF bond loading, the full comm-session transport, and BLE
+OTA/putbytes remain deferred. The remaining `FW_STUB` boot marker is the display
+compositor. Obelix board initialization now binds the real pt2 I2C devices and
+performs the shipping legacy-accelerometer reset; mic/audio await Zephyr
+drivers. The real SF32 watchdog is fed through Pebble task check-ins, and the
+real analytics service records events into its in-RAM backend while the upload
+sink awaits a Memfault or native DLS transport.
