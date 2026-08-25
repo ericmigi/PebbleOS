@@ -35,6 +35,7 @@ target_compile_options(app PRIVATE
 target_sources(app PRIVATE
   src/main.c
   src/port.c
+  src/render.c
 
   # PebbleOS notification card and its shared timeline/text-node machinery.
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"

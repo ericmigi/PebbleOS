@@ -25,6 +25,8 @@
 #include <services/gap/ble_svc_gap.h>
 #include <services/gatt/ble_svc_gatt.h>
 
+#include "notif_render.h"
+
 #define HOST_STACK_SIZE 6144
 #define HOST_PRIORITY 3
 
@@ -281,6 +283,13 @@ int main(void) {
   k_work_init_delayable(&s_sync_timeout, prv_sync_timeout);
   (void)k_work_schedule(&s_sync_timeout, K_SECONDS(5));
   ble_hs_sched_start();
+
+  // Phase 1: draw a real PebbleOS notification card on the panel from inside the
+  // connected BLE image, before any live delivery. Left up indefinitely (the
+  // memory-in-pixel JDI holds the last frame; no timeout/blanking).
+  printk("BLE_RENDER_DEMO_START\n");
+  notif_render_demo();
+  printk("BLE_RENDER_DEMO_DONE\n");
 
   while (true) {
     k_sleep(K_SECONDS(60));
