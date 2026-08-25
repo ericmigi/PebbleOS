@@ -8,6 +8,7 @@
 #include "applib/tick_timer_service.h"
 #include "applib/tick_timer_service_private.h"
 #include "button_input.h"
+#include "fw_ota_boot.h"
 #include "kernel/event_loop.h"
 #include "kernel/events.h"
 #include "kernel/kernel_applib_state.h"
@@ -118,6 +119,11 @@ static void prv_log_stubs(void) {
 int main(void) {
   PBL_LOG_ALWAYS("FW_BOOT");
   board_early_init();
+  fw_boot_select_and_report();
+  if (fw_ota_test_injection_requested() &&
+      (fw_ota_inject_test_image() != 0)) {
+    PBL_LOG_ALWAYS("FW_OTA_TEST_FAILED");
+  }
   prv_log_stubs();
 
   events_init();

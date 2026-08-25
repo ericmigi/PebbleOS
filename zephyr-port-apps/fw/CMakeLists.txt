@@ -6,6 +6,8 @@ set(USER_CACHE_DIR "${CMAKE_BINARY_DIR}/.cache" CACHE PATH "Zephyr cache directo
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(pebbleos_zephyr_fw)
 
+option(FW_OTA_TEST_INJECT "Write a non-executable OTA test image at boot" OFF)
+
 get_filename_component(PEBBLEOS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 string(TIMESTAMP FW_BUILD_EPOCH "%s" UTC)
 set(GFX "${PEBBLEOS_ROOT}/src/fw/applib/graphics")
@@ -46,6 +48,10 @@ target_compile_definitions(app PRIVATE
   PBL_WTF_CONTEXT=1
 )
 
+if(FW_OTA_TEST_INJECT)
+  target_compile_definitions(app PRIVATE FW_OTA_TEST_INJECT=1)
+endif()
+
 target_compile_options(app PRIVATE
   -include string.h
   -Wno-address-of-packed-member
@@ -63,6 +69,7 @@ target_sources(app PRIVATE
   src/ui_shims.c
   src/flash_shim.c
   src/freertos_compat.c
+  src/fw_ota_boot.c
   src/main.c
   src/pfs_boot.c
   src/port.c
@@ -115,6 +122,7 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/kernel/events.c"
   "${PEBBLEOS_ROOT}/src/fw/flash_region/filesystem_regions.c"
   "${PEBBLEOS_ROOT}/src/fw/flash_region/flash_region.c"
+  "${PEBBLEOS_ROOT}/src/fw/drivers/flash/flash_crc.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/pebble_tasks.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/task_timer.c"
   "${PEBBLEOS_ROOT}/src/fw/kernel/util/task_init.c"
@@ -129,6 +137,7 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/services/settings/settings_raw_iter.c"
   "${PEBBLEOS_ROOT}/src/fw/services/system_task/service.c"
   "${PEBBLEOS_ROOT}/src/fw/services/tick_timer/service.c"
+  "${PEBBLEOS_ROOT}/src/fw/system/firmware_storage.c"
   "${PEBBLEOS_ROOT}/src/fw/util/crc8.c"
   "${PEBBLEOS_ROOT}/src/fw/util/legacy_checksum.c"
 

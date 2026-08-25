@@ -22,10 +22,24 @@ static const struct device *const s_flash = DEVICE_DT_GET(PFS_FLASH_NODE);
 void pfs_port_panic(const char *file, int line, const char *format, ...)
     __attribute__((noreturn, format(printf, 3, 4)));
 
-static void prv_check_range(uint32_t address, size_t size, const char *operation) {
-  if ((address < FLASH_REGION_FILESYSTEM_BEGIN) ||
-      (address > FLASH_REGION_FILESYSTEM_END) ||
-      (size > (FLASH_REGION_FILESYSTEM_END - address))) {
+static bool prv_range_is_within(uint32_t address, size_t size, uint32_t begin,
+                                uint32_t end) {
+  return (address >= begin) && (address <= end) && (size <= (end - address));
+}
+
+static void prv_check_range(uint32_t address, size_t size,
+                            const char *operation) {
+  const bool allowed =
+      prv_range_is_within(address, size, FLASH_REGION_FIRMWARE_SLOT_0_BEGIN,
+                          FLASH_REGION_FIRMWARE_SLOT_0_END) ||
+      prv_range_is_within(address, size, FLASH_REGION_FIRMWARE_SLOT_1_BEGIN,
+                          FLASH_REGION_FIRMWARE_SLOT_1_END) ||
+      prv_range_is_within(address, size, FLASH_REGION_SAFE_FIRMWARE_BEGIN,
+                          FLASH_REGION_SAFE_FIRMWARE_END) ||
+      prv_range_is_within(address, size, FLASH_REGION_FILESYSTEM_BEGIN,
+                          FLASH_REGION_FILESYSTEM_END);
+
+  if (!allowed) {
     pfs_port_panic(__FILE__, __LINE__, "%s out of range: %#x + %u",
                    operation, address, (unsigned int)size);
   }
