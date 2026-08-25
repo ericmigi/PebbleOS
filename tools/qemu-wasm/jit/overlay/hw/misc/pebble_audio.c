@@ -129,7 +129,11 @@ static void pbl_audio_drain_tick(void *opaque)
     }
     s->ring_count -= drain;
 
-    if (pbl_audio_ring_free(s) >= IRQ_FREE_THRESHOLD) {
+    /* Only signal buffer-available while we are actually draining samples.
+     * Raising it every tick when the ring is idle (device enabled but nothing
+     * playing) floods the firmware's audio IRQ -> system-task callback ->
+     * light-mutex path and eventually trips a FreeRTOS assert. */
+    if (drain > 0 && pbl_audio_ring_free(s) >= IRQ_FREE_THRESHOLD) {
         s->intstat |= INT_BUFAVAIL;
         pbl_audio_update_irq(s);
     }
