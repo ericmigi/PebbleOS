@@ -307,6 +307,7 @@ def make_firmware_bundle(
     resources_timestamp=None,
     outfile=None,
     verbose=False,
+    firmware_slot=None,
 ):
     bundle = PebbleBundle()
 
@@ -318,11 +319,12 @@ def make_firmware_bundle(
         firmware_commit,
         board,
         firmware_version_tag,
+        firmware_slot,
     )
 
     if resources:
-        resources_path = os.path.expanduser(args.resources)
-        bundle.add_resources(resources_path, args.resources_timestamp)
+        resources_path = os.path.expanduser(resources)
+        bundle.add_resources(resources_path, resources_timestamp)
 
     bundle.write(outfile, verbose)
 
@@ -412,11 +414,28 @@ if __name__ == "__main__":
         choices=["normal", "recovery"],
     )
     firmware_parser.add_argument(
+        "--firmware-commit", help="the source revision of the firmware"
+    )
+    firmware_parser.add_argument(
         "--board",
         help="the board for which the firmware was built",
-        choices=["bigboard", "ev1", "ev2"],
     )
-    firmware_parser.add_argument("--firmware-version", help="the firmware version tag")
+    firmware_parser.add_argument(
+        "--firmware-version",
+        dest="firmware_version_tag",
+        help="the firmware version tag",
+    )
+    firmware_parser.add_argument(
+        "--firmware-slot", help="the destination slot", choices=[0, 1], type=int
+    )
+    firmware_parser.add_argument("--resources", help="optional system resources")
+    firmware_parser.add_argument(
+        "--resources-timestamp", help="the resources timestamp", type=int
+    )
+    firmware_parser.add_argument(
+        "-v", "--verbose", help="print additional output", action="store_true"
+    )
+    firmware_parser.add_argument("-o", "--outfile", help="path to the output file")
     firmware_parser.set_defaults(func=cmd_firmware)
 
     watchapp_parser = subparsers.add_parser(

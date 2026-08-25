@@ -3,3 +3,21 @@
 &rtc {
 	status = "okay";
 };
+
+/* Slot 0 starts at 0x12020000. Keep its header page outside Zephyr's ROM. */
+&gd25q256e {
+	partitions {
+		/delete-node/ partition@10000;
+
+		slot0_code: partition@20200 {
+			label = "slot0-code";
+			reg = <0x20200 0x2ffe00>;
+		};
+	};
+};
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_code;
+	};
+};
