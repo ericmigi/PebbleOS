@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 bool fw_sandbox_launch(void);
+void fw_sandbox_exit(void);
 
 // Initialise the panel + applib graphics shell (framebuffer, GContext, fonts,
 // app heap) and turn the display on. Safe to call more than once.

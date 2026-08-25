@@ -233,8 +233,7 @@ static void prv_launch_selected(void) {
     return;
   }
   printk("WINDOW_PUSH %s\n", entry->name);
-  s_app_launched = true;
-  (void)fw_sandbox_launch();
+  s_app_launched = fw_sandbox_launch();
 }
 
 // Non-animated navigation handlers (see ponytail note at top of file).
@@ -283,6 +282,17 @@ static void prv_window_push(Window *window) {
 }
 
 static void prv_window_pop(void) {
+  // The sandbox owns the panel without putting its unprivileged Window on this
+  // kernel stack. Treat it as the logical top window so BACK uses the same pop
+  // path as a privileged system app.
+  if (s_app_launched) {
+    fw_sandbox_exit();
+    s_app_launched = false;
+    printk("WINDOW_POP sandbox depth=%d\n", s_stack_top + 1);
+    prv_apply_click_config(prv_top_window());
+    prv_render_top();
+    return;
+  }
   if (s_stack_top < 0) {
     return;
   }
@@ -380,17 +390,20 @@ void fw_ui_pump_once(void) {
   switch (event.type) {
     case PEBBLE_BUTTON_DOWN_EVENT:
       // BACK pops the window stack (unless we're at the root), mirroring the
-      // default back-button behaviour in applib/app.c. Everything else is
-      // routed through the button/click-service agent's recognizer, which
-      // fires the current window's click handlers.
-      if (event.button.button_id == BUTTON_ID_BACK && s_stack_top > 0) {
+      // default back-button behaviour in applib/app.c. A sandbox has no safe
+      // kernel-context click handlers, so its other buttons remain unhandled;
+      // otherwise events drive the current window's click recognizers.
+      if (event.button.button_id == BUTTON_ID_BACK &&
+          (s_app_launched || s_stack_top > 0)) {
         prv_window_pop();
-      } else {
+      } else if (!s_app_launched) {
         input_service_handle_button_event(&event);
       }
       break;
     case PEBBLE_BUTTON_UP_EVENT:
-      input_service_handle_button_event(&event);
+      if (!s_app_launched) {
+        input_service_handle_button_event(&event);
+      }
       break;
     case PEBBLE_CALLBACK_EVENT:
       // click.c repeat/long/multi callbacks land here via app_timer.
