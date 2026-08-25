@@ -8,6 +8,7 @@
 #include "FreeRTOS.h"
 #include "kernel/pebble_tasks.h"
 #include "pbl/util/list.h"
+#include "pbl/services/music.h"
 #include <pbl/drivers/button_id.h>
 
 typedef enum {
@@ -15,11 +16,40 @@ typedef enum {
   // Values match the shipping kernel/events.h enum (button service compat).
   PEBBLE_BUTTON_DOWN_EVENT = 5,
   PEBBLE_BUTTON_UP_EVENT = 6,
+  PEBBLE_MEDIA_EVENT = 14,
   PEBBLE_TICK_EVENT = 15,
+  PEBBLE_ALARM_CLOCK_EVENT = 22,
   PEBBLE_CALLBACK_EVENT = 27,
   PEBBLE_SUBSCRIPTION_EVENT = 29,
+  // Subscribed to by the settings shared window to refresh on remote pref
+  // changes; never fired in the port (prefs are set locally), just needs a
+  // distinct enum slot for event_service.
+  PEBBLE_PREF_CHANGE_EVENT = 68,
   PEBBLE_NUM_EVENTS = 80,
 } PebbleEventType;
+
+typedef enum {
+  PebbleMediaEventTypeNowPlayingChanged,
+  PebbleMediaEventTypePlaybackStateChanged,
+  PebbleMediaEventTypeVolumeChanged,
+  PebbleMediaEventTypeServerConnected,
+  PebbleMediaEventTypeServerDisconnected,
+  PebbleMediaEventTypeTrackPosChanged,
+  PebbleMediaEventTypeAlbumArtUpdated,
+} PebbleMediaEventType;
+
+typedef struct {
+  PebbleMediaEventType type;
+  union {
+    MusicPlayState playback_state;
+    uint8_t volume_percent;
+  };
+} PebbleMediaEvent;
+
+typedef struct {
+  const char *key;
+  uint8_t key_len;
+} PebblePrefChangeEvent;
 
 typedef void (*CallbackEventCallback)(void *data);
 
@@ -49,6 +79,8 @@ typedef struct {
     PebbleCallbackEvent callback;
     PebbleSubscriptionEvent subscription;
     PebbleButtonEvent button;
+    PebbleMediaEvent media;
+    PebblePrefChangeEvent pref_change;
   };
   PebbleTaskBitset task_mask;
   PebbleEventType type : 8;
