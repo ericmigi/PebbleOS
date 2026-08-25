@@ -40,6 +40,7 @@
 #include "applib/ui/menu_layer.h"
 #include "applib/ui/window.h"
 
+#include "kernel/event_loop.h"
 #include "kernel/events.h"
 #include "pbl/drivers/button_id.h"
 #include "pbl/services/event_service.h"
@@ -225,15 +226,17 @@ static void prv_launch_selected(void) {
 
   // A registry entry carrying a real PebbleProcessMd is a privileged built-in
   // system app: launch it through the system-app path (deferred to the launcher
-  // loop's top level so it is not nested inside this click callback). Entries
-  // without an md fall back to the embedded sandboxed PBW, which reinitialises
-  // the display and owns the panel afterwards.
+  // loop's top level so it is not nested inside this click callback).
   if (entry->md) {
     s_pending_md = entry->md;
     return;
   }
+  if (!entry->installed) {
+    printk("LAUNCHER_UNAVAILABLE %s\n", entry->name);
+    return;
+  }
   printk("WINDOW_PUSH %s\n", entry->name);
-  s_app_launched = fw_sandbox_launch();
+  s_app_launched = fw_sandbox_launch(entry->install_id);
 }
 
 // Non-animated navigation handlers (see ponytail note at top of file).
@@ -321,6 +324,17 @@ void fw_window_stack_push(Window *window) { prv_window_push(window); }
 
 int fw_window_stack_depth(void) { return s_stack_top + 1; }
 
+// Runs on the launcher (KernelMain) loop, after LAUNCHER_UP_READY. Best-effort
+// AppDB install + enumerate deferred here so a slow/wedged PFS op can never gate
+// boot; on success the new apps are folded into the already-visible menu.
+static void prv_load_appdb_cb(void *data) {
+  (void)data;
+  if (fw_app_registry_load_appdb()) {
+    menu_layer_reload_data(&s_menu);
+    prv_render_top();
+  }
+}
+
 static void prv_launcher_setup(void) {
   // input_service_init() (called from main.c) already brought up the shared
   // ClickManager; here we bring up the panel and let the launcher window's
@@ -344,6 +358,10 @@ static void prv_launcher_setup(void) {
 
   prv_window_push(s_launcher_window);
   printk("LAUNCHER_UP_READY apps=%u\n", (unsigned)fw_app_registry_count());
+
+  // Launcher is up with the static apps; now kick the AppDB load onto this same
+  // loop as a deferred callback so it runs after boot has reached READY.
+  launcher_task_add_callback(prv_load_appdb_cb, NULL);
 }
 
 // ---------------------------------------------------------------------------

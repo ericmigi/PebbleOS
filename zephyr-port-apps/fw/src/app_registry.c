@@ -7,6 +7,7 @@
 
 #include <zephyr/sys/printk.h>
 
+#include "appdb_bootstrap.h"
 #include "pbl/services/blob_db/app_db.h"
 #include "process_management/pebble_process_info.h"
 #include "process_management/pebble_process_md.h"
@@ -30,7 +31,7 @@ typedef struct {
   AppInstallId id;
   const char *name;
   // Non-NULL => a privileged built-in system app launched via its real md.
-  // NULL => a not-yet-ported entry (launcher falls back to the sandboxed PBW).
+  // NULL => a not-yet-ported system entry (shown but not launchable).
   FwSystemAppMdFn md_fn;
 } FwSystemApp;
 
@@ -69,6 +70,7 @@ static FwAppRegistryEntry
     s_entries[FW_ARRAY_SIZE(s_system_apps) + FW_MAX_INSTALLED_APPS];
 static size_t s_entry_count;
 static const FwAppRegistryEntry *s_launch_candidate;
+static bool s_appdb_available;
 
 static void prv_copy_name(char destination[FW_APP_NAME_SIZE + 1],
                           const char source[FW_APP_NAME_SIZE]) {
@@ -115,23 +117,7 @@ static const FwAppRegistryEntry *prv_pick_app(void) {
   return s_entry_count == 0 ? NULL : &s_entries[0];
 }
 
-void fw_app_registry_init(void) {
-  s_entry_count = 0;
-
-  for (size_t i = 0; i < FW_ARRAY_SIZE(s_system_apps); ++i) {
-    FwAppRegistryEntry *entry = &s_entries[s_entry_count++];
-    *entry = (FwAppRegistryEntry) {
-      .install_id = s_system_apps[i].id,
-      .md = s_system_apps[i].md_fn ? s_system_apps[i].md_fn() : NULL,
-    };
-    strncpy(entry->name, s_system_apps[i].name, FW_APP_NAME_SIZE);
-  }
-
-  app_db_init();
-  app_db_enumerate_entries(prv_add_installed_app, NULL);
-  s_launch_candidate = prv_pick_app();
-
-  printk("FW_REGISTRY_UP\n");
+static void prv_print_registry(void) {
   printk("FW_APP_COUNT %zu\n", s_entry_count);
   for (size_t i = 0; i < s_entry_count; ++i) {
     const FwAppRegistryEntry *entry = &s_entries[i];
@@ -143,6 +129,51 @@ void fw_app_registry_init(void) {
       printk("FW_APP %" PRId32 " %s\n", entry->install_id, entry->name);
     }
   }
+}
+
+void fw_app_registry_init(bool appdb_available) {
+  s_entry_count = 0;
+  s_appdb_available = appdb_available;
+
+  // Static system apps need no PFS/AppDB, so they populate the launcher
+  // unconditionally and synchronously. This is the floor: the launcher always
+  // comes up with these, independent of PFS or the AppDB load below.
+  for (size_t i = 0; i < FW_ARRAY_SIZE(s_system_apps); ++i) {
+    FwAppRegistryEntry *entry = &s_entries[s_entry_count++];
+    *entry = (FwAppRegistryEntry) {
+      .install_id = s_system_apps[i].id,
+      .md = s_system_apps[i].md_fn ? s_system_apps[i].md_fn() : NULL,
+    };
+    strncpy(entry->name, s_system_apps[i].name, FW_APP_NAME_SIZE);
+  }
+
+  s_launch_candidate = prv_pick_app();
+  printk("FW_REGISTRY_UP\n");
+  prv_print_registry();
+}
+
+bool fw_app_registry_load_appdb(void) {
+  // Deferred to after the launcher is up (see launcher_ui.c) so a slow or
+  // wedged AppDB/PFS op can never gate boot. Best-effort: any failure leaves
+  // the static list intact.
+  if (!s_appdb_available) {
+    return false;
+  }
+
+  const size_t before = s_entry_count;
+  app_db_init();
+  (void)fw_appdb_install_test_app();
+  app_db_enumerate_entries(prv_add_installed_app, NULL);
+  s_launch_candidate = prv_pick_app();
+
+  const bool added = s_entry_count > before;
+  if (added) {
+    printk("FW_APPDB_LOADED added=%zu\n", s_entry_count - before);
+    prv_print_registry();
+  } else {
+    printk("FW_APPDB_EMPTY\n");
+  }
+  return added;
 }
 
 size_t fw_app_registry_count(void) {

@@ -1,6 +1,53 @@
 /* SPDX-FileCopyrightText: 2024 Google LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#ifdef CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
+
+#include <inttypes.h>
+#include <stdbool.h>
+
+#include <zephyr/sys/printk.h>
+
+#include "kernel/pbl_malloc.h"
+#include "pbl/services/process_management/app_storage.h"
+#include "pbl/util/build_id.h"
+#include "process_management/app_install_types.h"
+#include "process_management/pebble_process_md.h"
+
+// The Zephyr core-boot target currently needs only the storage-backed metadata
+// half of AppInstallManager. Keep the production contract: read the code-bank
+// header through AppStorage and construct a PebbleProcessMdFlash for AppManager.
+const PebbleProcessMd *app_install_get_md(AppInstallId id, bool worker) {
+  if (id <= INSTALL_ID_INVALID) {
+    return NULL;
+  }
+
+  PebbleProcessInfo app_header;
+  uint8_t build_id_buffer[BUILD_ID_EXPECTED_LEN];
+  const PebbleTask task = worker ? PebbleTask_Worker : PebbleTask_App;
+  if (app_storage_get_process_info(&app_header, build_id_buffer, id, task) !=
+      GET_APP_INFO_SUCCESS) {
+    printk("FW_APP_INSTALL_MD_FAIL id=%" PRId32 "\n", id);
+    return NULL;
+  }
+
+  PebbleProcessMdFlash *md = kernel_malloc_check(sizeof(*md));
+  process_metadata_init_with_flash_header(md, &app_header, id, task,
+                                          build_id_buffer);
+  printk("FW_APP_INSTALL_MD id=%" PRId32 " storage=%u unprivileged=%u\n",
+         id, (unsigned)md->common.process_storage,
+         (unsigned)md->common.is_unprivileged);
+  return &md->common;
+}
+
+void app_install_release_md(const PebbleProcessMd *md) {
+  if (md && md->process_storage != ProcessStorageBuiltin) {
+    kernel_free((PebbleProcessMd *)md);
+  }
+}
+
+#else
+
 #include "app_install_manager.h"
 #include "app_install_manager_private.h"
 
@@ -880,3 +927,5 @@ void app_install_clear_app_db(void) {
   app_db_enumerate_entries(prv_enumerate_app_db_delete, NULL);
   app_cache_flush();
 }
+
+#endif  // CONFIG_PEBBLE_ZEPHYR_CORE_BOOT
