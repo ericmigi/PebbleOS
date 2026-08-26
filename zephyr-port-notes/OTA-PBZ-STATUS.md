@@ -129,12 +129,25 @@ firmware @ 0x12021000` → Zephyr boots (`FW_BOOT`, `FW_PFS_MOUNT_OK`, `FW_APP_C
   flowed (`FW_BLE_PP_RX endpoint=0xb1db`). **Firmware-only pbz accepted (risk cleared).**
   A real FreeRTOS→Zephyr over-the-air upgrade, verified end to end.
 
-### Phase 6 — Land + Zephyr self-OTA — OUTSTANDING
-- OTA slot-apply infra (`fw_ota_boot.c`) is already on the port base (from the earlier
-  rebase at `3881dd890`).
-- The BLE **receive** path (PutBytes over PPoGATT → OTA slot) exists build-only on
-  `fork/wip/ble-ota-transport` but is **not integrated into the fw image**. Integrating
-  it + a reboot-into-slot handoff is the remaining work for Zephyr-to-Zephyr OTA.
+### Phase 6 — Zephyr self-OTA — DONE, HW-verified
+Folded the PutBytes receive path (system_message `0x12` + PutBytes `0xBEEF`,
+Init/Put/Commit/Install, legacy-checksum commit) into the fw's PPoGATT dispatch, writing
+the received pblboot-headered image verbatim to **slot1** (`0x12320000`), header-last, then
+cold-rebooting. On hardware: with an older-priority receiver in slot0, CoreApp sideloaded a
+newer-priority pbz and **PutBytes it directly to the running Zephyr** (no reboot-to-recovery):
+`FW_OTA_PUT 435664/435664 → FW_OTA_COMMIT calc=0xc5b11270 expected=0xc5b11270 MATCH →
+FW_OTA_SLOT1_WRITTEN base=0x12320000 → FW_OTA_INSTALL_REBOOT`. After reboot pblboot logged
+both slots valid and **booted the higher-priority slot1**
+(`Loading slot1 firmware @ 0x12321000`), Zephyr ran. Full A/B self-update loop closed.
+
+Remaining polish (non-blocking): resources have no storage slot (accepted + discarded);
+PutBytes is stop-and-wait (no windowing/retransmit); resume does not survive a watch reset;
+`isDualSlot` is reported false yet A/B works because CoreApp PutBytes directly.
+
+## Overall: all six phases complete and HW-verified.
+A Zephyr obelix `.pbz` (no signing) installs onto a stock FreeRTOS/PRF watch over the air
+with the existing pairing preserved, boots via the stock pblboot, and can self-update over
+its own BLE with proper A/B slot selection.
 
 ## 6. Bugs found and fixed on hardware (this effort)
 
