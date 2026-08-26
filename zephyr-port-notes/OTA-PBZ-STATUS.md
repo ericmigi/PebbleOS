@@ -112,17 +112,22 @@ bugs that pblboot rejected ("No valid firmware image"); all fixed and HW-verifie
 Result: stock pblboot logs `slot0 firmware valid (0x12021000, ...)` → `Loading slot0
 firmware @ 0x12021000` → Zephyr boots (`FW_BOOT`, `FW_PFS_MOUNT_OK`, `FW_APP_COUNT 26`).
 
-### Phase 5 — HW test (Pixel 7a + rig) — PARTIALLY DONE
+### Phase 5 — HW test (Pixel 7a + rig) — DONE, HW-verified
 - Clean slate (region-wise erase → ftab v1.0.18 → pblboot v0.9.21 → PRF v4.30) ✅.
-- pblboot boots Zephyr from slot0 ✅ (via direct sftool flash of the headered image).
+- pblboot boots Zephyr from slot0 ✅.
 - BLE controller + LCPU up ✅; PRF bond loaded from SPRF ✅.
-- **Bonded reconnect ✅** — after the GATT fix below, CoreApp reconnects with no re-pair:
-  `ConnectivityWatcher (read): connected=true paired=true encrypted=true
-  pairingErrorCode=NO_ERROR`, `FW_BLE_PPOG_UP`, watch shows `v4.0.0-zephyr`.
-- **OUTSTANDING**: install the pbz *via CoreApp OTA* (drive CoreApp → PRF → slot0),
-  rather than the direct sftool flash used to prove boot. A correct pbz is built
-  (`/tmp/zephyr-obelix-slot0.pbz`) and CoreApp's sideload path is identified (it registers
-  an `android.intent.action.VIEW` filter on `*.pbz` files, schemes `content`/`file`).
+- **Bonded reconnect ✅** — after the GATT fix, CoreApp reconnects with no re-pair:
+  `ConnectivityWatcher (read): connected=true paired=true encrypted=true`,
+  `FW_BLE_PPOG_UP`, watch shows `v4.0.0-zephyr`.
+- **OTA install over BLE ✅** — the full goal. Erased slot0 (→ PRF running), then drove
+  CoreApp's "Sideload firmware?" dialog (VIEW intent on the pbz staged in CoreApp's own
+  files dir; scoped-storage blocks `/sdcard/Download`). CoreApp PutBytes the Zephyr pbz to
+  PRF over BLE: `Firmware update progress → PutBytesCommit (CRC matched) → No resources to
+  send, resource PutBytes skipped → PutBytesInstall → Firmware update completed, waiting
+  for reboot`. Watch self-rebooted; pblboot logged `slot0 firmware valid (0x12021000,
+  0x800000006a8e2968)` and booted Zephyr; the phone reconnected and blob_db notifications
+  flowed (`FW_BLE_PP_RX endpoint=0xb1db`). **Firmware-only pbz accepted (risk cleared).**
+  A real FreeRTOS→Zephyr over-the-air upgrade, verified end to end.
 
 ### Phase 6 — Land + Zephyr self-OTA — OUTSTANDING
 - OTA slot-apply infra (`fw_ota_boot.c`) is already on the port base (from the earlier
