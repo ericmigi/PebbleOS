@@ -39,28 +39,27 @@ FW_TIMER dispatched
 `FW_BOOT_SLOT` comes from a pblboot-compatible slot check: both normal slots
 (`0x12020000`, `0x12320000`) are read for a valid pblboot/PebbleOS firmware
 header + CRC, the higher-priority valid image wins, and PRF is reported when
-neither validates. These regions are read-only from this app.
+neither validates. The running slot0 remains read-only; BLE self-OTA targets
+slot1.
 
-The OTA receive scaffold (`fw_ota_receive_image()`) validates a complete
-firmware blob's CRC, erases and writes the staging region through the real
-SiFli QSPI flash driver (via `flash_shim.c` -> `flash_impl_*`), re-validates the
-payload from flash, then writes the header last as the bootable commit marker.
-A successful call emits:
+The minimal PPoGATT router accepts firmware updates from CoreApp on the system
+message (`0x0012`) and PutBytes (`0xBEEF`) endpoints. It erases the received
+image span in slot1 (`0x12320000..0x12620000`), streams the headered
+`firmware.bin` there verbatim through the real SiFli QSPI driver, verifies both
+the PutBytes legacy checksum and the pblboot in-header IEEE CRC, and writes the
+28-byte header last on Install. A successful transfer emits:
 
 ```text
-FW_OTA_RECV
-FW_OTA_VALIDATED
-FW_OTA_SLOT_SET
+FW_OTA_RECV_BEGIN slot=0x12320000 size=<bytes> append=<bytes>
+FW_OTA_PUT <written>/<total>
+FW_OTA_COMMIT calc=<crc> expected=<crc> MATCH
+FW_OTA_SLOT1_WRITTEN base=0x12320000 size=<bytes>
+FW_OTA_INSTALL_REBOOT
 ```
 
-Staging goes to a dedicated non-bootable OTA scratch region
-(`0x13d00000..0x13d40000`), clear of the PFS window, the pblboot slots, and PRF.
-pblboot's header format is identical to ours (same magic, priority-selected), so
-staging must never land in a real slot until images are executable and signed.
 Configure with `-DFW_OTA_TEST_INJECT=ON` to run a local, non-BLE flash-path test
-at boot that injects a CRC-valid, deliberately non-executable image through this
-path; it is off by default and safe across reboots because the scratch region is
-never booted.
+at boot. The deliberately non-executable test image still uses the dedicated
+non-bootable scratch region (`0x13d00000..0x13d40000`); it is off by default.
 
 PFS mounts the QSPI NOR scratch region at `0x13e00000..0x13e40000` from the
 kernel-main task, then creates, writes, reads, verifies, and deletes a self-test
@@ -76,10 +75,11 @@ is the next slice.
 The unified image starts the NimBLE host and SF32 LCPU controller after PFS and
 board initialization. It advertises the reversed PPoGATT and pairing services,
 uses a RAM-only bond store, and brings up a minimal Pebble Protocol endpoint
-router. Persistent PRF bond loading, the full comm-session transport, and BLE
-OTA/putbytes remain deferred. The remaining `FW_STUB` boot marker is the display
-compositor. Obelix board initialization now binds the real pt2 I2C devices and
-performs the shipping legacy-accelerometer reset; mic/audio await Zephyr
-drivers. The real SF32 watchdog is fed through Pebble task check-ins, and the
-real analytics service records events into its in-RAM backend while the upload
-sink awaits a Memfault or native DLS transport.
+router with firmware PutBytes receive support. The router remains a
+single-connection implementation without the production comm-session transport
+or outbound retransmit window. The remaining `FW_STUB` boot marker is the
+display compositor. Obelix board initialization now binds the real pt2 I2C
+devices and performs the shipping legacy-accelerometer reset; mic/audio await
+Zephyr drivers. The real SF32 watchdog is fed through Pebble task check-ins,
+and the real analytics service records events into its in-RAM backend while the
+upload sink awaits a Memfault or native DLS transport.

@@ -14,10 +14,9 @@
 
 #define FLASH_REGION_BASE_ADDRESS 0x12000000u
 
-// pblboot pt2 partitions (see pblboot/boot/boards/pt2.overlay). Read-only from
-// this app: fw_boot_select() inspects these to report the active boot slot.
-// pblboot boots the valid slot with the higher pblboot-header priority, so an
-// OTA image must never be staged here until it is executable + signed.
+// pblboot pt2 partitions (see pblboot/boot/boards/pt2.overlay). This app runs
+// XIP from slot0 and streams self-OTA images into slot1. pblboot validates the
+// in-image header and boots the valid slot with the higher 64-bit priority.
 #define FLASH_REGION_FIRMWARE_SLOT_0_BEGIN 0x12020000u
 #define FLASH_REGION_FIRMWARE_SLOT_0_END 0x12320000u
 #define FLASH_REGION_FIRMWARE_SLOT_1_BEGIN 0x12320000u

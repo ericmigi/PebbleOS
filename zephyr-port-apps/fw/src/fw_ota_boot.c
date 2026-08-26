@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <zephyr/sys/printk.h>
+
 #include "flash_region/flash_region.h"
 #include "pbl/drivers/flash.h"
 #include "pbl/logging/logging.h"
@@ -21,6 +23,19 @@ typedef struct FwSlot {
   FirmwareHeader header;
   bool valid;
 } FwSlot;
+
+typedef struct FwOtaSlotState {
+  uint32_t total_size;
+  uint32_t written;
+  uint32_t header_received;
+  uint8_t header_bytes[sizeof(FirmwareHeader)];
+  bool receiving;
+  bool verified;
+  bool header_written;
+  bool installed;
+} FwOtaSlotState;
+
+static FwOtaSlotState s_ota_slot;
 
 static bool prv_header_fits_region(const FirmwareHeader *header,
                                    uint32_t region_size) {
@@ -113,78 +128,182 @@ static int prv_validate_blob(const uint8_t *image, size_t image_size,
   return 0;
 }
 
-static FwSlot prv_get_ota_target(FwOtaImageType image_type) {
-  (void)image_type;
-  // ponytail: every receive stages into the non-bootable OTA scratch. The
-  // payloads this scaffold can build are not executable, and pblboot's header
-  // format is identical to ours (same magic + priority selection), so writing
-  // one into a real slot/prf would brick boot. Route firmware -> inactive slot
-  // (via fw_boot_select) and recovery -> SAFE_FIRMWARE here only once images
-  // are executable and signed, and pblboot handoff exists.
-  return (FwSlot){
-      .begin = FLASH_REGION_OTA_SCRATCH_BEGIN,
-      .end = FLASH_REGION_OTA_SCRATCH_END,
+static const FwSlot s_ota_target = {
+    .begin = FLASH_REGION_FIRMWARE_SLOT_1_BEGIN,
+    .end = FLASH_REGION_FIRMWARE_SLOT_1_END,
+};
+
+static int prv_validate_streamed_header(FirmwareHeader *header_out) {
+  if ((header_out == NULL) ||
+      (s_ota_slot.header_received != sizeof(FirmwareHeader))) {
+    return -EINVAL;
+  }
+
+  memcpy(header_out, s_ota_slot.header_bytes, sizeof(*header_out));
+  const uint32_t region_size = s_ota_target.end - s_ota_target.begin;
+  if (!prv_header_fits_region(header_out, region_size) ||
+      (header_out->fw_start + header_out->fw_length !=
+       s_ota_slot.total_size)) {
+    return -EINVAL;
+  }
+
+  const uint32_t calculated_crc =
+      flash_crc32(s_ota_target.begin + header_out->fw_start,
+                  header_out->fw_length);
+  return (calculated_crc == header_out->fw_crc) ? 0 : -EBADMSG;
+}
+
+int fw_ota_slot_begin(uint32_t image_size, uint32_t append_offset) {
+  const uint32_t region_size = s_ota_target.end - s_ota_target.begin;
+  if ((image_size < sizeof(FirmwareHeader)) || (image_size > region_size) ||
+      (append_offset > image_size)) {
+    return (image_size > region_size) ? -EFBIG : -EINVAL;
+  }
+
+  int result = pfs_flash_shim_init();
+  if (result != 0) {
+    return result;
+  }
+
+  if (append_offset != 0U) {
+    if (!s_ota_slot.receiving ||
+        (s_ota_slot.total_size != image_size) ||
+        (s_ota_slot.written != append_offset)) {
+      return -ENOTSUP;
+    }
+    printk("FW_OTA_RECV_BEGIN slot=0x%08x size=%u append=%u\n",
+           s_ota_target.begin, image_size, append_offset);
+    return 0;
+  }
+
+  s_ota_slot = (FwOtaSlotState){
+      .total_size = image_size,
+      .receiving = true,
   };
+
+  const uint32_t erase_size =
+      (image_size + SUBSECTOR_SIZE_BYTES - 1U) & SUBSECTOR_ADDR_MASK;
+  const uint32_t erase_end = s_ota_target.begin + erase_size;
+  flash_region_erase_optimal_range(s_ota_target.begin, s_ota_target.begin,
+                                   erase_end, erase_end);
+  printk("FW_OTA_RECV_BEGIN slot=0x%08x size=%u append=0\n",
+         s_ota_target.begin, image_size);
+  return 0;
+}
+
+int fw_ota_slot_write(uint32_t offset, const uint8_t *data, uint32_t length) {
+  if (!s_ota_slot.receiving || (offset != s_ota_slot.written) ||
+      (length > (s_ota_slot.total_size - s_ota_slot.written)) ||
+      ((length != 0U) && (data == NULL))) {
+    return -EINVAL;
+  }
+
+  uint32_t consumed = 0;
+  if (offset < sizeof(FirmwareHeader)) {
+    uint32_t header_length = sizeof(FirmwareHeader) - offset;
+    if (header_length > length) {
+      header_length = length;
+    }
+    if (offset != s_ota_slot.header_received) {
+      return -EINVAL;
+    }
+    memcpy(s_ota_slot.header_bytes + offset, data, header_length);
+    s_ota_slot.header_received += header_length;
+    consumed = header_length;
+  }
+
+  if (consumed < length) {
+    flash_write_bytes(data + consumed, s_ota_target.begin + offset + consumed,
+                      length - consumed);
+  }
+  s_ota_slot.written += length;
+  return 0;
+}
+
+int fw_ota_slot_finish(void) {
+  if (!s_ota_slot.receiving ||
+      (s_ota_slot.written != s_ota_slot.total_size)) {
+    return -EINVAL;
+  }
+
+  FirmwareHeader header;
+  int result = prv_validate_streamed_header(&header);
+  if (result != 0) {
+    return result;
+  }
+
+  s_ota_slot.receiving = false;
+  s_ota_slot.verified = true;
+  return 0;
+}
+
+int fw_ota_slot_install(void) {
+  if (!s_ota_slot.verified || s_ota_slot.installed) {
+    return -EINVAL;
+  }
+
+  FirmwareHeader header;
+  int result = prv_validate_streamed_header(&header);
+  if (result != 0) {
+    return result;
+  }
+
+  // The header is the bootable commit marker. Keep it erased until Install,
+  // after all PutBytes and in-image CRC checks have succeeded.
+  flash_write_bytes(s_ota_slot.header_bytes, s_ota_target.begin,
+                    sizeof(s_ota_slot.header_bytes));
+  s_ota_slot.header_written = true;
+
+  const FirmwareHeader committed =
+      firmware_storage_read_firmware_header(s_ota_target.begin);
+  if ((memcmp(&committed, &header, sizeof(header)) != 0) ||
+      !firmware_storage_check_valid_firmware_header(s_ota_target.begin,
+                                                    &committed)) {
+    return -EIO;
+  }
+
+  s_ota_slot.installed = true;
+  printk("FW_OTA_SLOT1_WRITTEN base=0x%08x size=%u\n", s_ota_target.begin,
+         s_ota_slot.total_size);
+  return 0;
+}
+
+void fw_ota_slot_abort(void) {
+  if (s_ota_slot.header_written) {
+    flash_region_erase_optimal_range(
+        s_ota_target.begin, s_ota_target.begin,
+        s_ota_target.begin + SUBSECTOR_SIZE_BYTES,
+        s_ota_target.begin + SUBSECTOR_SIZE_BYTES);
+  }
+  s_ota_slot = (FwOtaSlotState){};
 }
 
 int fw_ota_receive_image(const uint8_t *image, size_t image_size,
                          FwOtaImageType image_type) {
-  PBL_LOG_ALWAYS("FW_OTA_RECV");
-
   FirmwareHeader header;
   int result = prv_validate_blob(image, image_size, &header);
   if (result != 0) {
     return result;
   }
 
-  if ((image_type != FwOtaImageFirmware) &&
-      (image_type != FwOtaImageRecovery)) {
-    return -EINVAL;
+  if (image_type != FwOtaImageFirmware) {
+    return -ENOTSUP;
   }
 
-  result = pfs_flash_shim_init();
+  result = fw_ota_slot_begin((uint32_t)image_size, 0);
+  if (result == 0) {
+    result = fw_ota_slot_write(0, image, (uint32_t)image_size);
+  }
+  if (result == 0) {
+    result = fw_ota_slot_finish();
+  }
+  if (result == 0) {
+    result = fw_ota_slot_install();
+  }
   if (result != 0) {
-    return result;
+    fw_ota_slot_abort();
   }
-
-  const FwSlot target = prv_get_ota_target(image_type);
-  const uint32_t region_size = target.end - target.begin;
-  if ((image_size > region_size) ||
-      !prv_header_fits_region(&header, region_size)) {
-    return -EFBIG;
-  }
-
-  const uint32_t erase_size =
-      ((uint32_t)image_size + SUBSECTOR_SIZE_BYTES - 1U) &
-      SUBSECTOR_ADDR_MASK;
-  flash_region_erase_optimal_range(target.begin, target.begin,
-                                   target.begin + erase_size,
-                                   target.begin + erase_size);
-
-  // Leave the header erased until the payload has passed a flash-readback CRC.
-  // This makes the pblboot header itself the bootable commit marker.
-  const size_t body_size = image_size - sizeof(FirmwareHeader);
-  flash_write_bytes(image + sizeof(FirmwareHeader),
-                    target.begin + sizeof(FirmwareHeader), body_size);
-
-  if (!firmware_storage_check_valid_firmware_header(target.begin, &header)) {
-    return -EIO;
-  }
-  PBL_LOG_ALWAYS("FW_OTA_VALIDATED");
-
-  flash_write_bytes(image, target.begin, sizeof(FirmwareHeader));
-  const FirmwareHeader committed =
-      firmware_storage_read_firmware_header(target.begin);
-  if ((memcmp(&committed, &header, sizeof(header)) != 0) ||
-      !firmware_storage_check_valid_firmware_header(target.begin,
-                                                    &committed)) {
-    return -EIO;
-  }
-
-  PBL_LOG_ALWAYS("FW_OTA_SLOT_SET");
-  // ponytail: hand the selected slot to pblboot and reset after the BLE update
-  // transaction has ACKed. The scaffold deliberately does not reboot here.
-  return 0;
+  return result;
 }
 
 int fw_ota_inject_test_image(void) {
@@ -204,7 +323,26 @@ int fw_ota_inject_test_image(void) {
   };
   memcpy(image, &header, sizeof(header));
 
-  return fw_ota_receive_image(image, sizeof(image), FwOtaImageFirmware);
+  // Keep the deliberately non-executable injection out of bootable slots.
+  int result = pfs_flash_shim_init();
+  if (result != 0) {
+    return result;
+  }
+  const uint32_t erase_end =
+      FLASH_REGION_OTA_SCRATCH_BEGIN + SUBSECTOR_SIZE_BYTES;
+  flash_region_erase_optimal_range(FLASH_REGION_OTA_SCRATCH_BEGIN,
+                                   FLASH_REGION_OTA_SCRATCH_BEGIN, erase_end,
+                                   erase_end);
+  flash_write_bytes(image + sizeof(FirmwareHeader),
+                    FLASH_REGION_OTA_SCRATCH_BEGIN + sizeof(FirmwareHeader),
+                    sizeof(image) - sizeof(FirmwareHeader));
+  if (!firmware_storage_check_valid_firmware_header(
+          FLASH_REGION_OTA_SCRATCH_BEGIN, &header)) {
+    return -EIO;
+  }
+  flash_write_bytes(image, FLASH_REGION_OTA_SCRATCH_BEGIN,
+                    sizeof(FirmwareHeader));
+  return 0;
 }
 
 bool fw_ota_test_injection_requested(void) {

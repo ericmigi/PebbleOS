@@ -18,6 +18,8 @@
 #include <bluetooth/bt_driver_ppog_reversed.h>
 #include <kernel/pbl_malloc.h>
 
+#include "putbytes_min.h"
+
 #define PPOG_TYPE_DATA 0x0
 #define PPOG_TYPE_ACK 0x1
 #define PPOG_TYPE_RESET_REQUEST 0x2
@@ -36,8 +38,12 @@
 #define PP_ENDPOINT_APP_RUN_STATE 0x0034
 #define PP_ENDPOINT_FACTORY_REGISTRY 0x1389
 #define PP_ENDPOINT_BLOB_DB 0xb1db
+#define PP_ENDPOINT_SYSTEM_MESSAGE 0x0012
+#define PP_ENDPOINT_PUT_BYTES 0xbeef
 
-static uint8_t s_pp_buffer[1024];
+// A PutBytes Put request carries up to 2044 data bytes plus its 9-byte request
+// header. Leave headroom for the complete Pebble Protocol message.
+static uint8_t s_pp_buffer[2560];
 static uint16_t s_pp_length;
 static uint16_t s_conn_handle = PPOG_CONN_NONE;
 static uint8_t s_tx_sn;
@@ -185,6 +191,10 @@ static void prv_dispatch_pp(uint16_t endpoint, const uint8_t *payload,
                            sizeof(run_response));
   } else if (endpoint == PP_ENDPOINT_BLOB_DB) {
     printk("FW_BLE_BLOB_STUB len=%u\n", payload_len);
+  } else if (endpoint == PP_ENDPOINT_SYSTEM_MESSAGE) {
+    putbytes_min_handle_system_message(payload, payload_len);
+  } else if (endpoint == PP_ENDPOINT_PUT_BYTES) {
+    putbytes_min_handle_request(payload, payload_len);
   }
 }
 

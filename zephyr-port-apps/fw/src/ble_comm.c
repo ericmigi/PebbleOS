@@ -22,6 +22,8 @@
 #include <services/gap/ble_svc_gap.h>
 #include <services/gatt/ble_svc_gatt.h>
 
+#include "putbytes_min.h"
+
 #define BLE_INIT_STACK_SIZE 8192
 #define BLE_HOST_STACK_SIZE 6144
 #define BLE_INIT_PRIORITY 6
@@ -293,6 +295,7 @@ static void prv_init_main(void *arg1, void *arg2, void *arg3) {
   (void)arg3;
   printk("FW_BLE_INIT\n");
 
+  putbytes_min_init();
   nimble_port_init();
   rc = ble_transport_sf32lb52_status();
   if (rc != 0) {

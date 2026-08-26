@@ -184,6 +184,7 @@ target_sources(app PRIVATE
   src/port.c
   src/sandbox_launcher.c
   src/ppog_min.c
+  src/putbytes_min.c
   src/ram_store.c
   src/sprf_bond.c
   src/sifli_lrc_glue.c
