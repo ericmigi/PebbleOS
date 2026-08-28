@@ -3,24 +3,27 @@
 
 #include <stdio.h>
 
-#include <bluetooth/bonding_sync.h>
 #include <bluetooth/bt_driver_advert.h>
+#include <host/ble_gap.h>
+#include <pbl/logging/logging.h>
+#include <system/passert.h>
+
+#ifndef PEBBLE_BLE_BRINGUP_APP
+#include <bluetooth/bonding_sync.h>
 #include <bluetooth/gatt.h>
 #include <bluetooth/pairing_confirm.h>
 #include <comm/bt_lock.h>
-#include <host/ble_gap.h>
 #include <host/ble_hs_hci.h>
 #include <kernel/pbl_malloc.h>
 #include <os/os_mbuf.h>
-#include <pbl/logging/logging.h>
-#include <system/passert.h>
 #include <pbl/util/math.h>
-
 #include "nimble_gattc_op_queue.h"
 #include "nimble_type_conversions.h"
+#endif
 
 PBL_LOG_MODULE_DECLARE(bt, CONFIG_BT_LOG_LEVEL);
 
+#ifndef PEBBLE_BLE_BRINGUP_APP
 static const ble_uuid16_t s_device_name_chr_uuid = BLE_UUID16_INIT(0x2A00);
 static char s_device_name[BT_DEVICE_NAME_BUFFER_SIZE];
 static bool s_pairing_in_progress;
@@ -51,6 +54,7 @@ static int prv_device_name_read_op_start(void *ctx) {
 
   return rc;
 }
+#endif
 
 void bt_driver_advert_advertising_disable(void) {
   int rc;
@@ -84,6 +88,7 @@ bool bt_driver_advert_set_advertising_data(const BLEAdData *ad_data) {
   return true;
 }
 
+#ifndef PEBBLE_BLE_BRINGUP_APP
 static void prv_handle_connection_event(struct ble_gap_event *event) {
   // we only want to notify on a successful connection
   if (event->connect.status != 0) return;
@@ -417,6 +422,13 @@ static int prv_handle_gap_event(struct ble_gap_event *event, void *arg) {
   }
   return 0;
 }
+#else
+static int prv_handle_gap_event(struct ble_gap_event *event, void *arg) {
+  (void)arg;
+  PBL_LOG_DBG("BLE bring-up GAP event %u", event->type);
+  return 0;
+}
+#endif
 
 bool bt_driver_advert_advertising_enable(uint32_t min_interval_ms, uint32_t max_interval_ms) {
   int rc;

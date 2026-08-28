@@ -8,6 +8,12 @@
 #ifndef _NIMBLE_NPL_OS_H_
 #define _NIMBLE_NPL_OS_H_
 
+#ifdef __ZEPHYR__
+
+#include "nimble/nimble_npl_os_zephyr.h"
+
+#else
+
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
@@ -241,4 +247,6 @@ static inline void nrf52_clock_hfxo_release(void) {
 
 #endif
 
-#endif /* _NPL_H_ */
+#endif /* __ZEPHYR__ */
+
+#endif /* _NIMBLE_NPL_OS_H_ */
