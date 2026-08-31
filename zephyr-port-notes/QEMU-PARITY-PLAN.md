@@ -95,3 +95,9 @@ Two tiers:
   timeline_resource_table.auto.c from the FreeRTOS reference build dir —
   build the reference first (acceptable: ref build is required for
   parity anyway).
+- Boot-sequence parity gap (frame_walk 2026-08-31): ref boots splash
+  (pebbleOS logo + progress bar, ~3 frames) then launcher then TicToc on
+  top; zephyr boots straight to TicToc. Also backlight keypress fade:
+  ref renders ~4 dim-to-bright frames on wake, zephyr constant-bright.
+  Queue after compositor transitions: boot splash + launch order, then
+  light service fade.
