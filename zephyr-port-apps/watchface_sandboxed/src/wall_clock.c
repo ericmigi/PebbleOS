@@ -27,9 +27,12 @@ static bool prv_read_rtc(time_t *timestamp) {
   if (now.tm_year >= 0 && now.tm_year < 100) {
     now.tm_year += 100;
   }
+#if DT_NODE_HAS_COMPAT(DT_NODELABEL(rtc), sifli_sf32lb_rtc)
+  // SF32LB driver returns one-based months; Zephyr-compliant drivers don't.
   if (now.tm_mon >= 1 && now.tm_mon <= 12) {
     now.tm_mon -= 1;
   }
+#endif
 
   if (now.tm_year < 100 || now.tm_year > 137 || now.tm_mon < 0 ||
       now.tm_mon > 11 || now.tm_mday < 1 || now.tm_mday > 31) {
