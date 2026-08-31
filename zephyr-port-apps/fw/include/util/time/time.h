@@ -14,6 +14,13 @@
 
 uint16_t time_ms(time_t *tloc, uint16_t *out_ms);
 
+// Midnight (UTC) of the day containing ts (fw/src/shell_glue.c).
+time_t time_util_get_midnight_of(time_t ts);
+
+// Zephyr's minimal libc has no strftime; the launcher alarms glance formats
+// weekday names with it. %a-only implementation in fw/src/shell_glue.c.
+size_t strftime(char *s, size_t max, const char *format, const struct tm *tm);
+
 #define DAYS_PER_WEEK 7
 #define MONTHS_PER_YEAR 12
 #define MS_PER_SECOND (1000)

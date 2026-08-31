@@ -97,16 +97,33 @@ bool animation_set_handlers(Animation *animation, AnimationHandlers callbacks, v
   return true;
 }
 
-// --- property animation (never created in the launcher) ---------------------
+// --- property animation: applied synchronously ------------------------------
+// The port has no tween engine; a property animation jumps straight to its
+// target value at creation time and returns NULL (all animation_* calls are
+// NULL-safe stubs). This is what makes the real menu_layer/scroll_layer
+// animated selection paths land on their final state instantly.
+// ponytail: no intermediate frames. Port applib animation.c for real tweens.
 PropertyAnimation *property_animation_create(const PropertyAnimationImplementation *implementation,
                                              void *subject, void *from_value, void *to_value) {
-  (void)implementation; (void)subject; (void)from_value; (void)to_value;
+  if (implementation && subject && to_value) {
+    const AnimationUpdateImplementation update = implementation->base.update;
+    if (update == (AnimationUpdateImplementation)property_animation_update_gpoint) {
+      ((GPointSetter)implementation->accessors.setter.gpoint)(subject, *(GPoint *)to_value);
+    } else if (update == (AnimationUpdateImplementation)property_animation_update_grect) {
+      ((GRectSetter)implementation->accessors.setter.grect)(subject, *(GRect *)to_value);
+    } else if (update == (AnimationUpdateImplementation)property_animation_update_int16) {
+      ((Int16Setter)implementation->accessors.setter.int16)(subject, *(int16_t *)to_value);
+    }
+  }
   return NULL;
 }
 
 PropertyAnimation *property_animation_create_layer_frame(struct Layer *layer, GRect *from_frame,
                                                          GRect *to_frame) {
-  (void)layer; (void)from_frame; (void)to_frame;
+  (void)from_frame;
+  if (layer && to_frame) {
+    layer_set_frame(layer, to_frame);
+  }
   return NULL;
 }
 
@@ -137,8 +154,18 @@ void property_animation_update_gpoint(PropertyAnimation *property_animation,
   (void)property_animation; (void)distance_normalized;
 }
 
+void property_animation_update_int16(PropertyAnimation *property_animation,
+                                     const uint32_t distance_normalized) {
+  (void)property_animation; (void)distance_normalized;
+}
+
 // --- interpolation helpers (link-only) --------------------------------------
 int16_t interpolate_int16(int32_t normalized, int16_t from, int16_t to) {
+  (void)normalized; (void)from;
+  return to;
+}
+
+uint32_t interpolate_uint32(int32_t normalized, uint32_t from, uint32_t to) {
   (void)normalized; (void)from;
   return to;
 }

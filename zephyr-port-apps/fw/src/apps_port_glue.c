@@ -44,6 +44,8 @@
 #include "apps/system/settings/window.h"
 
 #include "app_registry.h"
+#include "launcher_ui.h"
+#include "system_app.h"
 
 // ---------------------------------------------------------------------------
 // App heap helpers the real apps expect (system_app.c already provides
@@ -106,7 +108,9 @@ void shell_prefs_set_menu_scroll_vibe_behavior(MenuScrollVibeBehavior behavior) 
 // Default watchface: RAM. The watchfaces picker reads this to mark the "Active"
 // row and writes it on SELECT (via app_manager_put_launch_app_event below).
 // ---------------------------------------------------------------------------
-static AppInstallId s_default_watchface_id = INSTALL_ID_INVALID;
+// TicToc (registry id -1), the shipping default face; the launcher's
+// Watchfaces glance shows its name as the subtitle.
+static AppInstallId s_default_watchface_id = -1;
 
 AppInstallId watchface_get_default_install_id(void) { return s_default_watchface_id; }
 void watchface_set_default_install_id(AppInstallId id) { s_default_watchface_id = id; }
@@ -120,6 +124,17 @@ void app_manager_put_launch_app_event(const AppLaunchEventConfig *config) {
   if (!config) {
     return;
   }
+
+  // A non-watchface md-backed entry (real launcher SELECT): leave the current
+  // app (the launcher) and launch the target through the shared pump.
+  const FwAppRegistryEntry *entry = fw_app_registry_find_by_id(config->id);
+  if (entry && entry->md && entry->md->process_type != ProcessTypeWatchface) {
+    printk("SHELL_LAUNCH %" PRId32 " %s\n", config->id, entry->name);
+    fw_shell_request_launch(entry->md);
+    fw_system_app_request_exit();
+    return;
+  }
+
   s_default_watchface_id = config->id;
   printk("WATCHFACE_SET %" PRId32 "\n", config->id);
 }
@@ -247,13 +262,21 @@ static void prv_load_if_needed(AppMenuDataSource *source) {
     node->uuid = entry.uuid;
     node->visibility = entry.visibility;
     node->icon = source->default_icon;
+    node->app_num = SYSTEM_APP;
+    node->icon_resource_id = ((const PebbleProcessMdSystem *)reg->md)->icon_resource_id;
 
     const char *name = md->name ? md->name : "";
     const size_t len = strlen(name) + 1;
     node->name = app_malloc_check(len);
     memcpy(node->name, name, len);
 
-    source->list = (AppMenuNode *)list_append(&source->list->node, &node->node);
+    // list_append returns the appended (tail) node; keep the HEAD in
+    // source->list or every node before the last one becomes unreachable.
+    if (source->list) {
+      (void)list_append(&source->list->node, &node->node);
+    } else {
+      source->list = node;
+    }
   }
 }
 

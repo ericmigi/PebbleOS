@@ -178,6 +178,15 @@ void app_event_loop(void) {
   }
 }
 
+// Pop the running app's windows down to its launch base so its app_event_loop
+// exits (the shell's analog of process_manager closing an app: e.g. the real
+// launcher leaving before the selected app starts).
+void fw_system_app_request_exit(void) {
+  while (fw_window_stack_depth() > s_app_base_depth) {
+    fw_window_stack_pop();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The launch entry point (called by the launcher on SELECT).
 // ---------------------------------------------------------------------------
@@ -193,11 +202,20 @@ void fw_system_app_launch(const PebbleProcessMd *md) {
   }
   printk("SYS_APP_LAUNCH %s\n", name);
 
+  // Launches nest (watchface pump -> launcher -> selected app), so the
+  // per-launch state is saved/restored around main_func instead of being reset.
+  void *prev_user_data = s_app_user_data;
+  const int prev_base_depth = s_app_base_depth;
+  const bool prev_privileged = g_fw_privileged_window;
+
   s_app_user_data = NULL;
   s_app_base_depth = fw_window_stack_depth();
   g_fw_privileged_window = true;
   md->main_func();  // push window (load runs) -> app_event_loop -> deinit
-  g_fw_privileged_window = false;
+
+  s_app_user_data = prev_user_data;
+  s_app_base_depth = prev_base_depth;
+  g_fw_privileged_window = prev_privileged;
 
   printk("SYS_APP_EXIT %s\n", name);
 }

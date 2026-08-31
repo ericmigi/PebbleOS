@@ -17,6 +17,8 @@ char *kernel_strdup_check(const char *string);
 // backs these with the app heap.
 void *task_malloc(size_t bytes);
 void *task_malloc_check(size_t bytes);
+void *task_zalloc(size_t bytes);
+void *task_zalloc_check(size_t bytes);
 void task_free(void *ptr);
 
 // app_* heap for privileged built-in system apps (system_app.c backs these with

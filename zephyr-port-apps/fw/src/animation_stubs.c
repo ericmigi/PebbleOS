@@ -53,3 +53,33 @@ void property_animation_update_grect(PropertyAnimation *property_animation,
 bool app_timer_reschedule(AppTimer *timer_handle, uint32_t new_timeout_ms) {
   return evented_timer_reschedule((EventedTimerID)(uintptr_t)timer_handle, new_timeout_ms);
 }
+
+AppTimer *app_timer_register_repeatable(uint32_t timeout_ms, AppTimerCallback callback,
+                                        void *callback_data, bool repeating) {
+  return (AppTimer *)(uintptr_t)evented_timer_register(timeout_ms, repeating, callback,
+                                                       callback_data);
+}
+
+// --- animation queries used by kino_player (never scheduled in the port) ----
+void *animation_get_context(Animation *animation) {
+  (void)animation;
+  return NULL;
+}
+
+bool animation_get_elapsed(Animation *animation, int32_t *elapsed_ms) {
+  (void)animation;
+  if (elapsed_ms) {
+    *elapsed_ms = 0;
+  }
+  return false;
+}
+
+bool animation_get_reverse(Animation *animation) {
+  (void)animation;
+  return false;
+}
+
+bool animation_set_immutable(Animation *animation) {
+  (void)animation;
+  return true;
+}

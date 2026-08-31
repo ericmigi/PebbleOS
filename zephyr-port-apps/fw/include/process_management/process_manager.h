@@ -13,3 +13,10 @@
 PlatformType process_manager_current_platform(void);
 
 bool process_manager_compiled_with_legacy2_sdk(void);
+
+// Deferred-callback post used by the real launcher's menu layer; the port runs
+// apps on the shared KernelMain pump, so it lands on the shared event queue
+// (fw_shell.c).
+#include "kernel/pebble_tasks.h"
+void process_manager_send_callback_event_to_process(PebbleTask task, void (*callback)(void *),
+                                                    void *data);

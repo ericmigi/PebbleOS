@@ -170,6 +170,11 @@ static void prv_app_main(void *arg1, void *arg2, void *arg3) {
 //   FB_END crc=0x........
 // crc is the standard CRC-32 (zlib) over the raw framebuffer bytes.
 void fw_fb_dump_uart(void) {
+#ifndef FW_FB_UART_DUMP
+  // Screens are captured via the QEMU monitor screendump now; a full hex dump
+  // blocks KernelMain ~0.7s per changed frame, so it's opt-in.
+  return;
+#endif
   static uint32_t s_seq;
   static uint32_t s_last_crc;
   static bool s_have_last;

@@ -179,18 +179,34 @@ void window_raw_click_subscribe(ButtonId button_id, ClickHandler down_handler,
   cfg->raw.context = context;
 }
 
+// Once a SANDBOXED app is launched it owns the panel; stop rendering the launcher
+// over it. Privileged system apps (fw_system_app_launch) instead ride the shared
+// window stack and are rendered by the normal pump, so they leave this false.
+static bool s_app_launched;
+// A requested system-app launch (SELECT in a menu, the shell opening the real
+// launcher). Processed at the pump's top level, not nested inside callbacks.
+static const PebbleProcessMd *s_pending_md;
+
+void fw_shell_request_launch(const PebbleProcessMd *md) { s_pending_md = md; }
+
+bool fw_shell_launch_pending(void) { return s_pending_md != NULL; }
+
+// Shell hooks, overridden by fw_shell.c on boards running the real shell
+// (watchface at boot + real launcher app). Defaults preserve the pt2 custom
+// launcher-menu behavior.
+__attribute__((weak)) bool fw_shell_handle_button_down(ButtonId button_id) {
+  (void)button_id;
+  return false;
+}
+
+__attribute__((weak)) void fw_shell_on_app_exit(const PebbleProcessMd *md) { (void)md; }
+
+#ifndef FW_REAL_SHELL
 // ---------------------------------------------------------------------------
 // The launcher menu.
 // ---------------------------------------------------------------------------
 static Window *s_launcher_window;
 static MenuLayer s_menu;
-// Once a SANDBOXED app is launched it owns the panel; stop rendering the launcher
-// over it. Privileged system apps (fw_system_app_launch) instead ride the shared
-// window stack and are rendered by the normal pump, so they leave this false.
-static bool s_app_launched;
-// SELECT stashes the chosen system-app md here; the launcher loop launches it at
-// the top level (not nested inside the click callback).
-static const PebbleProcessMd *s_pending_md;
 
 static uint16_t prv_get_num_sections(struct MenuLayer *menu_layer, void *context) {
   return 1;
@@ -327,6 +343,7 @@ static void prv_launcher_click_config_provider(void *context) {
   window_single_repeating_click_subscribe(BUTTON_ID_DOWN, 100, prv_menu_down);
   window_single_click_subscribe(BUTTON_ID_SELECT, prv_menu_select);
 }
+#endif  // !FW_REAL_SHELL
 
 // ---------------------------------------------------------------------------
 // Render + window-stack push/pop.
@@ -391,8 +408,13 @@ static void prv_window_pop(void) {
 // window rides the same window stack + pump as the launcher.
 void fw_window_stack_push(Window *window) { prv_window_push(window); }
 
+void fw_window_stack_pop(void) { prv_window_pop(); }
+
 int fw_window_stack_depth(void) { return s_stack_top + 1; }
 
+Window *fw_window_stack_top(void) { return prv_top_window(); }
+
+#ifndef FW_REAL_SHELL
 // ---------------------------------------------------------------------------
 // Launcher status bar (top strip): BT status glyph on the left, battery percent
 // + battery glyph on the right, mirroring shipping's launcher chrome. The applib
@@ -531,6 +553,7 @@ static void prv_start_selftest(void) {
 #else
 static void prv_start_selftest(void) {}
 #endif
+#endif  // !FW_REAL_SHELL
 
 // ---------------------------------------------------------------------------
 // KernelMain UI event loop. Mirrors launcher_main_loop() but also routes button
@@ -561,7 +584,8 @@ void fw_ui_pump_once(void) {
       if (event.button.button_id == BUTTON_ID_BACK &&
           (s_app_launched || s_stack_top > 0)) {
         prv_window_pop();
-      } else if (!s_app_launched) {
+      } else if (!s_app_launched &&
+                 !fw_shell_handle_button_down(event.button.button_id)) {
         input_service_handle_button_event(&event);
       }
       break;
@@ -585,8 +609,21 @@ void fw_ui_pump_once(void) {
 
   // Reflect any selection/window change onto the panel.
   prv_render_top();
+
+  // Requested launches run here, at the pump's top level (never nested inside a
+  // click/render callback). fw_system_app_launch pumps this same loop until the
+  // app exits; fw_shell_on_app_exit may then chain another launch (e.g. return
+  // to the launcher after an app launched from it exits).
+  while (s_pending_md) {
+    const PebbleProcessMd *md = s_pending_md;
+    s_pending_md = NULL;
+    fw_system_app_launch(md);
+    fw_shell_on_app_exit(md);
+    prv_render_top();
+  }
 }
 
+#ifndef FW_REAL_SHELL
 void fw_launcher_ui_run(void) {
   extern void pebble_zephyr_core_event_loop_init(void);
   pebble_zephyr_core_event_loop_init();
@@ -596,14 +633,6 @@ void fw_launcher_ui_run(void) {
 
   while (true) {
     fw_ui_pump_once();
-
-    // SELECT on a system-app entry stashed its md; launch it here at the loop's
-    // top level. fw_system_app_launch runs the app on this same KernelMain loop
-    // and returns when the app exits (BACK past its root window).
-    if (s_pending_md) {
-      const PebbleProcessMd *md = s_pending_md;
-      s_pending_md = NULL;
-      fw_system_app_launch(md);
-    }
   }
 }
+#endif  // !FW_REAL_SHELL

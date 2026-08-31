@@ -11,3 +11,7 @@
 //! returns here when the app exits (BACK past its root window). Runs the app on
 //! the KernelMain task privileged (no MPU sandbox), unlike fw_sandbox_launch().
 void fw_system_app_launch(const PebbleProcessMd *md);
+
+//! Pop the running app's windows down to its launch base so its app_event_loop
+//! returns (used when another app is launched out of the current one).
+void fw_system_app_request_exit(void);

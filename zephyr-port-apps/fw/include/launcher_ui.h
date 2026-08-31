@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #pragma once
 
+#include <stdbool.h>
+
 // Port-local resource IDs for the launcher's per-row app icons + status-bar BT
 // glyph. These blobs are embedded in the FW and served through sys_resource_*
 // (watchface_sandboxed/src/port.c); the IDs live above the font/music-icon IDs
@@ -36,3 +38,18 @@ void fw_window_stack_push(struct Window *window);
 // Current window-stack depth (1 = launcher root only). app_event_loop() uses it
 // to detect when its window has been popped (BACK).
 int fw_window_stack_depth(void);
+
+// Pop the top window (runs disappear/unload handlers, re-applies click config).
+void fw_window_stack_pop(void);
+
+// The window currently on top of the shared stack (NULL if empty).
+struct Window *fw_window_stack_top(void);
+
+struct PebbleProcessMd;
+
+// Ask the pump to launch a system app at its top level (safe from click/render
+// callbacks). fw_shell_on_app_exit() (weak, fw_shell.c) is called when it exits.
+void fw_shell_request_launch(const struct PebbleProcessMd *md);
+
+// True while a requested launch has not started yet.
+bool fw_shell_launch_pending(void);

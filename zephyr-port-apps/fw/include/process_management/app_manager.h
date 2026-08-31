@@ -26,5 +26,14 @@ typedef struct AppLaunchEventConfig {
 } AppLaunchEventConfig;
 
 //! Launch (or, in the port, select) an installed app by id. See
-//! apps_port_glue.c: records the chosen watchface as the default face.
+//! apps_port_glue.c: records the chosen watchface as the default face, or (real
+//! launcher) exits the launcher and launches the target through the pump.
 void app_manager_put_launch_app_event(const AppLaunchEventConfig *config);
+
+// Minimal task-context shape: the real launcher app only reads ->args
+// (LauncherMenuArgs). Provided by fw_shell.c.
+typedef struct ProcessContext {
+  const void *args;
+} ProcessContext;
+
+ProcessContext *app_manager_get_task_context(void);

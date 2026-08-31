@@ -26,6 +26,29 @@
 
 typedef const PebbleProcessMd *(*FwSystemAppMdFn)(void);
 
+#ifdef FW_REAL_SHELL
+#include "resource/resource_ids.auto.h"
+
+// Real-launcher row placeholder: the shipping UUID/name/icon key the
+// notifications launcher glance; the app itself is not ported, so launching it
+// returns straight to the launcher.
+static void prv_notifications_main(void) {}
+
+static const PebbleProcessMd *prv_notifications_md(void) {
+  static const PebbleProcessMdSystem s_notifications_md = {
+    .common = {
+      .main_func = prv_notifications_main,
+      // UUID: b2cae818-10f8-46df-ad2b-98ad2254a3c1
+      .uuid = {0xb2, 0xca, 0xe8, 0x18, 0x10, 0xf8, 0x46, 0xdf,
+               0xad, 0x2b, 0x98, 0xad, 0x22, 0x54, 0xa3, 0xc1},
+    },
+    .name = "Notifications",
+    .icon_resource_id = RESOURCE_ID_NOTIFICATIONS_APP_GLANCE,
+  };
+  return (const PebbleProcessMd *)&s_notifications_md;
+}
+#endif
+
 typedef struct {
   AppInstallId id;
   const char *name;
@@ -42,7 +65,11 @@ static const FwSystemApp s_system_apps[] = {
   { -2, "Watch Only" },
   { -7, "Settings", settings_get_app_info },
   { -3, "Music", music_app_get_info },
+#ifdef FW_REAL_SHELL
+  { -4, "Notifications", prv_notifications_md },
+#else
   { -4, "Notifications" },
+#endif
   { -5, "Alarms", alarms_app_get_info },
   { -6, "Watchfaces", watchfaces_get_app_info },
   { -9, "Quick Launch" },
@@ -155,4 +182,13 @@ const FwAppRegistryEntry *fw_app_registry_get(size_t index) {
 
 const FwAppRegistryEntry *fw_launcher_pick_app(void) {
   return s_launch_candidate;
+}
+
+const FwAppRegistryEntry *fw_app_registry_find_by_id(AppInstallId install_id) {
+  for (size_t i = 0; i < s_entry_count; ++i) {
+    if (s_entries[i].install_id == install_id) {
+      return &s_entries[i];
+    }
+  }
+  return NULL;
 }

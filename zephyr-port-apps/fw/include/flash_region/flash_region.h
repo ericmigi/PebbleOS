@@ -26,6 +26,13 @@
 #define FLASH_REGION_SAFE_FIRMWARE_BEGIN 0x10a20000u
 #define FLASH_REGION_SAFE_FIRMWARE_END 0x10ab0000u
 
+// The real system resource pack banks the FreeRTOS image ships (pbpack read by
+// resource_pack.c through the XIP window).
+#define FLASH_REGION_SYSTEM_RESOURCES_BANK_0_BEGIN 0x10620000u
+#define FLASH_REGION_SYSTEM_RESOURCES_BANK_0_END 0x10820000u
+#define FLASH_REGION_SYSTEM_RESOURCES_BANK_1_BEGIN 0x10820000u
+#define FLASH_REGION_SYSTEM_RESOURCES_BANK_1_END 0x10a20000u
+
 // Carved from the CD region; not part of the FreeRTOS layout. Only touched by
 // the off-by-default OTA flash-path self-test.
 #define FLASH_REGION_OTA_SCRATCH_BEGIN 0x11f40000u

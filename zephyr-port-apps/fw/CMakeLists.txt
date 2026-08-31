@@ -246,7 +246,14 @@ target_sources(app PRIVATE
 # The real src/fw/flash_region/flash_region.h resolves its chip layout from
 # this; the qemu layout matches the FreeRTOS SPI image (and the app's shadow
 # flash_region header).
-target_compile_definitions(app PRIVATE CONFIG_FLASH_QEMU=1)
+# FW_REAL_SHELL: boot into TicToc + the REAL launcher app (fw_shell.c) instead
+# of the custom launcher menu; needs the real system resource pack, which qemu
+# has in its FreeRTOS-layout SPI flash image (resource_pack.c).
+target_compile_definitions(app PRIVATE CONFIG_FLASH_QEMU=1 FW_REAL_SHELL=1)
+# Generated resource IDs (resource/resource_ids.auto.h + the timeline resource
+# table) come from the FreeRTOS reference build of the same tree. BEFORE so the
+# real generated IDs beat the gfx app's minimal resource-id shadow.
+target_include_directories(app BEFORE PRIVATE "${PEBBLEOS_ROOT}/build/src/fw")
 endif()
 
 target_sources(app PRIVATE
@@ -568,10 +575,26 @@ set_source_files_properties(
 # launcher icon; the port has no generated resource IDs, so define it to 0 (the
 # launcher menu draws names, not icons). fw_zephyr_pre.h resolves the Zephyr vs
 # Pebble sign_extend() collision (both pulled by real app sources).
+# On pt2 (no real resource pack) the generated resource IDs don't exist, so the
+# md-icon / app-icon IDs are defined to 0; qemu uses the real generated IDs.
+if(FW_BOARD_PT2)
+  set(FW_TICTOC_RES_DEFS "RESOURCE_ID_MENU_ICON_TICTOC_WATCH=0")
+  set(FW_MUSIC_RES_DEFS "RESOURCE_ID_AUDIO_CASSETTE_TINY=0;RESOURCE_ID_MUSIC_ICON_ELLIPSIS=278;RESOURCE_ID_MUSIC_ICON_FAST_FORWARD=272;RESOURCE_ID_MUSIC_ICON_PAUSE=271;RESOURCE_ID_MUSIC_ICON_PLAY=270;RESOURCE_ID_MUSIC_ICON_PLAY_PAUSE=0;RESOURCE_ID_MUSIC_ICON_REWIND=273;RESOURCE_ID_MUSIC_ICON_SKIP_BACKWARD=275;RESOURCE_ID_MUSIC_ICON_SKIP_FORWARD=274;RESOURCE_ID_MUSIC_ICON_VOLUME_DOWN=277;RESOURCE_ID_MUSIC_ICON_VOLUME_UP=276;RESOURCE_ID_MUSIC_IMAGE_NO_MUSIC=0;RESOURCE_ID_MUSIC_LARGE_CASSETTE=0;RESOURCE_ID_MUSIC_LARGE_PAUSED=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_DOWN=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_UP=0;RESOURCE_ID_VIBE_SCORE_HAPTIC_FEEDBACK=0;")
+  set(FW_ALARMS_RES_DEFS "RESOURCE_ID_ACTION_BAR_ICON_CHECK=0;RESOURCE_ID_ALARM_CLOCK_TINY=0;RESOURCE_ID_GENERIC_CONFIRMATION_LARGE=0;RESOURCE_ID_PLUS_ICON_BLACK=0;RESOURCE_ID_PLUS_ICON_DOTTED=0;RESOURCE_ID_RESULT_SHREDDED_LARGE=0;RESOURCE_ID_SMART_ALARM_ICON_BLACK=0;RESOURCE_ID_SMART_ALARM_TINY=0")
+  set(FW_WATCHFACES_RES_DEFS "RESOURCE_ID_WATCHFACES_APP_GLANCE=0;RESOURCE_ID_MENU_LAYER_GENERIC_WATCHFACE_ICON=0")
+  set(FW_SETTINGS_RES_DEFS "RESOURCE_ID_SETTINGS_TINY=0")
+else()
+  set(FW_TICTOC_RES_DEFS "")
+  set(FW_MUSIC_RES_DEFS "")
+  set(FW_ALARMS_RES_DEFS "")
+  set(FW_WATCHFACES_RES_DEFS "")
+  set(FW_SETTINGS_RES_DEFS "")
+endif()
+
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/apps/watch/tictoc/tictoc.c"
   PROPERTIES
-    COMPILE_DEFINITIONS "RESOURCE_ID_MENU_ICON_TICTOC_WATCH=0"
+    COMPILE_DEFINITIONS "${FW_TICTOC_RES_DEFS}"
     COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
 )
 
@@ -620,7 +643,7 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/apps/system/music.c"
   PROPERTIES
     COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
-    COMPILE_DEFINITIONS "RESOURCE_ID_AUDIO_CASSETTE_TINY=0;RESOURCE_ID_MUSIC_ICON_ELLIPSIS=278;RESOURCE_ID_MUSIC_ICON_FAST_FORWARD=272;RESOURCE_ID_MUSIC_ICON_PAUSE=271;RESOURCE_ID_MUSIC_ICON_PLAY=270;RESOURCE_ID_MUSIC_ICON_PLAY_PAUSE=0;RESOURCE_ID_MUSIC_ICON_REWIND=273;RESOURCE_ID_MUSIC_ICON_SKIP_BACKWARD=275;RESOURCE_ID_MUSIC_ICON_SKIP_FORWARD=274;RESOURCE_ID_MUSIC_ICON_VOLUME_DOWN=277;RESOURCE_ID_MUSIC_ICON_VOLUME_UP=276;RESOURCE_ID_MUSIC_IMAGE_NO_MUSIC=0;RESOURCE_ID_MUSIC_LARGE_CASSETTE=0;RESOURCE_ID_MUSIC_LARGE_PAUSED=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_DOWN=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_UP=0;RESOURCE_ID_VIBE_SCORE_HAPTIC_FEEDBACK=0;SECONDS_PER_HOUR=3600;SECONDS_PER_MINUTE=60"
+    COMPILE_DEFINITIONS "${FW_MUSIC_RES_DEFS}SECONDS_PER_HOUR=3600;SECONDS_PER_MINUTE=60"
 )
 
 # Alarms app trio: same sign_extend pre-include as music, with its launcher /
@@ -632,7 +655,7 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/apps/system/alarms/alarm_detail.c"
   PROPERTIES
     COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-include;applib/app_launch_reason.h"
-    COMPILE_DEFINITIONS "RESOURCE_ID_ACTION_BAR_ICON_CHECK=0;RESOURCE_ID_ALARM_CLOCK_TINY=0;RESOURCE_ID_GENERIC_CONFIRMATION_LARGE=0;RESOURCE_ID_PLUS_ICON_BLACK=0;RESOURCE_ID_PLUS_ICON_DOTTED=0;RESOURCE_ID_RESULT_SHREDDED_LARGE=0;RESOURCE_ID_SMART_ALARM_ICON_BLACK=0;RESOURCE_ID_SMART_ALARM_TINY=0"
+    COMPILE_DEFINITIONS "${FW_ALARMS_RES_DEFS}"
 )
 
 # tictoc_default.c calls rtc_get_time_tm without including a header for it (in
@@ -663,12 +686,11 @@ set_source_files_properties(
 # names, not icons. Define the launcher-icon IDs these mds reference to 0.
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/apps/system/watchfaces.c"
-  PROPERTIES COMPILE_DEFINITIONS
-    "RESOURCE_ID_WATCHFACES_APP_GLANCE=0;RESOURCE_ID_MENU_LAYER_GENERIC_WATCHFACE_ICON=0"
+  PROPERTIES COMPILE_DEFINITIONS "${FW_WATCHFACES_RES_DEFS}"
 )
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/settings.c"
-  PROPERTIES COMPILE_DEFINITIONS "RESOURCE_ID_SETTINGS_TINY=0"
+  PROPERTIES COMPILE_DEFINITIONS "${FW_SETTINGS_RES_DEFS}"
 )
 
 # The port has no unobstructed-area service and runs system apps on the KernelMain
@@ -680,3 +702,117 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/layer.c"
   PROPERTIES COMPILE_DEFINITIONS "layer_get_unobstructed_bounds=port_layer_gub_unused;layer_get_unobstructed_bounds_by_value=port_layer_gubv_unused"
 )
+
+# ---------------------------------------------------------------------------
+# Real shell (qemu_emery): TicToc at boot + the REAL launcher app with its
+# glance service, kino reel PDC icons, and the real system resource pack read
+# from the XIP-mapped SPI flash image.
+# ---------------------------------------------------------------------------
+if(NOT FW_BOARD_PT2)
+set(LAUNCHER "${PEBBLEOS_ROOT}/src/fw/apps/system/launcher/default")
+set(KINO "${PEBBLEOS_ROOT}/src/fw/applib/ui/kino")
+
+target_sources(app PRIVATE
+  src/fw_shell.c
+  src/shell_glue.c
+  src/resource_pack.c
+
+  "${LAUNCHER}/launcher.c"
+  "${LAUNCHER}/menu_layer.c"
+  "${LAUNCHER}/app_glance.c"
+  "${LAUNCHER}/app_glance_private.c"
+  "${LAUNCHER}/app_glance_service.c"
+  "${LAUNCHER}/app_glance_structured.c"
+  "${LAUNCHER}/app_glance_generic.c"
+  "${LAUNCHER}/app_glance_settings.c"
+  "${LAUNCHER}/app_glance_music.c"
+  "${LAUNCHER}/app_glance_notifications.c"
+  "${LAUNCHER}/app_glance_alarms.c"
+  "${LAUNCHER}/app_glance_watchfaces.c"
+  "${LAUNCHER}/app_glance_weather.c"
+  "${LAUNCHER}/app_glance_workout.c"
+
+  "${KINO}/kino_reel.c"
+  "${KINO}/kino_reel_custom.c"
+  "${KINO}/kino_player.c"
+  "${KINO}/kino_reel_gbitmap.c"
+  "${KINO}/kino_reel_gbitmap_sequence.c"
+  "${KINO}/kino_reel_pdci.c"
+  "${KINO}/kino_reel_pdcs.c"
+
+  "${GFX}/gdraw_command.c"
+  "${GFX}/gdraw_command_frame.c"
+  "${GFX}/gdraw_command_image.c"
+  "${GFX}/gdraw_command_list.c"
+  "${GFX}/gdraw_command_sequence.c"
+  "${GFX}/gdraw_command_transforms.c"
+  "${GFX}/gpath.c"
+  "${GFX}/gbitmap_sequence.c"
+
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/timeline/text_node.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_resources.c"
+  "${PEBBLEOS_ROOT}/build/src/fw/resource/timeline_resource_table.auto.c"
+  "${PEBBLEOS_ROOT}/lib/util/uuid.c"
+)
+
+# Launcher app TUs: same treatment as the settings/watchfaces app sources, plus
+# the port shadow declarations they pull implicitly in shipping.
+set_source_files_properties(
+  "${LAUNCHER}/launcher.c"
+  "${LAUNCHER}/menu_layer.c"
+  "${LAUNCHER}/app_glance.c"
+  "${LAUNCHER}/app_glance_private.c"
+  "${LAUNCHER}/app_glance_service.c"
+  "${LAUNCHER}/app_glance_structured.c"
+  "${LAUNCHER}/app_glance_generic.c"
+  "${LAUNCHER}/app_glance_settings.c"
+  "${LAUNCHER}/app_glance_music.c"
+  "${LAUNCHER}/app_glance_notifications.c"
+  "${LAUNCHER}/app_glance_alarms.c"
+  "${LAUNCHER}/app_glance_watchfaces.c"
+  "${LAUNCHER}/app_glance_weather.c"
+  "${LAUNCHER}/app_glance_workout.c"
+  PROPERTIES COMPILE_OPTIONS
+    "-include;fw_zephyr_pre.h;-include;applib/ui/window.h;-include;pbl/services/timeline/item.h;-include;pbl/services/bluetooth/bluetooth_ctl.h;-include;process_management/app_manager.h;-include;process_management/process_manager.h;-include;pbl/drivers/rtc.h;-iquote;${FW_APP_IQUOTE}"
+)
+
+# Graphics-flavored TUs (kino reels, PDC drawing, text nodes) get the same
+# app-state pre-include as the rest of the applib graphics group.
+set_source_files_properties(
+  "${KINO}/kino_reel.c"
+  "${KINO}/kino_reel_custom.c"
+  "${KINO}/kino_player.c"
+  "${KINO}/kino_reel_gbitmap.c"
+  "${KINO}/kino_reel_gbitmap_sequence.c"
+  "${KINO}/kino_reel_pdci.c"
+  "${KINO}/kino_reel_pdcs.c"
+  "${GFX}/gdraw_command.c"
+  "${GFX}/gdraw_command_frame.c"
+  "${GFX}/gdraw_command_image.c"
+  "${GFX}/gdraw_command_list.c"
+  "${GFX}/gdraw_command_sequence.c"
+  "${GFX}/gdraw_command_transforms.c"
+  "${GFX}/gpath.c"
+  "${GFX}/gbitmap_sequence.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/timeline/text_node.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_resources.c"
+  PROPERTIES COMPILE_OPTIONS
+    "-include;${FW_GRAPHICS_APP_STATE};-include;resource/resource_ids.auto.h;-include;applib/app_logging.h;-iquote;${PEBBLEOS_ROOT}/build/src/fw;-iquote;${CMAKE_CURRENT_SOURCE_DIR}/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/gfx/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/include"
+)
+
+# port.c keeps serving its embedded resources (fonts, music icons, FW_RES_*)
+# but under port_* names; resource_pack.c owns the real symbols and adds the
+# system pbpack from flash (see resource_pack.c).
+set_property(SOURCE "${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/src/port.c"
+  APPEND PROPERTY COMPILE_DEFINITIONS
+  sys_resource_is_valid=port_sys_resource_is_valid
+  sys_resource_size=port_sys_resource_size
+  sys_resource_load_range=port_sys_resource_load_range
+  sys_resource_get_and_cache=port_sys_resource_get_and_cache
+  sys_resource_read_only_bytes=port_sys_resource_read_only_bytes
+  sys_resource_bytes_are_readonly=port_sys_resource_bytes_are_readonly
+  applib_resource_mmap_or_load=port_applib_resource_mmap_or_load
+  applib_resource_munmap_or_free=port_applib_resource_munmap_or_free
+  applib_resource_get_handle=port_applib_resource_get_handle
+)
+endif()

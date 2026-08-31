@@ -8,6 +8,7 @@
 #include "FreeRTOS.h"
 #include "kernel/pebble_tasks.h"
 #include "pbl/util/list.h"
+#include "pbl/util/uuid.h"
 #include "pbl/services/music.h"
 #include <pbl/drivers/button_id.h>
 
@@ -16,11 +17,20 @@ typedef enum {
   // Values match the shipping kernel/events.h enum (button service compat).
   PEBBLE_BUTTON_DOWN_EVENT = 5,
   PEBBLE_BUTTON_UP_EVENT = 6,
+  PEBBLE_COMM_SESSION_EVENT = 13,
   PEBBLE_MEDIA_EVENT = 14,
   PEBBLE_TICK_EVENT = 15,
+  PEBBLE_SYS_NOTIFICATION_EVENT = 17,
   PEBBLE_ALARM_CLOCK_EVENT = 22,
+  PEBBLE_BT_STATE_EVENT = 25,
+  PEBBLE_BATTERY_STATE_CHANGE_EVENT = 26,
   PEBBLE_CALLBACK_EVENT = 27,
   PEBBLE_SUBSCRIPTION_EVENT = 29,
+  PEBBLE_DO_NOT_DISTURB_EVENT = 32,
+  // Subscribed to by the real launcher's glance service / glances; never fired
+  // in the port (no phone / battery / weather / glance-slice sources yet).
+  PEBBLE_WEATHER_EVENT = 60,
+  PEBBLE_APP_GLANCE_EVENT = 63,
   // Subscribed to by the settings shared window to refresh on remote pref
   // changes; never fired in the port (prefs are set locally), just needs a
   // distinct enum slot for event_service.
@@ -74,6 +84,53 @@ typedef struct {
 } PebbleSubscriptionEvent;
 
 typedef struct {
+  Uuid *app_uuid;
+} PebbleAppGlanceEvent;
+
+typedef enum {
+  NotificationAdded,
+  NotificationActedUpon,
+  NotificationRemoved,
+  NotificationActionResult,
+} PebbleSysNotificationType;
+
+typedef struct {
+  PebbleSysNotificationType type : 8;
+  union {
+    Uuid *notification_id;
+    void *action_result;
+  };
+} PebbleSysNotificationEvent;
+
+// Prototype-only shapes for headers the ported apps include (never fired).
+typedef struct {
+  uint8_t type;
+} PebbleHealthEvent;
+
+typedef struct {
+  uint8_t type;
+} PebbleActivityEvent;
+
+typedef struct {
+  uint8_t type;
+} PebbleWorkoutEvent;
+
+typedef struct {
+  bool is_event_ongoing;
+} PebbleCalendarEvent;
+
+typedef struct {
+  bool is_open;
+  bool is_system;
+} PebbleCommSessionEvent;
+
+typedef struct {
+  union {
+    PebbleCommSessionEvent comm_session_event;
+  };
+} PebbleBluetoothEvent;
+
+typedef struct {
   union {
     PebbleTickEvent clock_tick;
     PebbleCallbackEvent callback;
@@ -81,6 +138,9 @@ typedef struct {
     PebbleButtonEvent button;
     PebbleMediaEvent media;
     PebblePrefChangeEvent pref_change;
+    PebbleAppGlanceEvent app_glance;
+    PebbleBluetoothEvent bluetooth;
+    PebbleSysNotificationEvent sys_notification;
   };
   PebbleTaskBitset task_mask;
   PebbleEventType type : 8;
