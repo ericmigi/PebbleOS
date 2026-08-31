@@ -13,21 +13,25 @@ from PIL import Image
 DEFAULT = ("shot:launcher-top,down,shot:l1,down,shot:l2,down,shot:l3,down,shot:l4,"
            "up,up,up,up,right,shot:settings,left,shot:launcher-back")
 
-def mon(sock_path, cmd):
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.connect(sock_path)
-    s.settimeout(2)
-    try:
-        s.recv(4096)
-    except socket.timeout:
-        pass
-    s.sendall((cmd + "\n").encode())
-    time.sleep(0.3)
-    try:
-        s.recv(4096)
-    except socket.timeout:
-        pass
-    s.close()
+class Mon:
+    def __init__(self, sock_path):
+        self.s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.s.connect(sock_path)
+        self.s.settimeout(3)
+        self._read_prompt()
+
+    def _read_prompt(self):
+        buf = b""
+        try:
+            while b"(qemu)" not in buf:
+                buf += self.s.recv(4096)
+        except socket.timeout:
+            pass
+        return buf
+
+    def cmd(self, c):
+        self.s.sendall((c + "\n").encode())
+        self._read_prompt()
 
 def main():
     ap = argparse.ArgumentParser()
@@ -37,6 +41,10 @@ def main():
     ap.add_argument("--settle", type=float, default=1.0)
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
+    m = Mon(args.mon)
+    # wake the backlight so captures are in a consistent lit state
+    m.cmd("sendkey ret")
+    time.sleep(1.0)
     n = 0
     for step in args.steps.split(","):
         step = step.strip()
@@ -45,13 +53,13 @@ def main():
             n += 1
             time.sleep(args.settle)
             ppm = os.path.abspath(os.path.join(args.out, name + ".ppm"))
-            mon(args.mon, "screendump %s" % ppm)
+            m.cmd("screendump %s" % ppm)
             time.sleep(0.5)
             Image.open(ppm).save(os.path.join(args.out, name))
             os.unlink(ppm)
             print("shot", name)
         else:
-            mon(args.mon, "sendkey %s" % step)
+            m.cmd("sendkey %s" % step)
             time.sleep(0.4)
             print("key", step)
     print("done", args.out)
