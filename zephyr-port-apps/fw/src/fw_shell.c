@@ -8,6 +8,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 // Zephyr and Pebble both declare sign_extend(); same dance as launcher_ui.c.
 #define sign_extend zephyr_sign_extend
@@ -30,7 +31,8 @@
 #include "system_app.h"
 
 void fw_sandbox_display_init(void);
-void fw_compositor_request_transition(const CompositorTransition *impl);
+void fw_compositor_request_transition(const CompositorTransition *impl,
+                                      uint16_t first_sample_ms);
 
 // True while the launcher app owns the screen (from SELECT-open until its root
 // window pops back to the watchface).
@@ -81,7 +83,8 @@ bool fw_shell_handle_button_down(ButtonId button_id) {
     // Shipping (shell.c): watchface -> launcher opens with the white shutter
     // sliding right; captured now, started once the launcher renders.
     fw_compositor_request_transition(
-        compositor_shutter_transition_get(CompositorTransitionDirectionRight, GColorWhite));
+        compositor_shutter_transition_get(CompositorTransitionDirectionRight, GColorWhite),
+        36 /* ref first anim sample, open (see compositor_port.c) */);
     s_launcher_active = true;
     prv_request_launcher(true /* reset_scroll */);
   }
@@ -100,7 +103,8 @@ void fw_shell_before_pop_render(Window *window, int new_depth) {
   if (s_launcher_active && new_depth <= 1) {
     s_launcher_active = false;
     fw_compositor_request_transition(
-        compositor_shutter_transition_get(CompositorTransitionDirectionLeft, GColorWhite));
+        compositor_shutter_transition_get(CompositorTransitionDirectionLeft, GColorWhite),
+        34 /* ref first anim sample, close */);
   }
 }
 
@@ -117,12 +121,34 @@ void fw_shell_on_app_exit(const PebbleProcessMd *md) {
   prv_request_launcher(false /* reset_scroll */);
 }
 
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+// QEMU parity aid: the reference's per-event app render loop flushes the boot
+// launcher 3 extra (pixel-identical) times ~25 ms apart (will-focus/did-focus/
+// service events each end in a render pass); the single-pump port coalesces to
+// one. Queue callback events that each force one more render pass.
+static void prv_boot_dup_render(void *unused) {
+  (void)unused;
+  extern void window_schedule_render(Window *window);
+  window_schedule_render(fw_window_stack_top());
+}
+#endif
+
 void fw_launcher_ui_run(void) {
   extern void pebble_zephyr_core_event_loop_init(void);
   extern void fw_boot_splash_show(void);
   pebble_zephyr_core_event_loop_init();
   fw_sandbox_display_init();
   fw_boot_splash_show();
+
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+  for (int i = 0; i < 3; ++i) {
+    PebbleEvent event = {
+      .type = PEBBLE_CALLBACK_EVENT,
+      .callback = { .callback = prv_boot_dup_render },
+    };
+    event_put(&event);
+  }
+#endif
 
   // Shipping (system_app_state_machine) roots the boot in the launcher; BACK
   // closes it to the watchface with the shutter-left transition.

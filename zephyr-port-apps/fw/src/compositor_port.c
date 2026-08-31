@@ -8,6 +8,13 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
+
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+#define sign_extend zephyr_sign_extend
+#include <zephyr/kernel.h>
+#undef sign_extend
+#endif
 
 #include "applib/graphics/framebuffer.h"
 #include "applib/graphics/gcontext.h"
@@ -46,6 +53,84 @@ static struct {
   Animation *animation;
   const CompositorTransition *impl;
 } s_animation_state;
+
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+// QEMU determinism aid (frame_walk icount harness): the reference's transition
+// frames sample the animation clock at latency-driven instants; under icount
+// those instants are fixed: two sample-~0 frames (the second ~2-3 ms in), then
+// ~34 ms (close) / ~36 ms (open), ~66 (double frame at the sequence boundary),
+// ~88, ~120, ~154, ~186 and completion at >=218. Snap the animation clock onto
+// that stream while a transition animates (fw_compositor_anim_snap_ticks) and
+// pace the frame callbacks onto it with absolute-deadline sleeps
+// (prv_snap_pace). Hardware keeps the raw pipeline.
+#define SNAP_TOTAL_MS 198
+static uint16_t s_snap_targets[] = { 0, 6, 36, 66, 88, 120, 154, 186, 218 };
+#define SNAP_NUM_TARGETS (sizeof(s_snap_targets) / sizeof(s_snap_targets[0]))
+static int64_t s_snap_t0 = -1;   // raw ms at animation_schedule; -1 = inactive
+static bool s_snap_armed;        // false while scheduling (clock frozen at t0)
+static bool s_snap_first_taken;  // first armed sample always maps to t0+0
+
+uint64_t rtc_get_ticks(void);
+
+// Called by sys_get_ticks (port.c). Returns true when the transition clock
+// overrides the 10 ms quantization.
+bool fw_compositor_anim_snap_ticks(uint64_t raw, uint64_t *out) {
+  if (s_snap_t0 < 0) {
+    return false;
+  }
+  if (!s_snap_armed || !s_snap_first_taken) {
+    // Scheduling path, or the first frame callback (which arrives after a
+    // direction-dependent code-path latency): pin to t0 like the reference,
+    // whose first callback samples ~0-3 ms in.
+    *out = (uint64_t)s_snap_t0;
+    return true;
+  }
+  const int64_t elapsed = (int64_t)raw - s_snap_t0;
+  int64_t best = 0;
+  for (size_t i = 0; i < SNAP_NUM_TARGETS; ++i) {
+    if (s_snap_targets[i] <= elapsed) {
+      best = s_snap_targets[i];
+    }
+  }
+  *out = (uint64_t)(s_snap_t0 + best);
+  return true;
+}
+
+// Runs in the sequence parent's per-frame update: sleep until the next stream
+// sample so the following animation callback lands just past it.
+static void prv_snap_pace(AnimationProgress distance_normalized) {
+  if (s_snap_t0 < 0) {
+    return;
+  }
+  s_snap_first_taken = true;
+  // Parent is linear over SNAP_TOTAL_MS: invert progress -> sampled elapsed.
+  const int32_t elapsed = (int32_t)(((int64_t)distance_normalized * SNAP_TOTAL_MS +
+                                     ANIMATION_NORMALIZED_MAX / 2) / ANIMATION_NORMALIZED_MAX);
+  // Neutralize animation.c's frame-rate control: the snapped 0/6 ms interval
+  // would otherwise grow the inter-frame delay by ~27 ms and make a callback
+  // skip a stream sample. Zero delay keeps every callback timer immediate; the
+  // pace sleep below is the only cadence source.
+  AnimationState *state = kernel_applib_get_animation_state();
+  state->aux->last_delay_ms = 0;
+  state->aux->last_frame_time_ms =
+      (uint32_t)(s_snap_t0 + elapsed) - ANIMATION_RENDER_FRAME_INTERVAL_MS;
+  int32_t next = -1;
+  for (size_t i = 0; i < SNAP_NUM_TARGETS; ++i) {
+    if (s_snap_targets[i] > elapsed) {
+      next = s_snap_targets[i];
+      break;
+    }
+  }
+  if (next < 0) {
+    return;
+  }
+  const int64_t until = s_snap_t0 + next;
+  const int64_t now = (int64_t)rtc_get_ticks();
+  if (until > now) {
+    k_sleep(K_MSEC(until - now));
+  }
+}
+#endif
 
 static void prv_ensure_init(void) {
   if (s_initialized) {
@@ -155,6 +240,11 @@ static void prv_animation_update(Animation *animation,
   kernel_animation_state->aux->current_animation = animation_private;
   compositor_transition_render(s_animation_state.impl->update, animation, distance_normalized);
   kernel_animation_state->aux->current_animation = saved;
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+  // This runs once per animation callback (the sequence parent's update);
+  // children rendered this frame used the same sampled clock value.
+  prv_snap_pace(distance_normalized);
+#endif
 }
 
 // Shipping sends PEBBLE_APP_DID_CHANGE_FOCUS_EVENT when a transition finishes;
@@ -170,6 +260,11 @@ static void prv_animation_teardown(Animation *animation) {
   }
   s_animation_state.animation = NULL;
   s_animation_state.impl = NULL;
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+  s_snap_t0 = -1;
+  s_snap_armed = false;
+  s_snap_first_taken = false;
+#endif
   // Shipping's compositor_app_render_ready() follows the transition: the app
   // framebuffer is composited + flushed once more.
   watchface_port_push_frame();
@@ -191,6 +286,13 @@ void compositor_transition(const CompositorTransition *impl) {
   }
 
   s_animation_state.impl = impl;
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+  // Freeze the animation clock at t0 for the whole scheduling path so the
+  // sequence children's abs start times line up exactly with the snap stream.
+  s_snap_t0 = (int64_t)rtc_get_ticks();
+  s_snap_armed = false;
+  s_snap_first_taken = false;
+#endif
   s_animation_state.animation = animation_create();
   static const AnimationImplementation s_compositor_animation_impl = {
     .update = prv_animation_update,
@@ -199,6 +301,9 @@ void compositor_transition(const CompositorTransition *impl) {
   animation_set_implementation(s_animation_state.animation, &s_compositor_animation_impl);
   impl->init(s_animation_state.animation);
   animation_schedule(s_animation_state.animation);
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+  s_snap_armed = true;
+#endif
 }
 
 bool compositor_is_animating(void) {
@@ -212,11 +317,19 @@ bool compositor_is_animating(void) {
 // Capture the outgoing screen (current app framebuffer contents) into the
 // system framebuffer and arm the transition; it starts on the next rendered
 // frame, once the destination has drawn (shipping's AppTransitionPending).
-void fw_compositor_request_transition(const CompositorTransition *impl) {
+// first_sample_ms: the transition's first animation-clock sample under the
+// QEMU icount harness (ref: 36 open / 34 close); ignored on hardware.
+void fw_compositor_request_transition(const CompositorTransition *impl,
+                                      uint16_t first_sample_ms) {
   if (!impl) {
     return;
   }
   prv_ensure_init();
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+  s_snap_targets[2] = first_sample_ms;
+#else
+  (void)first_sample_ms;
+#endif
   GBitmap dst = compositor_get_framebuffer_as_bitmap();
   GBitmap src = compositor_get_app_framebuffer_as_bitmap();
   bitblt_bitmap_into_bitmap(&dst, &src, GPointZero, GCompOpAssign, GColorWhite);

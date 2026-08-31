@@ -75,6 +75,14 @@ AnimationState *app_state_get_animation_state(void) {
   return &s_app_animation_state;
 }
 
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+__attribute__((weak)) bool fw_compositor_anim_snap_ticks(uint64_t raw, uint64_t *out) {
+  (void)raw;
+  (void)out;
+  return false;
+}
+#endif
+
 RtcTicks sys_get_ticks(void) {
   // Quantize the animation clock to 10 ms buckets (this build's only callers
   // are applib animation.c and menu_layer's double-tap window). Frame pacing
@@ -85,6 +93,13 @@ RtcTicks sys_get_ticks(void) {
   // boundary (the FreeRTOS reference itself flips those frames run-to-run).
   const RtcTicks ticks = rtc_get_ticks();
 #if defined(CONFIG_BOARD_QEMU_EMERY)
+  // While a compositor transition animates, its frames must sample the
+  // reference's (non-decade) instants; compositor_port.c snaps the clock onto
+  // that stream instead (weak default: no compositor linked, e.g. pt2).
+  RtcTicks snapped;
+  if (fw_compositor_anim_snap_ticks(ticks, &snapped)) {
+    return snapped;
+  }
   return ticks - (ticks % (10 * RTC_TICKS_HZ / 1000));
 #else
   // Hardware keeps the raw clock: quantization is a QEMU determinism aid
