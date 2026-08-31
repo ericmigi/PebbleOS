@@ -46,3 +46,4 @@ by construction once the same code boots on Zephyr; the diff harness proves it.
 
 - P0 DONE 2026-08-31: ref runs headless (SDL dummy), ui_walk.py + px_diff.py in zephyr-port-notes/tools, PT2 UX mapped (boot=watchface, select=launcher, up/down=timeline).
 - P1 DONE 2026-08-31: display+buttons+rtc+extflash Zephyr drivers verified in qemu-pebble (gfx renders via applib, 4 buttons report, RTC sane, flash persists via SYNC). gfx app builds for qemu_emery.
+- P2 DONE 2026-08-31: Sliding Text watchface (real PBW, real loader) renders correct wall-clock time on qemu_emery. Known issue: kernel wall_clock_zephyr.c applies the SF32 month -1 normalization to the Zephyr-compliant QEMU RTC too — date off by one month on qemu; make it rtc-driver-conditional (HH:MM unaffected).
