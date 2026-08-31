@@ -223,6 +223,7 @@ void fw_system_app_launch(const PebbleProcessMd *md) {
   g_fw_privileged_window = true;
   ++s_launch_nesting;
   md->main_func();  // push window (load runs) -> app_event_loop -> deinit
+  fw_compositor_launch_frame_exited(s_launch_nesting);
   --s_launch_nesting;
 
   s_app_user_data = prev_user_data;

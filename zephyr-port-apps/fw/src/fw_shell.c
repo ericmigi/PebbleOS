@@ -95,12 +95,18 @@ bool fw_shell_handle_button_down(ButtonId button_id) {
 // left (shipping shell.c, launcher -> watchface).
 void fw_shell_before_pop_render(Window *window, int new_depth) {
   (void)window;
-  if (s_launcher_active && new_depth == 1) {
+  // new_depth 1: launcher opened over the watchface. new_depth 0: the
+  // boot-rooted launcher closing to the (about to launch) watchface.
+  if (s_launcher_active && new_depth <= 1) {
     s_launcher_active = false;
     fw_compositor_request_transition(
         compositor_shutter_transition_get(CompositorTransitionDirectionLeft, GColorWhite));
   }
 }
+
+// The boot-rooted launcher sits alone at depth 1; BACK must still close it
+// (the pump only auto-pops at depth > 1 to protect the watchface root).
+bool fw_shell_back_should_pop(void) { return s_launcher_active; }
 
 void fw_shell_on_app_exit(const PebbleProcessMd *md) {
   if (md == launcher_menu_app_get_app_info() ||
@@ -113,8 +119,17 @@ void fw_shell_on_app_exit(const PebbleProcessMd *md) {
 
 void fw_launcher_ui_run(void) {
   extern void pebble_zephyr_core_event_loop_init(void);
+  extern void fw_boot_splash_show(void);
   pebble_zephyr_core_event_loop_init();
   fw_sandbox_display_init();
+  fw_boot_splash_show();
+
+  // Shipping (system_app_state_machine) roots the boot in the launcher; BACK
+  // closes it to the watchface with the shutter-left transition.
+  s_launcher_args = (LauncherMenuArgs) { .reset_scroll = true };
+  s_task_context.args = &s_launcher_args;
+  s_launcher_active = true;
+  fw_system_app_launch(launcher_menu_app_get_app_info());
 
   while (true) {
     // The watchface is the shell's root app; its app_event_loop pumps the UI

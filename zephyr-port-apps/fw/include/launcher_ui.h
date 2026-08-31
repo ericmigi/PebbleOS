@@ -53,3 +53,15 @@ void fw_shell_request_launch(const struct PebbleProcessMd *md);
 
 // True while a requested launch has not started yet.
 bool fw_shell_launch_pending(void);
+
+// Weak shell hook (fw_shell.c): BACK pops the top window even at depth 1
+// (boot-rooted launcher). Default false protects the watchface root.
+bool fw_shell_back_should_pop(void);
+
+// Weak compositor hook (compositor_port.c): a launch frame returned; unblocks
+// a pending transition whose requester just exited.
+void fw_compositor_launch_frame_exited(int nesting);
+
+// Weak backlight hooks (qemu_board.c drives the QEMU RGB backlight channels).
+void fw_light_button_pressed(void);
+void fw_light_button_released(void);

@@ -201,6 +201,15 @@ __attribute__((weak)) bool fw_shell_handle_button_down(ButtonId button_id) {
 
 __attribute__((weak)) void fw_shell_on_app_exit(const PebbleProcessMd *md) { (void)md; }
 
+// True when BACK should pop the top window even at stack depth 1 (the real
+// shell's boot-rooted launcher); defaults to protecting the root window.
+__attribute__((weak)) bool fw_shell_back_should_pop(void) { return false; }
+
+// Backlight hooks (qemu_board.c on the real-shell qemu build); shipping's
+// kernel drives light_button_pressed/released from every button event.
+__attribute__((weak)) void fw_light_button_pressed(void) {}
+__attribute__((weak)) void fw_light_button_released(void) {}
+
 // Called after a window is popped, before the revealed window renders; the
 // real shell uses it to arm the compositor close transition while the app
 // framebuffer still holds the outgoing screen.
@@ -214,6 +223,7 @@ __attribute__((weak)) void fw_shell_before_pop_render(Window *window, int new_de
 __attribute__((weak)) bool fw_compositor_handle_frame(void) { return false; }
 __attribute__((weak)) bool fw_compositor_transition_pending(void) { return false; }
 __attribute__((weak)) bool fw_compositor_render_blocked(void) { return false; }
+__attribute__((weak)) void fw_compositor_launch_frame_exited(int nesting) { (void)nesting; }
 
 #ifndef FW_REAL_SHELL
 // ---------------------------------------------------------------------------
@@ -372,6 +382,8 @@ static void prv_render_top(void) {
       fw_compositor_render_blocked()) {
     return;
   }
+  extern uint64_t rtc_get_ticks(void);
+  const uint32_t frame_start_ms = (uint32_t)rtc_get_ticks();
   layer_render_tree(window_get_root_layer(window), app_state_get_graphics_context());
   window->is_render_scheduled = false;
   // A pending/running compositor transition owns the panel: it composites the
@@ -380,6 +392,35 @@ static void prv_render_top(void) {
     return;
   }
   watchface_port_push_frame();
+  // Shipping app frames traverse app FB -> compositor copy -> display before
+  // KernelMain pumps the next event (~29-31 ms/frame under this host's TCG);
+  // the port's direct render+push is ~10 ms cheaper and jitters, and the
+  // animation rate control is latency-bound for the first ~8 frames of every
+  // animation, so unpadded frames sample the curves earlier than the reference
+  // and the streams diverge. Pace app frames on an absolute 30 ms grid
+  // (drift-free: each deadline advances from the previous one, resyncing after
+  // idle gaps) so curve sampling is deterministic instead of riding the
+  // render-cost jitter.
+  // ponytail: 30 ms matches the ref pipeline's measured cadence; the ref
+  // itself flips animation frames that land within ~2 ms of curve boundaries
+  // run-to-run, which no port-side pacing can track.
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+  // QEMU-only determinism aid; hardware gets its cadence from the real
+  // display pipeline latency, like shipping.
+  static uint32_t s_frame_deadline_ms;
+  const uint32_t now_ms = (uint32_t)rtc_get_ticks();
+  if ((int32_t)(frame_start_ms - s_frame_deadline_ms) > 20) {
+    // Idle gap: re-anchor on this frame's animation-clock bucket edge so the
+    // animation callback samples elapsed as exact cadence multiples.
+    s_frame_deadline_ms = frame_start_ms - (frame_start_ms % 10u);
+  }
+  // 29 ms matches the reference's cadence under the frame_walk `-icount
+  // shift=3` harness, where both firmwares are bit-deterministic.
+  s_frame_deadline_ms += 29;
+  if ((int32_t)(s_frame_deadline_ms - now_ms) > 0) {
+    k_sleep(K_MSEC(s_frame_deadline_ms - now_ms));
+  }
+#endif
   fw_fb_dump_uart();
 }
 
@@ -613,12 +654,31 @@ void fw_ui_pump_once(void) {
 
   switch (event.type) {
     case PEBBLE_BUTTON_DOWN_EVENT:
+    case PEBBLE_BUTTON_UP_EVENT: {
+      // Align button handling to the 10 ms animation-clock bucket edge (see
+      // sys_get_ticks in port.c): animations the handler schedules then start
+      // at a fixed clock phase, so their frames sample deterministic elapsed
+      // times instead of depending on where the keypress fell in the bucket.
+      extern uint64_t rtc_get_ticks(void);
+      const uint32_t phase_ms = (uint32_t)rtc_get_ticks() % 10u;
+      if (phase_ms) {
+        k_sleep(K_MSEC(10u - phase_ms));
+      }
+      break;
+    }
+    default:
+      break;
+  }
+
+  switch (event.type) {
+    case PEBBLE_BUTTON_DOWN_EVENT:
+      fw_light_button_pressed();
       // BACK pops the window stack (unless we're at the root), mirroring the
       // default back-button behaviour in applib/app.c. A sandbox has no safe
       // kernel-context click handlers, so its other buttons remain unhandled;
       // otherwise events drive the current window's click recognizers.
       if (event.button.button_id == BUTTON_ID_BACK &&
-          (s_app_launched || s_stack_top > 0)) {
+          (s_app_launched || s_stack_top > 0 || fw_shell_back_should_pop())) {
         prv_window_pop();
       } else if (!s_app_launched &&
                  !fw_shell_handle_button_down(event.button.button_id)) {
@@ -626,6 +686,7 @@ void fw_ui_pump_once(void) {
       }
       break;
     case PEBBLE_BUTTON_UP_EVENT:
+      fw_light_button_released();
       if (!s_app_launched) {
         input_service_handle_button_event(&event);
       }

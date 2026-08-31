@@ -228,9 +228,20 @@ void fw_compositor_request_transition(const CompositorTransition *impl) {
 // While a transition is pending, the destination has not rendered yet. Renders
 // issued from the requesting app's own pump frame would draw the revealed
 // window with the WRONG app context (user_data still belongs to the exiting
-// app); the destination always renders from a different launch nesting level.
+// app); the destination always renders from a different launch nesting level,
+// or (boot-rooted launcher -> watchface) from a fresh frame at the SAME level,
+// which fw_compositor_launch_frame_exited() unblocks.
 bool fw_compositor_render_blocked(void) {
   return s_pending_impl != NULL && fw_system_app_launch_nesting() == s_pending_nesting;
+}
+
+// system_app.c calls this when a launch frame returns; if the requester of the
+// pending transition just exited, later renders at its old nesting level come
+// from the newly launched destination and must not stay blocked.
+void fw_compositor_launch_frame_exited(int nesting) {
+  if (s_pending_impl != NULL && nesting == s_pending_nesting) {
+    s_pending_nesting = -1;
+  }
 }
 
 bool fw_compositor_transition_pending(void) {

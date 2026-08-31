@@ -46,7 +46,8 @@ def launch(name, qemu, elf, spi_src, out, extra_machine):
     shutil.copy(spi_src, spi)
     sock = os.path.join(workdir, "mon.sock")
     log = os.path.join(workdir, "console.log")
-    cmd = [qemu, "-rtc", "base=localtime", "-machine", "pebble-emery" + extra_machine,
+    cmd = [qemu, "-rtc", "base=localtime", "-icount", "shift=3,sleep=on",
+           "-machine", "pebble-emery" + extra_machine,
            "-display", "none", "-kernel", elf,
            "-serial", "file:" + log, "-serial", "null", "-serial", "null",
            "-monitor", "unix:%s,server=on,wait=off" % sock,

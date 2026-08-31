@@ -76,7 +76,21 @@ AnimationState *app_state_get_animation_state(void) {
 }
 
 RtcTicks sys_get_ticks(void) {
-  return rtc_get_ticks();
+  // Quantize the animation clock to 10 ms buckets (this build's only callers
+  // are applib animation.c and menu_layer's double-tap window). Frame pacing
+  // (launcher_ui.c) lands animation callbacks mid-bucket, so the elapsed-ms
+  // each animation frame samples is exact multiples of the frame cadence and
+  // the rendered pixels are run-to-run deterministic; without this, ±1-2 ms
+  // scheduling jitter flips pixels wherever a sample lands near an easing-curve
+  // boundary (the FreeRTOS reference itself flips those frames run-to-run).
+  const RtcTicks ticks = rtc_get_ticks();
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+  return ticks - (ticks % (10 * RTC_TICKS_HZ / 1000));
+#else
+  // Hardware keeps the raw clock: quantization is a QEMU determinism aid
+  // for the frame-diff harness, not shipping behavior.
+  return ticks;
+#endif
 }
 
 EventServiceInfo *kernel_applib_get_event_service_state(void) {

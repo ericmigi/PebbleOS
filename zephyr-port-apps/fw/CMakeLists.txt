@@ -734,6 +734,7 @@ set(KINO "${PEBBLEOS_ROOT}/src/fw/applib/ui/kino")
 
 target_sources(app PRIVATE
   src/fw_shell.c
+  src/boot_splash_port.c
   src/shell_glue.c
   src/resource_pack.c
 
