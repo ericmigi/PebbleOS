@@ -53,13 +53,15 @@ by construction once the same code boots on Zephyr; the diff harness proves it.
 
 ## Animation capture
 
-ui_walk `burst:` samples screendumps (~10-15/s) and dedupes — catches gross
-animation diffs (collapsed/missing frames) but can miss individual 30fps
-compositor frames. For true frame-exact animation parity, add a frame
-recorder to the qemu-pebble display device (dump framebuffer on every
-CTRL_UPDATE_REQUEST to a ring dir) in the coredevices/qemu fork — then both
-firmwares produce exact per-update frame streams to diff. Do this when the
-settled-screen set is at px_diff==0.
+Two tiers:
+- ui_walk `burst:` samples screendumps (~10-15/s) and dedupes — quick, catches
+  gross diffs, can miss individual frames.
+- EXACT: qemu frame recorder (local qemu fork checkout
+  ~/dev/qemu-pebble-src, branch pebble-display-recorder, binary
+  build/qemu-system-arm). `-global pebble-display.record-dir=DIR` dumps the
+  raw framebuffer as PPM on every guest CTRL_UPDATE plus frames.log with
+  virtual-ns timestamps. Run both firmwares with the recorder and diff the
+  frame streams 1:1. Not pushed anywhere (never push coredevices).
 
 ## Status log
 
