@@ -1,0 +1,6 @@
+board:
+  name: qemu_emery
+  full_name: Pebble Emery (qemu-pebble)
+  vendor: pebble
+  socs:
+  - name: pebble_qemu

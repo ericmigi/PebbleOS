@@ -163,3 +163,24 @@ wedges), boot_capture.py, shell_probe.py, Info.plist (GrabD bundle plist).
   (vendor blob already in flash) via HCI-H4 over IPC (third_party/nimble/transport/hci_sf32lb52.c,
   lcpu_power_on + ipc_queue). npl ported to Zephyr (npl_os_zephyr.c).
 - Milestone (scoped): connect -> receive ONE notification -> display it on the panel. No OTA.
+
+## 6. QEMU (host, no rig needed)
+
+Zephyr board def for the qemu-pebble `pebble-emery` machine lives in
+`zephyr-port/module/` (Zephyr module: board `qemu_emery`, SoC `pebble_qemu`,
+`pebble,simple-uart` console driver). Build + run the smoke app:
+
+```sh
+cd ~/dev/pblboot-ws
+export PATH="$PWD/.venv/bin:$PATH" QEMU_BIN_PATH=$PWD/qemu-bin \
+  ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb \
+  GNUARMEMB_TOOLCHAIN_PATH=/opt/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi
+west build -b qemu_emery ~/dev/PebbleOS/zephyr-port -d build-qemu-smoke \
+  -- -DZEPHYR_EXTRA_MODULES=/home/taz/dev/PebbleOS/zephyr-port/module
+west build -d build-qemu-smoke -t run   # expect SMOKE_DONE 8/8 on console
+```
+
+`qemu-bin/qemu-system-arm` is a symlink to the SDK's `qemu-pebble`
+(pebbleos-sdk-0.1.7). Console is UART0 (serial slot 0); the FreeRTOS pbl
+tooling maps console to UART2 (slot 2) — flip `zephyr,console` when
+integrating with `./pbl qemu`.

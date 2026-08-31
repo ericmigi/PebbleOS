@@ -1,0 +1,80 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Core Devices LLC
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Pebble Emery generic machine in qemu-pebble (pebble-emery, Cortex-M33).
+ * Memory map mirrors src/fw/board/board_qemu.h.
+ */
+
+/dts-v1/;
+
+#include <mem.h>
+#include <arm/armv8-m.dtsi>
+
+/ {
+	compatible = "pebble,qemu-emery";
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,cortex-m33";
+			reg = <0>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			mpu: mpu@e000ed90 {
+				compatible = "arm,armv8m-mpu";
+				reg = <0xe000ed90 0x40>;
+			};
+		};
+	};
+
+	chosen {
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+	};
+
+	sram0: memory@20000000 {
+		compatible = "mmio-sram";
+		reg = <0x20000000 0x7fc00>;
+	};
+
+	soc {
+		flash0: flash@0 {
+			compatible = "soc-nv-flash";
+			reg = <0x0 DT_SIZE_M(4)>;
+		};
+
+		uart0: uart@40000000 {
+			compatible = "pebble,simple-uart";
+			reg = <0x40000000 0x1000>;
+			interrupts = <0 3>;
+			status = "okay";
+		};
+
+		uart1: uart@40001000 {
+			compatible = "pebble,simple-uart";
+			reg = <0x40001000 0x1000>;
+			interrupts = <1 3>;
+			status = "disabled";
+		};
+
+		uart2: uart@40002000 {
+			compatible = "pebble,simple-uart";
+			reg = <0x40002000 0x1000>;
+			interrupts = <2 3>;
+			status = "disabled";
+		};
+	};
+};
+
+&nvic {
+	arm,num-irq-priority-bits = <3>;
+};

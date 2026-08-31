@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config UART_PEBBLE_SIMPLE
+	bool "Pebble QEMU simple UART driver"
+	default y
+	depends on DT_HAS_PEBBLE_SIMPLE_UART_ENABLED
+	select SERIAL_HAS_DRIVER
+	help
+	  Driver for the pebble-simple-uart device in qemu-pebble machines.

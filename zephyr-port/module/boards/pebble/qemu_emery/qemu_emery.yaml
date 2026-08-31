@@ -1,0 +1,10 @@
+identifier: qemu_emery
+name: Pebble Emery (qemu-pebble)
+type: qemu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+ram: 511
+flash: 4096
+simulation: qemu

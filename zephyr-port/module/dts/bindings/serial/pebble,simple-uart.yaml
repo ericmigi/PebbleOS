@@ -1,0 +1,12 @@
+description: Pebble QEMU simple UART (pebble-simple-uart device in qemu-pebble)
+
+compatible: "pebble,simple-uart"
+
+include: uart-controller.yaml
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
