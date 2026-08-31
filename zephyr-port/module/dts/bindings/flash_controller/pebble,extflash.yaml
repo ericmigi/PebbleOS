@@ -1,0 +1,10 @@
+description: Pebble QEMU external flash controller (pebble-extflash device)
+
+compatible: "pebble,extflash"
+
+include: flash-controller.yaml
+
+properties:
+  reg:
+    required: true
+    description: Two entries - control registers, XIP window

@@ -1,0 +1,5 @@
+add_subdirectory_ifdef(CONFIG_UART_PEBBLE_SIMPLE drivers/serial)
+add_subdirectory_ifdef(CONFIG_DISPLAY_PEBBLE drivers/display)
+add_subdirectory_ifdef(CONFIG_INPUT_PEBBLE_BUTTONS drivers/input)
+add_subdirectory_ifdef(CONFIG_FLASH_PEBBLE_EXTFLASH drivers/flash)
+add_subdirectory_ifdef(CONFIG_RTC_PEBBLE drivers/rtc)

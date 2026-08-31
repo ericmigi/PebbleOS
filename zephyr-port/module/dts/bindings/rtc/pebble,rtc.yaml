@@ -1,0 +1,12 @@
+description: Pebble QEMU RTC (pebble-rtc device in qemu-pebble)
+
+compatible: "pebble,rtc"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true

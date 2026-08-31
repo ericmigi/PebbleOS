@@ -44,4 +44,5 @@ by construction once the same code boots on Zephyr; the diff harness proves it.
 
 ## Status log
 
-- P0: started 2026-08-31.
+- P0 DONE 2026-08-31: ref runs headless (SDL dummy), ui_walk.py + px_diff.py in zephyr-port-notes/tools, PT2 UX mapped (boot=watchface, select=launcher, up/down=timeline).
+- P1: started 2026-08-31 (3 agents: display+gfx, buttons+rtc, extflash).
