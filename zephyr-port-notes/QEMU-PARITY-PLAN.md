@@ -33,6 +33,15 @@ by construction once the same code boots on Zephyr; the diff harness proves it.
 
 ## Rules
 
+- **Pixel bar (highest level, user-set): frame-exact 1:1.** Every screen AND
+  every animation frame must be pixel-identical to the FreeRTOS reference
+  (px_diff == 0). Compare under deterministic state: same `-rtc base=` fixed
+  clock, same flash image, same scripted input. Capture frame bursts during
+  transitions (launcher slide, Sliding Text slide-in/out), not just settled
+  screens. A nonzero diff is a bug to fix, never to accept. Known offenders:
+  Sliding Text animation collapsed by the synchronous animation stub; custom
+  launcher menu != real launcher app.
+
 - FreeRTOS build must stay green (`./pbl configure --board qemu_emery &&
   ./pbl build`) — it is the reference and the shipping firmware.
 - Commit per milestone. gitlint clean.
