@@ -116,3 +116,7 @@ Two tiers:
   persistence, (3) Music, (4) Notifications, (5) Alarms, (6) timeline.
   Parity walks must extend breadth-first: fix earliest diverging
   segment first, since later segments compare different UI states.
+- MILESTONE 2026-08-31: covered walk (boot/wake/open/scroll/close) is
+  frame-exact — 3x3 runs all px_diff==0. OPEN BUG: ~1/12 runs hard
+  freeze at final WINDOW_POP (ticks stop, no fault) — root-cause when
+  it recurs; instrument event pump if needed.
