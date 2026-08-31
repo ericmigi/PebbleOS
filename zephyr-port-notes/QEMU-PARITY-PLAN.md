@@ -72,3 +72,13 @@ settled-screen set is at px_diff==0.
   frame-diff Sliding Text zephyr vs ref incl. slide animations. Blocked
   offender: port's synchronous animation stub collapses slides — needs the
   real animation service in the fw app.
+- Sliding Text px audit 2026-08-31 (same minute, embedded bin == store
+  v1.2.1 emery bin, byte-identical): 6266 px differ. Two causes:
+  (1) zephyr text frozen 88px right of ref, right-edge clipped — the
+  synchronous animation stub leaves layers at mid-slide positions; fix =
+  real animation service, frame-exact burst diff after.
+  (2) capture hygiene: ref must be captured backlight-lit (send 'back',
+  shoot within ~3s); zephyr is always full-bright.
+- Fixture: Sliding Text v1.2.1 via
+  https://appstore-api.repebble.com/api/v1/apps/uuid/c7a9d535-e9bd-4c36-9c30-b45ad0908634
+  (pbw_file in latest_release); install: pebble install --qemu localhost:12344 <pbw>.

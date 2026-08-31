@@ -47,7 +47,7 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     m = Mon(args.mon)
     # wake the backlight so captures are in a consistent lit state
-    m.cmd("sendkey ret")
+    m.cmd("sendkey left")  # back: wakes backlight, no navigation from watchface
     time.sleep(1.0)
     n = 0
     for step in args.steps.split(","):
