@@ -51,6 +51,16 @@ by construction once the same code boots on Zephyr; the diff harness proves it.
 - Zephyr workspace: ~/dev/pblboot-ws (west, ericmigi/zephyr@pt2-display).
   Build: see RUNBOOK.md §6.
 
+## Animation capture
+
+ui_walk `burst:` samples screendumps (~10-15/s) and dedupes — catches gross
+animation diffs (collapsed/missing frames) but can miss individual 30fps
+compositor frames. For true frame-exact animation parity, add a frame
+recorder to the qemu-pebble display device (dump framebuffer on every
+CTRL_UPDATE_REQUEST to a ring dir) in the coredevices/qemu fork — then both
+firmwares produce exact per-update frame streams to diff. Do this when the
+settled-screen set is at px_diff==0.
+
 ## Status log
 
 - P0 DONE 2026-08-31: ref runs headless (SDL dummy), ui_walk.py + px_diff.py in zephyr-port-notes/tools, PT2 UX mapped (boot=watchface, select=launcher, up/down=timeline).

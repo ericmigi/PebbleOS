@@ -4,7 +4,11 @@
 """Scripted UI walk for qemu-pebble: sendkey + screenshot per step.
 
 Usage: ui_walk.py --mon build/qemu-mon.sock --out /tmp/walk-ref [--steps STEPS]
-STEPS: comma-separated keys (up/down/left/right) or 'shot:<name>'.
+STEPS: comma-separated keys (up/down/left/right), 'shot:<name>', or
+'burst:<name>:<seconds>' — captures frames as fast as the monitor allows for
+<seconds>, dedupes consecutive identical frames, and saves the distinct
+sequence as <name>-f000.png, <name>-f001.png, ... For animation parity,
+run the same walk on both firmwares and px_diff the frame sequences.
 Default walk covers launcher scroll + a few app screens.
 """
 import argparse, socket, time, os, sys
@@ -48,7 +52,27 @@ def main():
     n = 0
     for step in args.steps.split(","):
         step = step.strip()
-        if step.startswith("shot:"):
+        if step.startswith("burst:"):
+            _, name, secs = step.split(":")
+            end = time.time() + float(secs)
+            prev = None
+            fi = 0
+            tmp = os.path.abspath(os.path.join(args.out, "_burst.ppm"))
+            while time.time() < end:
+                m.cmd("screendump %s" % tmp)
+                try:
+                    data = open(tmp, "rb").read()
+                except OSError:
+                    continue
+                if data and data != prev:
+                    Image.open(tmp).save(os.path.join(args.out, "%02d-%s-f%03d.png" % (n, name, fi)))
+                    fi += 1
+                    prev = data
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            n += 1
+            print("burst", name, "%d distinct frames" % fi)
+        elif step.startswith("shot:"):
             name = "%02d-%s.png" % (n, step[5:])
             n += 1
             time.sleep(args.settle)
