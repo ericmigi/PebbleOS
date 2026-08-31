@@ -107,3 +107,12 @@ Two tiers:
   row offset, boot splash sequence, backlight wake fade. Then:
   watchface pref persistence, timeline, glance backends, notifications
   row, Settings submenus + remaining system apps, PBW app corpus.
+- Deep-walk triage 2026-08-31: launcher/watchface/transition layer near
+  parity; inside apps diverges — Settings submenus are "Not ported"
+  placeholders (ref renders real Bluetooth Connection screen etc.),
+  Music renders differently (static glance stubs), submenu open/close
+  transitions missing. Order of attack after transition alignment:
+  (1) Settings submenus real screens, (2) Watchfaces picker + pref
+  persistence, (3) Music, (4) Notifications, (5) Alarms, (6) timeline.
+  Parity walks must extend breadth-first: fix earliest diverging
+  segment first, since later segments compare different UI states.
