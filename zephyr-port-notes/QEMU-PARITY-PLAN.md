@@ -101,3 +101,9 @@ Two tiers:
   ref renders ~4 dim-to-bright frames on wake, zephyr constant-bright.
   Queue after compositor transitions: boot splash + launch order, then
   light service fade.
+- P4 compositor milestone 2026-08-31: real shutter transitions ported;
+  open/scroll/close frame counts match, endpoints exact, mid-frame
+  jitter within ref-vs-ref variance. Agent running: selection-highlight
+  row offset, boot splash sequence, backlight wake fade. Then:
+  watchface pref persistence, timeline, glance backends, notifications
+  row, Settings submenus + remaining system apps, PBW app corpus.
