@@ -1,6 +1,11 @@
 # PebbleOS core firmware bring-up
 
-This application is the P2 unified-firmware bring-up for `pt2`. It compiles the
+This application is the P2 unified-firmware bring-up for `pt2`, also buildable
+for the `qemu_emery` board (qemu-pebble `pebble-emery` machine): the SiFli
+HAL/QSPI/NimBLE stack is pt2-only (see `if(FW_BOARD_PT2)` in CMakeLists.txt and
+`boards/pt2.conf`); qemu uses the Zephyr flash/input/rtc drivers, the FreeRTOS
+`qemu_image_spi` flash layout, and stubs BLE (`FW_BLE_SKIPPED`) and the
+watchdog. It compiles the
 real firmware entry, Pebble task registry, launcher event loop, kernel event queues, event
 service/client dispatch, system background task, NewTimer service, regular
 timer, and tick timer service into one Zephyr image.

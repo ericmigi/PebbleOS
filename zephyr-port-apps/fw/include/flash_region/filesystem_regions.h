@@ -15,9 +15,13 @@ _Static_assert((FLASH_REGION_FILESYSTEM_BEGIN % SECTOR_SIZE_BYTES) == 0,
                "PFS scratch start must be sector aligned");
 _Static_assert((FLASH_REGION_FILESYSTEM_END % SECTOR_SIZE_BYTES) == 0,
                "PFS scratch end must be sector aligned");
+#ifndef CONFIG_BOARD_QEMU_EMERY
+// pt2 mounts a small dedicated scratch window; qemu mounts the full 21MB
+// filesystem region from the FreeRTOS SPI image.
 _Static_assert((FLASH_REGION_FILESYSTEM_END - FLASH_REGION_FILESYSTEM_BEGIN) ==
                    (4u * SECTOR_SIZE_BYTES),
                "PFS scratch must contain four erase sectors");
+#endif
 
 static const FSRegion s_region_list[] = {
     {.start = FLASH_REGION_FILESYSTEM_BEGIN,

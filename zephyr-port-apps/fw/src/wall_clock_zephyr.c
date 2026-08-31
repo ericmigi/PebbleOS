@@ -10,7 +10,14 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/timeutil.h>
 
-static const struct device *const s_rtc = DEVICE_DT_GET(DT_NODELABEL(rtc));
+// pt2 labels its RTC "rtc"; qemu_emery labels it "rtc0".
+#if DT_NODE_EXISTS(DT_NODELABEL(rtc))
+#define FW_RTC_NODE DT_NODELABEL(rtc)
+#else
+#define FW_RTC_NODE DT_NODELABEL(rtc0)
+#endif
+
+static const struct device *const s_rtc = DEVICE_DT_GET(FW_RTC_NODE);
 
 #define SF32LB_RTC_RESET_EPOCH 946684800
 

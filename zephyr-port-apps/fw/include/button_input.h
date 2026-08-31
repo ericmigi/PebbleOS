@@ -26,7 +26,13 @@ typedef struct {
 //! @return bitset of buttons whose debounced state flipped this step
 uint32_t button_debounce_step(ButtonDebouncer *d, uint32_t raw_state);
 
-//! Bring up the button GPIOs and start the 2ms sampling timer.
+//! Board backend: prepare the raw button source. Returns 0 on success.
+int button_raw_init(void);
+
+//! Board backend: current raw pressed-bitset (active-level adjusted).
+uint32_t button_raw_read(void);
+
+//! Bring up the raw button source and start the 2ms sampling timer.
 void button_zephyr_init(void);
 
 //! Runtime self-check of the debounce filter + event mapping. Asserts on
