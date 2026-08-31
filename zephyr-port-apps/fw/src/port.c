@@ -61,6 +61,24 @@ bool rng_rand(uint32_t *rand_out) {
 static EventServiceInfo s_event_service_state;
 static TickTimerServiceState s_tick_timer_state;
 
+// Real applib animation engine state (KernelMain UI + apps share the single
+// port event loop; apps get their own AnimationState like shipping firmware).
+#include "applib/ui/animation_private.h"
+static AnimationState s_kernel_animation_state;
+static AnimationState s_app_animation_state;
+
+AnimationState *kernel_applib_get_animation_state(void) {
+  return &s_kernel_animation_state;
+}
+
+AnimationState *app_state_get_animation_state(void) {
+  return &s_app_animation_state;
+}
+
+RtcTicks sys_get_ticks(void) {
+  return rtc_get_ticks();
+}
+
 EventServiceInfo *kernel_applib_get_event_service_state(void) {
   return &s_event_service_state;
 }
@@ -263,12 +281,12 @@ void mpu_set_task_configurable_regions(MemoryRegion_t *regions,
   memset(regions, 0, sizeof(MemoryRegion_t) * portNUM_CONFIGURABLE_REGIONS);
 }
 
-// evented_timer references this for App/Worker-targeted timers. The port only
-// registers KernelMain timers, so this path is never taken.
+// Apps share the KernelMain pump; App-targeted events (evented_timer, the
+// animation service frame events) land on the shared queue.
 bool process_manager_send_event_to_process(PebbleTask task, PebbleEvent *e) {
   ARG_UNUSED(task);
-  ARG_UNUSED(e);
-  return false;
+  event_put(e);
+  return true;
 }
 void system_task_watchdog_feed(void);
 void mcu_fpu_cleanup(void) { }

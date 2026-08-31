@@ -100,7 +100,7 @@ typedef struct {
 //! legacy 2.0 applications, this structure can be no larger than the AnimationLegacy2State
 //! structure.
 #define ANIMATION_STATE_3_X_SIGNATURE  ((uint32_t)(~0))
-typedef struct {
+typedef struct AnimationState {
   //! Signature used to distinguish these globals from the legacy 2.0 globals. The legacy 2.0
   //! globals start with a ListNode pointer. We put a value here (ANIMATION_STATE_3_X_SIGNATURE)
   //! that is guaranteed to be unique from a pointer.

@@ -4,7 +4,10 @@
 #include "applib/event_service_client.h"
 #include "applib/tick_timer_service_private.h"
 
+typedef struct AnimationState AnimationState;
+
 EventServiceInfo *app_state_get_event_service_state(void);
+AnimationState *app_state_get_animation_state(void);
 TickTimerServiceState *app_state_get_tick_timer_service_state(void);
 
 // Per-app scratch pointer for the running privileged system app (system_app.c).

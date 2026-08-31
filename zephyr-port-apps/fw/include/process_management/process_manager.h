@@ -20,3 +20,6 @@ bool process_manager_compiled_with_legacy2_sdk(void);
 #include "kernel/pebble_tasks.h"
 void process_manager_send_callback_event_to_process(PebbleTask task, void (*callback)(void *),
                                                     void *data);
+
+#include "kernel/events.h"
+bool process_manager_send_event_to_process(PebbleTask task, PebbleEvent *e);

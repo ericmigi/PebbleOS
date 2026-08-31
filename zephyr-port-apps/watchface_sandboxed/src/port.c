@@ -355,12 +355,13 @@ void watchface_port_set_threads(struct k_thread *kernel_thread, struct k_thread 
   s_app_thread = app_thread;
 }
 
+void applib_heap_ensure_init(void);
+
 void watchface_port_graphics_init(void) {
   const GSize size = GSize(PBL_DISPLAY_WIDTH, PBL_DISPLAY_HEIGHT);
   framebuffer_init(&s_framebuffer, &size);
   graphics_context_init(&s_context, &s_framebuffer, GContextInitializationMode_App);
-  k_heap_init(&s_app_heap, g_sandbox_app_arena.app_heap,
-              sizeof(g_sandbox_app_arena.app_heap));
+  applib_heap_ensure_init();
 
   if (!text_resources_init_font(SYSTEM_APP, FONT_RESOURCE_GOTHAM_BOLD_50, 0, &s_font_bold) ||
       !text_resources_init_font(SYSTEM_APP, FONT_RESOURCE_GOTHAM_LIGHT_50, 0, &s_font_light) ||
@@ -655,7 +656,20 @@ bool heap_is_allocated(Heap *heap, void *ptr) {
   return false;
 }
 
+// One-time init: the fw build allocates kernel-side animations from this heap
+// at boot, before the first app/graphics init; re-initializing on every app
+// (re)launch would wipe live kernel allocations.
+static bool s_app_heap_ready;
+void applib_heap_ensure_init(void) {
+  if (!s_app_heap_ready) {
+    k_heap_init(&s_app_heap, g_sandbox_app_arena.app_heap,
+                sizeof(g_sandbox_app_arena.app_heap));
+    s_app_heap_ready = true;
+  }
+}
+
 void *applib_malloc(size_t size) {
+  applib_heap_ensure_init();
   return k_heap_alloc(&s_app_heap, size, K_NO_WAIT);
 }
 
@@ -956,6 +970,9 @@ void app_unobstructed_area_service_subscribe(UnobstructedAreaHandlers handlers, 
 
 void app_unobstructed_area_service_unsubscribe(void) {}
 
+#ifndef PBL_WATCHFACE_IN_FW
+// Mock tween engine for the standalone sandboxed watchface demo. The fw build
+// links the real applib animation engine instead.
 Animation *animation_create(void) {
   return applib_zalloc(sizeof(struct Animation));
 }
@@ -1010,6 +1027,7 @@ bool animation_destroy(Animation *animation) {
   applib_free(animation);
   return true;
 }
+#endif  // !PBL_WATCHFACE_IN_FW
 
 int32_t watchface_port_time(int32_t *tloc) {
   const int32_t result = (int32_t)kernel_wall_clock_get();

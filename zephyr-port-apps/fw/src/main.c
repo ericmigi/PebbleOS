@@ -6,6 +6,7 @@
 #include "FreeRTOS.h"
 #include "app_registry.h"
 #include "applib/tick_timer_service.h"
+#include "applib/ui/animation_private.h"
 #include "applib/tick_timer_service_private.h"
 #include "ble_comm.h"
 #include "button_input.h"
@@ -13,6 +14,7 @@
 #include "kernel/event_loop.h"
 #include "kernel/events.h"
 #include "kernel/kernel_applib_state.h"
+#include "process_state/app_state/app_state.h"
 #include "kernel/pebble_tasks.h"
 #include "kernel/util/task_init.h"
 #include "launcher_ui.h"
@@ -60,6 +62,11 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 static void prv_kernel_main(void *parameter) {
   (void)parameter;
   task_init();
+
+  // Shipping inits the kernel animation state from kernel_ui_init on
+  // KernelMain; both engine states allocate their aux state on the heap.
+  animation_private_state_init(kernel_applib_get_animation_state());
+  animation_private_state_init(app_state_get_animation_state());
 
   TickTimerServiceState *tick_state = kernel_applib_get_tick_timer_service_state();
   tick_timer_service_state_init(tick_state);

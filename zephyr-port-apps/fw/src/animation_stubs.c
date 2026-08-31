@@ -1,55 +1,78 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-// Gap-fillers for the ported system apps. The port already ships an inert
-// animation shim layer (fw/src/ui_shims.c + watchface_sandboxed/src/port.c) and
-// an evented-timer-backed app_timer (fw/src/input_service.c). The Music app uses
-// a few entry points those shims don't yet cover; add only those here so we don't
-// double-define the existing ones.
-//
-// ponytail: animations resolve instantly (no tween) exactly like the rest of the
-// port shim layer. app_timer_reschedule is real (wraps evented_timer). Upgrade
-// path is the same as ui_shims.c: real applib animation.c once system apps run on
-// a PebbleTask_App with an initialized AnimationState + frame timer.
+// Residual glue next to the real applib animation engine (animation.c /
+// property_animation.c / animation_interpolate.c + the animation service).
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
 
 #include "applib/app_timer.h"
 #include "applib/ui/animation.h"
+#include "applib/ui/animation_private.h"
 #include "applib/ui/property_animation.h"
+#include "applib/ui/property_animation_private.h"
 #include "pbl/services/evented_timer.h"
+#include "system/passert.h"
 
-// --- animation entry points not in ui_shims.c / port.c ----------------------
-Animation *animation_spawn_create(Animation *animation_a, Animation *animation_b,
-                                  Animation *animation_c, ...) {
-  (void)animation_a;
-  (void)animation_b;
-  (void)animation_c;
-  return NULL;
+// applib_malloc.auto.c is not part of the port build; the engine allocates
+// through these generated-symbol hooks. The applib heap lazily inits on first
+// use (the engine frees with applib_free, so the allocator must match).
+void *applib_malloc(size_t size);
+void *_applib_type_malloc_AnimationPrivate(void) {
+  return applib_malloc(sizeof(AnimationPrivate));
 }
 
-bool animation_set_play_count(Animation *animation, uint32_t play_count) {
-  (void)animation;
-  (void)play_count;
-  return false;
+void *_applib_type_malloc_PropertyAnimationPrivate(void) {
+  return applib_malloc(sizeof(PropertyAnimationPrivate));
 }
 
-PropertyAnimation *property_animation_create_bounds_origin(struct Layer *layer, GPoint *from,
-                                                           GPoint *to) {
-  (void)layer;
-  (void)from;
-  (void)to;
-  return NULL;
+void *_applib_type_malloc_AnimationAuxState(void) {
+  return applib_malloc(sizeof(AnimationAuxState));
 }
 
-void property_animation_update_grect(PropertyAnimation *property_animation,
-                                     const uint32_t distance_normalized) {
-  (void)property_animation;
-  (void)distance_normalized;
+struct AnimationLegacy2Scheduler;
+void animation_legacy2_private_init_scheduler(struct AnimationLegacy2Scheduler *s) {
+  (void)s;
 }
 
-// --- app_timer_reschedule (port app_timer wraps evented_timer; register/cancel
-// live in input_service.c, reschedule was not needed until now) --------------
+// Legacy2 (SDK 2.x) animations never run in the port; the real applib
+// animation.c/property_animation.c only reach these for 2.x-SDK processes.
+#define LEGACY2_STUB(ret, name, args)   ret name args { PBL_CROAK("legacy2 animation unsupported"); }
+struct AnimationLegacy2;
+struct PropertyAnimationLegacy2;
+struct AnimationLegacy2Implementation;
+struct AnimationLegacy2Handlers;
+struct Layer;
+struct GRect;
+LEGACY2_STUB(struct AnimationLegacy2 *, animation_legacy2_create, (void))
+LEGACY2_STUB(void, animation_legacy2_destroy, (struct AnimationLegacy2 *a))
+LEGACY2_STUB(bool, animation_legacy2_is_scheduled, (struct AnimationLegacy2 *a))
+LEGACY2_STUB(void, animation_legacy2_schedule, (struct AnimationLegacy2 *a))
+LEGACY2_STUB(void, animation_legacy2_set_curve, (struct AnimationLegacy2 *a, uint8_t curve))
+LEGACY2_STUB(void, animation_legacy2_set_custom_curve, (struct AnimationLegacy2 *a, void *f))
+LEGACY2_STUB(void, animation_legacy2_set_delay, (struct AnimationLegacy2 *a, uint32_t ms))
+LEGACY2_STUB(void, animation_legacy2_set_duration, (struct AnimationLegacy2 *a, uint32_t ms))
+LEGACY2_STUB(void, animation_legacy2_set_handlers, (struct AnimationLegacy2 *a,
+             struct AnimationLegacy2Handlers *h, void *ctx))
+LEGACY2_STUB(void, animation_legacy2_set_implementation, (struct AnimationLegacy2 *a,
+             const struct AnimationLegacy2Implementation *impl))
+LEGACY2_STUB(void, animation_legacy2_unschedule, (struct AnimationLegacy2 *a))
+LEGACY2_STUB(struct PropertyAnimationLegacy2 *, property_animation_legacy2_create,
+             (const void *impl, void *subject, void *from, void *to))
+LEGACY2_STUB(struct PropertyAnimationLegacy2 *, property_animation_legacy2_create_layer_frame,
+             (struct Layer *layer, struct GRect *from, struct GRect *to))
+LEGACY2_STUB(void, property_animation_legacy2_init,
+             (struct PropertyAnimationLegacy2 *pa, const void *impl, void *subject,
+              void *from, void *to))
+LEGACY2_STUB(void, property_animation_legacy2_update_gpoint,
+             (struct PropertyAnimationLegacy2 *pa, const uint32_t d))
+LEGACY2_STUB(void, property_animation_legacy2_update_grect,
+             (struct PropertyAnimationLegacy2 *pa, const uint32_t d))
+LEGACY2_STUB(void, property_animation_legacy2_update_int16,
+             (struct PropertyAnimationLegacy2 *pa, const uint32_t d))
+
+// --- app_timer entry points (evented_timer-backed, unrelated to the engine) --
 bool app_timer_reschedule(AppTimer *timer_handle, uint32_t new_timeout_ms) {
   return evented_timer_reschedule((EventedTimerID)(uintptr_t)timer_handle, new_timeout_ms);
 }
@@ -58,28 +81,4 @@ AppTimer *app_timer_register_repeatable(uint32_t timeout_ms, AppTimerCallback ca
                                         void *callback_data, bool repeating) {
   return (AppTimer *)(uintptr_t)evented_timer_register(timeout_ms, repeating, callback,
                                                        callback_data);
-}
-
-// --- animation queries used by kino_player (never scheduled in the port) ----
-void *animation_get_context(Animation *animation) {
-  (void)animation;
-  return NULL;
-}
-
-bool animation_get_elapsed(Animation *animation, int32_t *elapsed_ms) {
-  (void)animation;
-  if (elapsed_ms) {
-    *elapsed_ms = 0;
-  }
-  return false;
-}
-
-bool animation_get_reverse(Animation *animation) {
-  (void)animation;
-  return false;
-}
-
-bool animation_set_immutable(Animation *animation) {
-  (void)animation;
-  return true;
 }

@@ -366,6 +366,10 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/scroll_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/inverter_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/animation_timing.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/animation.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/animation_interpolate.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/property_animation.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/animation_service/service.c"
 
   # Real applib UI + graphics pulled in by the Music app (action bar, bitmap /
   # status / progress layers, album-art PNG decode). app_timer + the animation
@@ -434,6 +438,22 @@ set_source_files_properties(
   "${CMAKE_CURRENT_SOURCE_DIR}/src/ui_shims.c"
   PROPERTIES COMPILE_OPTIONS
     "-include;${FW_GRAPHICS_APP_STATE};-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/gfx/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/include"
+)
+
+# port.c now pulls applib animation_private.h (via kernel_applib_state.h)
+# alongside Zephyr kernel headers; resolve the sign_extend clash the usual way.
+set_source_files_properties(
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/port.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/main.c"
+  PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
+)
+
+# Real animation engine + service TUs: Zephyr/legacy2/critical-section shims.
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/animation.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/property_animation.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/animation_service/service.c"
+  PROPERTIES COMPILE_OPTIONS "-include;anim_port_pre.h"
 )
 
 # The shipping QSPI flash sources + the port's qspi_board.c need the SiFli HAL

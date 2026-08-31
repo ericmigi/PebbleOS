@@ -24,6 +24,9 @@ const uint8_t *sys_resource_read_only_bytes(ResAppNum app_num, uint32_t resource
                                             size_t *num_bytes_out);
 uint32_t sys_resource_get_and_cache(ResAppNum app_num, uint32_t resource_id);
 ResAppNum sys_get_current_resource_num(void);
+
+#include "pbl/drivers/rtc.h"
+RtcTicks sys_get_ticks(void);
 bool sys_app_is_watchface(void);
 void sys_event_service_client_subscribe(EventServiceInfo *handler);
 void sys_event_service_client_unsubscribe(EventServiceInfo *state, EventServiceInfo *handler);
