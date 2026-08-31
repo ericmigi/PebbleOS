@@ -66,3 +66,9 @@ settled-screen set is at px_diff==0.
 - P0 DONE 2026-08-31: ref runs headless (SDL dummy), ui_walk.py + px_diff.py in zephyr-port-notes/tools, PT2 UX mapped (boot=watchface, select=launcher, up/down=timeline).
 - P1 DONE 2026-08-31: display+buttons+rtc+extflash Zephyr drivers verified in qemu-pebble (gfx renders via applib, 4 buttons report, RTC sane, flash persists via SYNC). gfx app builds for qemu_emery.
 - P2 DONE 2026-08-31: Sliding Text watchface (real PBW, real loader) renders correct wall-clock time on qemu_emery. Known issue: kernel wall_clock_zephyr.c applies the SF32 month -1 normalization to the Zephyr-compliant QEMU RTC too — date off by one month on qemu; make it rtc-driver-conditional (HH:MM unaffected).
+- TODO parity fixture: reconstruct Sliding Text .pbw from the embedded
+  loader bin + resources (zip: manifest + pebble-app.bin + resource pack),
+  install into the ref emulator via pebble-tool (port 12344), then
+  frame-diff Sliding Text zephyr vs ref incl. slide animations. Blocked
+  offender: port's synchronous animation stub collapses slides — needs the
+  real animation service in the fw app.
