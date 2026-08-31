@@ -39,7 +39,7 @@ static void pebble_buttons_isr(const struct device *dev)
 	for (int i = 0; i < ARRAY_SIZE(button_codes); i++) {
 		if (changed & BIT(i)) {
 			input_report_key(dev, button_codes[i], (state & BIT(i)) != 0, true,
-					 K_FOREVER);
+					 K_NO_WAIT);
 		}
 	}
 }
