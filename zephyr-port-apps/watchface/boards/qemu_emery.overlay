@@ -1,0 +1,9 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* wall_clock_zephyr.c binds DT_NODELABEL(rtc); attach that label here. */
+/ {
+	soc {
+		rtc: rtc@40005000 {
+		};
+	};
+};
