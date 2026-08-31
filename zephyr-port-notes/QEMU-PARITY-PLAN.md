@@ -82,3 +82,14 @@ settled-screen set is at px_diff==0.
 - Fixture: Sliding Text v1.2.1 via
   https://appstore-api.repebble.com/api/v1/apps/uuid/c7a9d535-e9bd-4c36-9c30-b45ad0908634
   (pbw_file in latest_release); install: pebble install --qemu localhost:12344 <pbw>.
+- P4 progress 2026-08-31: real shell flow on qemu_emery — boots real
+  TicToc, real launcher app, real Settings; settled screens launcher /
+  launcher+down / settings at px_diff == 0 vs reference (verified twice,
+  cold boot). Remaining P4 queue, in order: real animation service
+  (running), qemu frame recorder for exact animation diffs (running),
+  backlight keypress dynamics, watchface pref persistence, timeline,
+  glance backends (music/alarms/weather), notifications row backend.
+  Note: qemu fw build consumes resource_ids.auto.h +
+  timeline_resource_table.auto.c from the FreeRTOS reference build dir —
+  build the reference first (acceptable: ref build is required for
+  parity anyway).
