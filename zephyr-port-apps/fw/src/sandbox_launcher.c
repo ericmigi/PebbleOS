@@ -219,15 +219,18 @@ void fw_fb_dump_uart(void) {
   printk("FB_END crc=0x%08x\n", crc);
 }
 
-void watchface_port_push_frame(void) {
+void fw_display_push_buffer(const uint8_t *buffer) {
   if (!s_display_ready) {
     return;
   }
-  const int ret =
-      display_write(s_display, 0U, 0U, &s_display_desc, s_framebuffer);
+  const int ret = display_write(s_display, 0U, 0U, &s_display_desc, buffer);
   if (ret != 0) {
     printk("DISPLAY_PUSH_FAIL %d\n", ret);
   }
+}
+
+void watchface_port_push_frame(void) {
+  fw_display_push_buffer(s_framebuffer);
 }
 
 void fw_sandbox_display_init(void) {

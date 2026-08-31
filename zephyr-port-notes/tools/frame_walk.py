@@ -38,7 +38,7 @@ def frame_count(d):
     except FileNotFoundError:
         return 0
 
-def run_side(name, qemu, elf, spi_src, steps, out, extra_machine, boot_marker_log=None):
+def launch(name, qemu, elf, spi_src, out, extra_machine):
     workdir = os.path.join(out, name)
     frames = os.path.join(workdir, "frames")
     os.makedirs(workdir, exist_ok=True)
@@ -55,33 +55,41 @@ def run_side(name, qemu, elf, spi_src, steps, out, extra_machine, boot_marker_lo
     if extra_machine:
         cmd += ["-audiodev", "none,id=snd0"]
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    segments = []  # (label, start_idx, end_idx)
+    return {"name": name, "proc": proc, "frames": frames, "sock": sock, "segments": [],
+            "prev_label": "boot", "prev_idx": 0}
+
+def run_both(sides, steps):
+    # Both firmwares run at the same wall time so clock-driven pixels (watch
+    # hands) match; keys go to both monitors back-to-back per step.
     try:
-        # wait for first frames (boot render)
         t0 = time.time()
-        while frame_count(frames) < 1:
-            if time.time() - t0 > 90:
-                raise RuntimeError(name + ": no frames after 90s")
-            time.sleep(1)
-        prev_label = "boot"
-        prev_idx = 0
+        for side in sides:
+            while frame_count(side["frames"]) < 1:
+                if time.time() - t0 > 90:
+                    raise RuntimeError(side["name"] + ": no frames after 90s")
+                time.sleep(1)
         for step in steps:
             if step.startswith("settle:") or step.startswith("wait:"):
                 time.sleep(float(step.split(":")[1]))
             else:
-                n = frame_count(frames)
-                segments.append((prev_label, prev_idx, n))
-                prev_label, prev_idx = step, n
-                mon_cmd(sock, "sendkey " + step)
+                for side in sides:
+                    n = frame_count(side["frames"])
+                    side["segments"].append((side["prev_label"], side["prev_idx"], n))
+                    side["prev_label"], side["prev_idx"] = step, n
+                for side in sides:
+                    mon_cmd(side["sock"], "sendkey " + step)
         time.sleep(2)
-        segments.append((prev_label, prev_idx, frame_count(frames)))
+        for side in sides:
+            side["segments"].append((side["prev_label"], side["prev_idx"],
+                                     frame_count(side["frames"])))
     finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-    return frames, segments
+        for side in sides:
+            side["proc"].terminate()
+        for side in sides:
+            try:
+                side["proc"].wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                side["proc"].kill()
 
 def px_diff(a, b):
     from PIL import Image, ImageChops
@@ -104,9 +112,11 @@ def main():
     args = ap.parse_args()
     steps = [s.strip() for s in args.steps.split(",") if s.strip()]
     os.makedirs(args.out, exist_ok=True)
-    rf, rseg = run_side("ref", args.qemu, args.ref_elf, args.spi, steps, args.out,
-                        ",audiodev=snd0")
-    zf, zseg = run_side("zephyr", args.qemu, args.zephyr_elf, args.spi, steps, args.out, "")
+    ref = launch("ref", args.qemu, args.ref_elf, args.spi, args.out, ",audiodev=snd0")
+    zep = launch("zephyr", args.qemu, args.zephyr_elf, args.spi, args.out, "")
+    run_both([ref, zep], steps)
+    rf, rseg = ref["frames"], ref["segments"]
+    zf, zseg = zep["frames"], zep["segments"]
     rframes = sorted(f for f in os.listdir(rf) if f.endswith(".ppm"))
     zframes = sorted(f for f in os.listdir(zf) if f.endswith(".ppm"))
     exit_code = 0

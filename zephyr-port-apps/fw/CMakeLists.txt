@@ -773,6 +773,12 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_resources.c"
   "${PEBBLEOS_ROOT}/build/src/fw/resource/timeline_resource_table.auto.c"
   "${PEBBLEOS_ROOT}/lib/util/uuid.c"
+
+  # Real compositor transitions (watchface <-> launcher shutter) on the port
+  # compositor core (src/compositor_port.c).
+  src/compositor_port.c
+  "${PEBBLEOS_ROOT}/src/fw/services/compositor/compositor_transitions.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_shutter_transitions.c"
 )
 
 # Launcher app TUs: same treatment as the settings/watchfaces app sources, plus
@@ -816,6 +822,9 @@ set_source_files_properties(
   "${GFX}/gbitmap_sequence.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/timeline/text_node.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_resources.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/compositor_port.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/compositor/compositor_transitions.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_shutter_transitions.c"
   PROPERTIES COMPILE_OPTIONS
     "-include;${FW_GRAPHICS_APP_STATE};-include;resource/resource_ids.auto.h;-include;applib/app_logging.h;-iquote;${PEBBLEOS_ROOT}/build/src/fw;-iquote;${CMAKE_CURRENT_SOURCE_DIR}/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/gfx/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/include"
 )

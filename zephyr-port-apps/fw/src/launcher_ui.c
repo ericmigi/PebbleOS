@@ -201,6 +201,20 @@ __attribute__((weak)) bool fw_shell_handle_button_down(ButtonId button_id) {
 
 __attribute__((weak)) void fw_shell_on_app_exit(const PebbleProcessMd *md) { (void)md; }
 
+// Called after a window is popped, before the revealed window renders; the
+// real shell uses it to arm the compositor close transition while the app
+// framebuffer still holds the outgoing screen.
+__attribute__((weak)) void fw_shell_before_pop_render(Window *window, int new_depth) {
+  (void)window;
+  (void)new_depth;
+}
+
+// compositor_port.c (real-shell builds); pt2 has no compositor, so the pump
+// falls back to these no-transition defaults.
+__attribute__((weak)) bool fw_compositor_handle_frame(void) { return false; }
+__attribute__((weak)) bool fw_compositor_transition_pending(void) { return false; }
+__attribute__((weak)) bool fw_compositor_render_blocked(void) { return false; }
+
 #ifndef FW_REAL_SHELL
 // ---------------------------------------------------------------------------
 // The launcher menu.
@@ -348,16 +362,29 @@ static void prv_launcher_click_config_provider(void *context) {
 // ---------------------------------------------------------------------------
 // Render + window-stack push/pop.
 // ---------------------------------------------------------------------------
+// Render + push only when something marked the top window dirty
+// (layer_mark_dirty -> window_schedule_render), like the shipping render loop.
+// Unconditional pushes emit duplicate display frames on every event (per-second
+// tick spam, double frames during animations) that the reference never shows.
 static void prv_render_top(void) {
   Window *window = prv_top_window();
-  if (!window || s_app_launched) {
+  if (!window || s_app_launched || !window->is_render_scheduled ||
+      fw_compositor_render_blocked()) {
     return;
   }
   layer_render_tree(window_get_root_layer(window), app_state_get_graphics_context());
   window->is_render_scheduled = false;
+  // A pending/running compositor transition owns the panel: it composites the
+  // app framebuffer itself and pushes the system framebuffer per frame.
+  if (fw_compositor_handle_frame()) {
+    return;
+  }
   watchface_port_push_frame();
   fw_fb_dump_uart();
 }
+
+// window_private.h's entry, defined in watchface_sandboxed/src/port.c.
+void window_schedule_render(Window *window);
 
 static void prv_window_push(Window *window) {
   if (s_stack_top + 1 >= STACK_MAX) {
@@ -367,6 +394,7 @@ static void prv_window_push(Window *window) {
   window->on_screen = true;
   printk("WINDOW_PUSH %p depth=%d\n", (void *)window, s_stack_top + 1);
   prv_apply_click_config(window);
+  window_schedule_render(window);
   prv_render_top();
 }
 
@@ -379,6 +407,7 @@ static void prv_window_pop(void) {
     s_app_launched = false;
     printk("WINDOW_POP sandbox depth=%d\n", s_stack_top + 1);
     prv_apply_click_config(prv_top_window());
+    window_schedule_render(prv_top_window());
     prv_render_top();
     return;
   }
@@ -388,6 +417,7 @@ static void prv_window_pop(void) {
   Window *window = s_stack[s_stack_top--];
   window->on_screen = false;
   printk("WINDOW_POP %p depth=%d\n", (void *)window, s_stack_top + 1);
+  fw_shell_before_pop_render(window, s_stack_top + 1);
 
   // Run the real window's disappear + unload handlers (mirrors shipping window
   // stack pop) so a system app's window frees its data / deinits its menu. This
@@ -401,7 +431,13 @@ static void prv_window_pop(void) {
   }
 
   prv_apply_click_config(prv_top_window());
-  prv_render_top();
+  window_schedule_render(prv_top_window());
+  // A pending close transition means this pop leaves the exiting app; the
+  // revealed window must render from its own app context (user_data still
+  // points at the exiting app here), so defer to the owning pump's render.
+  if (!fw_compositor_transition_pending()) {
+    prv_render_top();
+  }
 }
 
 // Exposed to the system-app launch core (system_app.c) so a privileged app's

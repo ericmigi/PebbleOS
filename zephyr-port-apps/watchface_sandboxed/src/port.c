@@ -388,6 +388,10 @@ void watchface_port_app_state_init(void) {
   tick_timer_service_state_init(&s_app_state.tick_state);
 }
 
+FrameBuffer *watchface_port_get_framebuffer(void) {
+  return &s_framebuffer;
+}
+
 uint8_t *watchface_framebuffer_bytes(size_t *size_out, uint16_t *stride_out) {
   if (size_out) {
     *size_out = framebuffer_get_size_bytes(&s_framebuffer);

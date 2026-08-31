@@ -23,10 +23,18 @@
 #include "process_management/app_manager.h"
 #include "process_management/pebble_process_md.h"
 
+#include "pbl/services/compositor/compositor.h"
+#include "pbl/services/compositor/default/compositor_shutter_transitions.h"
+
 #include "launcher_ui.h"
 #include "system_app.h"
 
 void fw_sandbox_display_init(void);
+void fw_compositor_request_transition(const CompositorTransition *impl);
+
+// True while the launcher app owns the screen (from SELECT-open until its root
+// window pops back to the watchface).
+static bool s_launcher_active;
 
 // ---------------------------------------------------------------------------
 // app_manager task context: carries the launcher's args (reset_scroll).
@@ -70,6 +78,11 @@ bool fw_shell_handle_button_down(ButtonId button_id) {
     return false;
   }
   if (button_id == BUTTON_ID_SELECT && !fw_shell_launch_pending()) {
+    // Shipping (shell.c): watchface -> launcher opens with the white shutter
+    // sliding right; captured now, started once the launcher renders.
+    fw_compositor_request_transition(
+        compositor_shutter_transition_get(CompositorTransitionDirectionRight, GColorWhite));
+    s_launcher_active = true;
     prv_request_launcher(true /* reset_scroll */);
   }
   return true;
@@ -78,6 +91,17 @@ bool fw_shell_handle_button_down(ButtonId button_id) {
 // Exiting an app that was launched from the launcher returns to the launcher
 // (shipping relaunches it with its persisted selection). Exiting the launcher
 // itself, or a watchface, falls back to the watchface pump.
+// BACK out of the launcher to the watchface closes with the shutter sliding
+// left (shipping shell.c, launcher -> watchface).
+void fw_shell_before_pop_render(Window *window, int new_depth) {
+  (void)window;
+  if (s_launcher_active && new_depth == 1) {
+    s_launcher_active = false;
+    fw_compositor_request_transition(
+        compositor_shutter_transition_get(CompositorTransitionDirectionLeft, GColorWhite));
+  }
+}
+
 void fw_shell_on_app_exit(const PebbleProcessMd *md) {
   if (md == launcher_menu_app_get_app_info() ||
       md->process_type == ProcessTypeWatchface ||

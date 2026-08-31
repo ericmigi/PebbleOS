@@ -86,11 +86,14 @@ void app_free(void *ptr) { k_free(ptr); }
 
 // ---------------------------------------------------------------------------
 // app_focus_service: the fw scaffold has no notification/modal overlay, so an
-// app is always in focus. Stubbed (a watchface only uses this to redraw on
-// regaining focus, which never happens here).
+// app is always in focus. Deliver the did-focus callback immediately (shipping
+// sends PEBBLE_APP_DID_CHANGE_FOCUS_EVENT right after launch); the launcher
+// gates its selection animations + glance playing on it.
 // ---------------------------------------------------------------------------
 void app_focus_service_subscribe_handlers(AppFocusHandlers handlers) {
-  ARG_UNUSED(handlers);
+  if (handlers.did_focus) {
+    handlers.did_focus(true);
+  }
 }
 
 void app_focus_service_unsubscribe(void) {}
@@ -156,6 +159,13 @@ void rtc_get_time_tm(struct tm *time_tm) {
   gmtime_r(&now, time_tm);
 }
 
+// Nesting level of fw_system_app_launch frames (watchface = 1, launcher = 2,
+// app opened from the launcher = 3, ...). The compositor uses it to tell which
+// app context a render would run in.
+static int s_launch_nesting;
+
+int fw_system_app_launch_nesting(void) { return s_launch_nesting; }
+
 // Window-stack depth of the launcher at the moment a system app is launched
 // (before the app pushes its first window). app_event_loop pumps until the app
 // has popped every window it pushed, i.e. depth is back to this base.
@@ -211,7 +221,9 @@ void fw_system_app_launch(const PebbleProcessMd *md) {
   s_app_user_data = NULL;
   s_app_base_depth = fw_window_stack_depth();
   g_fw_privileged_window = true;
+  ++s_launch_nesting;
   md->main_func();  // push window (load runs) -> app_event_loop -> deinit
+  --s_launch_nesting;
 
   s_app_user_data = prev_user_data;
   s_app_base_depth = prev_base_depth;
