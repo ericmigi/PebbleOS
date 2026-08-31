@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config INPUT_PEBBLE_BUTTONS
+	bool "Pebble QEMU input driver"
+	default y
+	depends on DT_HAS_PEBBLE_BUTTONS_ENABLED && INPUT
+	help
+	  Driver for the corresponding device in qemu-pebble machines.

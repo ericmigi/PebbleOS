@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config DISPLAY_PEBBLE
+	bool "Pebble QEMU display driver"
+	default y
+	depends on DISPLAY && DT_HAS_PEBBLE_DISPLAY_ENABLED
+	help
+	  Driver for the corresponding device in qemu-pebble machines.

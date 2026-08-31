@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include <zephyr/sys/printk.h>
@@ -84,6 +85,8 @@ static void prv_print_preview(void) {
   }
 }
 
+void gfx_port_push_frame(const void *buffer, size_t buf_size, uint16_t width, uint16_t height);
+
 int main(void) {
   if (!prv_render()) {
     return 1;
@@ -94,6 +97,7 @@ int main(void) {
 
   printk("GFX_CRC 0x%08x %dx%d 8bpp\n", framebuffer_crc, GFX_WIDTH, GFX_HEIGHT);
   prv_print_preview();
+  gfx_port_push_frame(s_framebuffer.buffer, framebuffer_size, GFX_WIDTH, GFX_HEIGHT);
   printk("GFX_DONE\n");
   return 0;
 }

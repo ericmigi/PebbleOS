@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config RTC_PEBBLE
+	bool "Pebble QEMU rtc driver"
+	default y
+	depends on DT_HAS_PEBBLE_RTC_ENABLED && RTC
+	help
+	  Driver for the corresponding device in qemu-pebble machines.

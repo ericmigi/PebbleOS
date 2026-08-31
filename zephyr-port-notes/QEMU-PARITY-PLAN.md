@@ -45,4 +45,4 @@ by construction once the same code boots on Zephyr; the diff harness proves it.
 ## Status log
 
 - P0 DONE 2026-08-31: ref runs headless (SDL dummy), ui_walk.py + px_diff.py in zephyr-port-notes/tools, PT2 UX mapped (boot=watchface, select=launcher, up/down=timeline).
-- P1: started 2026-08-31 (3 agents: display+gfx, buttons+rtc, extflash).
+- P1 DONE 2026-08-31: display+buttons+rtc+extflash Zephyr drivers verified in qemu-pebble (gfx renders via applib, 4 buttons report, RTC sane, flash persists via SYNC). gfx app builds for qemu_emery.

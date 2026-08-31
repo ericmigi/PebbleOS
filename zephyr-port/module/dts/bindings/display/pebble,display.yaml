@@ -1,0 +1,13 @@
+description: Pebble QEMU display (pebble-display device in qemu-pebble)
+
+compatible: "pebble,display"
+
+include: [base.yaml, display-controller.yaml]
+
+properties:
+  reg:
+    required: true
+    description: Two entries - control registers, framebuffer
+
+  interrupts:
+    required: true
