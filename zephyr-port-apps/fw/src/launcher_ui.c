@@ -199,6 +199,8 @@ __attribute__((weak)) bool fw_shell_handle_button_down(ButtonId button_id) {
   return false;
 }
 
+__attribute__((weak)) void fw_shell_note_activity(void) {}
+
 __attribute__((weak)) void fw_shell_on_app_exit(const PebbleProcessMd *md) { (void)md; }
 
 // True when BACK should pop the top window even at stack depth 1 (the real
@@ -767,6 +769,7 @@ void fw_ui_pump_once(void) {
 
   switch (event.type) {
     case PEBBLE_BUTTON_DOWN_EVENT:
+      fw_shell_note_activity();
     case PEBBLE_BUTTON_UP_EVENT: {
       // Align button handling to the 10 ms animation-clock bucket edge (see
       // sys_get_ticks in port.c): animations the handler schedules then start

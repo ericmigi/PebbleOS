@@ -50,6 +50,7 @@ struct PebbleProcessMd;
 // Ask the pump to launch a system app at its top level (safe from click/render
 // callbacks). fw_shell_on_app_exit() (weak, fw_shell.c) is called when it exits.
 void fw_shell_request_launch(const struct PebbleProcessMd *md);
+void fw_shell_note_activity(void);
 
 // True while a requested launch has not started yet.
 bool fw_shell_launch_pending(void);

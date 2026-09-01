@@ -48,8 +48,46 @@ static ProcessContext s_task_context;
 
 ProcessContext *app_manager_get_task_context(void) { return &s_task_context; }
 
-// The launcher starts its idle timeout in shipping; no-op here.
-void app_idle_timeout_start(void) {}
+// Shipping (shell/normal/app_idle_timeout.c): the launcher returns to the
+// watchface after 30 s without input, via the watchface close transition.
+#include "pbl/services/new_timer/new_timer.h"
+static TimerID s_idle_timer = TIMER_INVALID_ID;
+
+static void prv_idle_close_launcher(void *data) {
+  (void)data;
+  if (s_launcher_active && !fw_shell_launch_pending()) {
+    fw_window_stack_pop();  // launcher root; before_pop_render requests the shutter
+  }
+}
+
+static void prv_idle_timeout_expired(void *data) {
+  (void)data;
+  PebbleEvent event = {
+    .type = PEBBLE_CALLBACK_EVENT,
+    .callback = { .callback = prv_idle_close_launcher },
+  };
+  event_put(&event);
+}
+
+void app_idle_timeout_start(void) {
+  if (s_idle_timer == TIMER_INVALID_ID) {
+    s_idle_timer = new_timer_create();
+  }
+  new_timer_start(s_idle_timer, 30000, prv_idle_timeout_expired, NULL, 0);
+}
+
+void app_idle_timeout_stop(void) {
+  if (s_idle_timer != TIMER_INVALID_ID) {
+    new_timer_stop(s_idle_timer);
+  }
+}
+
+// Any button press restarts the countdown while the launcher owns the screen.
+void fw_shell_note_activity(void) {
+  if (s_launcher_active && s_idle_timer != TIMER_INVALID_ID) {
+    new_timer_start(s_idle_timer, 30000, prv_idle_timeout_expired, NULL, 0);
+  }
+}
 
 // menu_layer.c defers the actual launch until after the last menu frame renders
 // by posting a callback to the app task; our apps share the KernelMain pump, so
@@ -104,6 +142,7 @@ void fw_shell_before_pop_render(Window *window, int new_depth) {
   // boot-rooted launcher closing to the (about to launch) watchface.
   if (s_launcher_active && new_depth <= 1) {
     s_launcher_active = false;
+    app_idle_timeout_stop();
     // SELECT-launch also pops the launcher; the launcher-app transition is
     // already pending then — don't overwrite it with the watchface shutter.
     if (!fw_shell_launch_pending()) {
