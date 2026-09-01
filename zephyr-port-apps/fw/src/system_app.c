@@ -31,6 +31,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
+#include "applib/tick_timer_service.h"
+#include "applib/tick_timer_service_private.h"
+#include "kernel/kernel_applib_state.h"
 
 // Zephyr and Pebble both declare sign_extend() with different signatures; load
 // Zephyr's under a private name before the Pebble headers (mirrors launcher_ui.c
@@ -216,9 +219,19 @@ void fw_system_app_launch(const PebbleProcessMd *md) {
 
   // Launches nest (watchface pump -> launcher -> selected app), so the
   // per-launch state is saved/restored around main_func instead of being reset.
+  // The tick subscription is part of that state: shipping gives each process
+  // its own TickTimerServiceState torn down at process death; without the
+  // save/restore an exited watchface's minute handler fires into freed
+  // user_data on the next rollover.
   void *prev_user_data = s_app_user_data;
   const int prev_base_depth = s_app_base_depth;
   const bool prev_privileged = g_fw_privileged_window;
+  TickTimerServiceState *tick_state = kernel_applib_get_tick_timer_service_state();
+  const TickHandler prev_tick_handler = tick_state->handler;
+  const TimeUnits prev_tick_units = tick_state->tick_units;
+  if (prev_tick_handler) {
+    tick_timer_service_unsubscribe();
+  }
 
   s_app_user_data = NULL;
   s_app_base_depth = fw_window_stack_depth();
@@ -231,6 +244,12 @@ void fw_system_app_launch(const PebbleProcessMd *md) {
   s_app_user_data = prev_user_data;
   s_app_base_depth = prev_base_depth;
   g_fw_privileged_window = prev_privileged;
+  if (tick_state->handler) {
+    tick_timer_service_unsubscribe();  // the app left its subscription behind
+  }
+  if (prev_tick_handler) {
+    tick_timer_service_subscribe(prev_tick_units, prev_tick_handler);
+  }
 
   printk("SYS_APP_EXIT %s\n", name);
 }

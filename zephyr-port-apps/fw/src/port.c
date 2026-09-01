@@ -101,6 +101,20 @@ void time_util_split_seconds_into_parts(uint32_t seconds, uint32_t *day_part,
   *second_part = seconds % SEC_PER_MIN;
 }
 
+bool rtc_is_timezone_set(void) {
+  return true;  // reference QEMU has a timezone (localtime base)
+}
+
+// Mirrors src/fw/util/time/time.c exactly.
+int time_util_get_seconds_until_daily_time(struct tm *time, int hour, int minute) {
+  int hour_diff = hour - time->tm_hour;
+  if (hour < time->tm_hour || (hour == time->tm_hour && minute <= time->tm_min)) {
+    hour_diff += 24;
+  }
+  int minutes_diff = (hour_diff * 60) + (minute - time->tm_min);
+  return (minutes_diff * 60) - (time->tm_sec);
+}
+
 RtcTicks sys_get_ticks(void) {
   // Quantize the animation clock to 10 ms buckets (this build's only callers
   // are applib animation.c and menu_layer's double-tap window). Frame pacing

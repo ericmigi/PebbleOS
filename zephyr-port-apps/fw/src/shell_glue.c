@@ -84,8 +84,8 @@ CommSession *comm_session_get_system_session(void) {
   return (CommSession *)&s_dummy_session;
 }
 bool bt_ctl_is_airplane_mode_on(void) { return false; }
-bool do_not_disturb_is_active(void) { return false; }
-AlertMask alerts_get_mask(void) { return AlertMaskAllOn; }
+// do_not_disturb_is_active + alerts masks now come from the real
+// do_not_disturb.c and settings_system_glue.c.
 
 // ---------------------------------------------------------------------------
 // Notifications: empty store.

@@ -61,12 +61,14 @@ void accel_tap_service_unsubscribe(void) {}
 // no-op (both are null-safe in the app).
 // ponytail: port services/vibes for haptic feedback.
 // ---------------------------------------------------------------------------
+#if !defined(CONFIG_BOARD_QEMU_EMERY)
 VibeScore *vibe_score_create_with_resource(uint32_t resource_id) {
   (void)resource_id;
   return NULL;
 }
 
 void vibe_score_do_vibe(VibeScore *score) { (void)score; }
+#endif
 
 // ---------------------------------------------------------------------------
 // imaging (phone album-art fetch): report unsupported so no art is requested.

@@ -30,6 +30,10 @@ typedef enum {
   PEBBLE_CALLBACK_EVENT = 27,
   PEBBLE_SUBSCRIPTION_EVENT = 29,
   PEBBLE_DO_NOT_DISTURB_EVENT = 32,
+  // Subscribed by settings/notifications + quiet_time; charger state never
+  // changes in the port (no battery-connection source), needs a distinct slot.
+  PEBBLE_BATTERY_CONNECTION_EVENT = 64,
+  PEBBLE_BLOBDB_EVENT = 65,
   PEBBLE_BLE_DEVICE_NAME_UPDATED_EVENT = 41,
   // Subscribed to by the real launcher's glance service / glances; never fired
   // in the port (no phone / battery / weather / glance-slice sources yet).
@@ -155,9 +159,20 @@ typedef struct {
   };
 } PebbleBluetoothEvent;
 
+#include "pbl/services/blob_db/api_types.h"
+
+typedef struct {
+  uint8_t db_id;
+  BlobDBEventType type;
+  uint8_t *key;
+  uint8_t key_len;
+} PebbleBlobDBEvent;
+
 typedef struct {
   union {
     PebbleTickEvent clock_tick;
+    PebbleDoNotDisturbEvent do_not_disturb;
+    PebbleBlobDBEvent blob_db;
     PebbleCallbackEvent callback;
     PebbleSubscriptionEvent subscription;
     PebbleButtonEvent button;

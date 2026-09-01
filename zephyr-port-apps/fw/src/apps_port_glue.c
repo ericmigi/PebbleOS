@@ -180,40 +180,6 @@ bool app_install_entry_is_hidden(const AppInstallEntry *entry) {
 // the matching loaded FontInfo.
 // ponytail: LECO time-header numbers aren't embedded; they fall back to GOTHIC_14.
 // ---------------------------------------------------------------------------
-GFont system_theme_get_font_for_default_size(TextStyleFont font) {
-  const char *key;
-  switch (font) {
-#if !defined(CONFIG_RECOVERY_FW)
-    case TextStyleFont_Title:
-      key = FONT_KEY_GOTHIC_28_BOLD;
-      break;
-    case TextStyleFont_Body:
-      key = FONT_KEY_GOTHIC_28;
-      break;
-#endif
-    case TextStyleFont_Subtitle:
-      key = FONT_KEY_GOTHIC_28;
-      break;
-    case TextStyleFont_Header:
-    case TextStyleFont_MenuCellTitle:
-      key = FONT_KEY_GOTHIC_24_BOLD;
-      break;
-    case TextStyleFont_MenuCellSubtitle:
-    case TextStyleFont_PinSubtitle:
-      key = FONT_KEY_GOTHIC_24;
-      break;
-    case TextStyleFont_TimeHeaderWords:
-    case TextStyleFont_ParagraphHeader:
-      key = FONT_KEY_GOTHIC_18_BOLD;
-      break;
-    case TextStyleFont_Caption:
-    case TextStyleFont_Footer:
-    default:
-      key = FONT_KEY_GOTHIC_18;
-      break;
-  }
-  return fonts_get_system_font(key);
-}
 
 // Icons are cosmetic in the port; graphics_draw_bitmap_in_rect is a no-op
 // already provided by ui_shims.c (the data source hands out a 1x1 blank so the
@@ -400,9 +366,15 @@ GBitmap *app_menu_data_source_get_node_icon(AppMenuDataSource *source, AppMenuNo
 #if !defined(CONFIG_BOARD_QEMU_EMERY)
 STUB_SUBMODULE(settings_bluetooth_get_info, "Bluetooth", SettingsMenuItemBluetooth)
 #endif
+#if !defined(CONFIG_BOARD_QEMU_EMERY)
 STUB_SUBMODULE(settings_notifications_get_info, "Notifications", SettingsMenuItemNotifications)
+#endif
+#if !defined(CONFIG_BOARD_QEMU_EMERY)
 STUB_SUBMODULE(settings_vibe_patterns_get_info, "Sounds & Haptics", SettingsMenuItemVibrations)
+#endif
+#if !defined(CONFIG_BOARD_QEMU_EMERY)
 STUB_SUBMODULE(settings_quiet_time_get_info, "Quiet Time", SettingsMenuItemQuietTime)
+#endif
 STUB_SUBMODULE(settings_timeline_get_info, "Timeline", SettingsMenuItemTimeline)
 STUB_SUBMODULE(settings_activity_tracker_get_info, "Background App", SettingsMenuItemActivity)
 STUB_SUBMODULE(settings_quick_launch_get_info, "Quick Launch", SettingsMenuItemQuickLaunch)

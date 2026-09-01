@@ -883,9 +883,11 @@ int16_t fonts_get_font_cap_offset(GFont font) {
   return font ? (int16_t)((int16_t)font->max_height * 22 / 100) : 0;
 }
 
+#if !defined(PBL_WATCHFACE_IN_FW)
 PreferredContentSize system_theme_get_default_content_size_for_runtime_platform(void) {
   return PreferredContentSizeLarge;
 }
+#endif  // !PBL_WATCHFACE_IN_FW
 
 Window *window_create(void) {
   Window *window = applib_zalloc(sizeof(*window));

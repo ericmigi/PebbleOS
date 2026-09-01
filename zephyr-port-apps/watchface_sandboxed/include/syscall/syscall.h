@@ -22,3 +22,6 @@ ResAppNum sys_get_current_resource_num(void);
 GFont sys_font_get_system_font(const char *font_key);
 void sys_font_reload_font(FontInfo *font_info);
 
+
+void sys_vibe_pattern_enqueue_step_raw(uint32_t step_duration_ms, int32_t strength);
+void sys_vibe_pattern_trigger_start(void);

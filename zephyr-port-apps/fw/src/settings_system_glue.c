@@ -73,11 +73,10 @@ struct WindowStack *modal_manager_get_window_stack(int priority) {
   return (struct WindowStack *)1;  // opaque token; the port has one stack
 }
 
-bool window_stack_push(struct WindowStack *stack, struct Window *window, bool animated) {
+void window_stack_push(struct WindowStack *stack, struct Window *window, bool animated) {
   (void)stack;
   (void)animated;
   fw_window_stack_push(window);
-  return true;
 }
 
 bool window_stack_remove(struct Window *window, bool animated) {
@@ -90,6 +89,45 @@ bool window_stack_remove(struct Window *window, bool animated) {
 }
 
 void vibes_short_pulse(void) {}
+void vibes_cancel(void) {}
+void vibes_double_pulse(void) {}
+
+// Speaker service (emery has a speaker; QEMU audio unused for pixel walks).
+#include "kernel/pebble_tasks.h"
+void speaker_service_handle_audio_prefs_changed(void) {}
+void speaker_service_play_volume_preview(void) {}
+void speaker_service_set_owner_task(PebbleTask task) { (void)task; }
+void speaker_service_stop_for_task(PebbleTask task) { (void)task; }
+int32_t vibe_get_braking_strength(void) { return 0; }
+
+struct WindowStack *window_manager_get_window_stack(int priority) {
+  (void)priority;
+  return (struct WindowStack *)1;
+}
+
+#include "applib/app_exit_reason.h"
+void app_exit_reason_set(AppExitReason reason) { (void)reason; }
+void vibes_set_default_vibe_strength(int32_t strength) { (void)strength; }
+
+// Shell prefs the reference defaults to under QEMU.
+#include "shell/system_theme.h"
+static PreferredContentSize s_content_size = PreferredContentSizeDefault;
+PreferredContentSize system_theme_get_content_size(void) { return s_content_size; }
+void system_theme_set_content_size(PreferredContentSize size) { s_content_size = size; }
+
+#include "pbl/services/notifications/alerts.h"
+#include "pbl/services/notifications/alerts_private.h"
+static AlertMask s_alert_mask = AlertMaskAllOn;
+static AlertMask s_dnd_mask = AlertMaskAllOff;  // reference default: Quiet All Notifications
+AlertMask alerts_get_mask(void) { return s_alert_mask; }
+void alerts_set_mask(AlertMask mask) { s_alert_mask = mask; }
+AlertMask alerts_get_dnd_mask(void) { return s_dnd_mask; }
+void alerts_set_dnd_mask(AlertMask mask) { s_dnd_mask = mask; }
+void sys_vibe_pattern_enqueue_step_raw(uint32_t step_duration_ms, int32_t strength) {
+  (void)step_duration_ms;
+  (void)strength;
+}
+void sys_vibe_pattern_trigger_start(void) {}
 
 #include "applib/ui/window.h"
 bool window_is_loaded(Window *window) {
@@ -100,6 +138,26 @@ bool window_is_loaded(Window *window) {
 void *applib_malloc(size_t size);
 void *_applib_type_malloc_NumberWindow(void) {
   return applib_malloc(sizeof(NumberWindow));
+}
+
+#include "applib/ui/dialogs/expandable_dialog.h"
+void *_applib_type_malloc_ExpandableDialog(void) {
+  return applib_malloc(sizeof(ExpandableDialog));
+}
+
+// Quiet Time calendar coupling: no pins/events in the QEMU image.
+bool calendar_event_is_ongoing(void) { return false; }
+
+// expandable_dialog scroll hinting; the port's content-indicator shim tracks
+// availability only.
+#include "applib/ui/content_indicator.h"
+bool content_indicator_configure_direction(ContentIndicator *content_indicator,
+                                           ContentIndicatorDirection direction,
+                                           const ContentIndicatorConfig *config) {
+  (void)content_indicator;
+  (void)direction;
+  (void)config;
+  return true;
 }
 
 // --- bt mac string (qemu BT driver fixed AA identity address)

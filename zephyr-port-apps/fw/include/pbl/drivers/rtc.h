@@ -12,3 +12,4 @@ RtcTicks rtc_get_ticks(void);
 time_t rtc_get_time(void);
 void rtc_get_time_ms(time_t *seconds, uint16_t *milliseconds);
 void rtc_get_time_tm(struct tm *time_tm);
+bool rtc_is_timezone_set(void);

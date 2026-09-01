@@ -109,51 +109,5 @@ void *settings_option_menu_get_context(SettingsOptionMenuData *data) {
   return NULL;
 }
 #endif  // !CONFIG_BOARD_QEMU_EMERY
+// Real dialogs (simple/expandable) are compiled now; stubs removed.
 
-// --- confirmation / first-run dialogs ---------------------------------------
-SimpleDialog *simple_dialog_create(const char *dialog_name) {
-  (void)dialog_name;
-  return NULL;
-}
-
-Dialog *simple_dialog_get_dialog(SimpleDialog *simple_dialog) {
-  (void)simple_dialog;
-  return NULL;
-}
-
-void app_simple_dialog_push(SimpleDialog *simple_dialog) { (void)simple_dialog; }
-
-ExpandableDialog *expandable_dialog_create_with_params(const char *dialog_name, ResourceId icon,
-                                                       const char *text, GColor text_color,
-                                                       GColor background_color,
-                                                       DialogCallbacks *callbacks,
-                                                       ResourceId select_icon,
-                                                       ClickHandler select_click_handler) {
-  (void)dialog_name;
-  (void)icon;
-  (void)text;
-  (void)text_color;
-  (void)background_color;
-  (void)callbacks;
-  (void)select_icon;
-  (void)select_click_handler;
-  return NULL;
-}
-
-void expandable_dialog_set_header(ExpandableDialog *expandable_dialog, const char *header) {
-  (void)expandable_dialog;
-  (void)header;
-}
-
-void expandable_dialog_set_header_font(ExpandableDialog *expandable_dialog, GFont header_font) {
-  (void)expandable_dialog;
-  (void)header_font;
-}
-
-void expandable_dialog_set_action_bar_background_color(ExpandableDialog *expandable_dialog,
-                                                       GColor color) {
-  (void)expandable_dialog;
-  (void)color;
-}
-
-void expandable_dialog_pop(ExpandableDialog *expandable_dialog) { (void)expandable_dialog; }

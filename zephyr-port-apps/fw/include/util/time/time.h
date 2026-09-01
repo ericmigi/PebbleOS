@@ -68,3 +68,5 @@ void time_util_split_seconds_into_parts(uint32_t seconds, uint32_t *day_part,
                                         uint32_t *hour_part, uint32_t *minute_part,
                                         uint32_t *second_part);
 uint32_t time_get_uptime_seconds(void);
+
+int time_util_get_seconds_until_daily_time(struct tm *time, int hour, int minute);

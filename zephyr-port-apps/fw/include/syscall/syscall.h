@@ -27,6 +27,9 @@ ResAppNum sys_get_current_resource_num(void);
 
 #include "pbl/drivers/rtc.h"
 RtcTicks sys_get_ticks(void);
+
+void sys_vibe_pattern_enqueue_step_raw(uint32_t step_duration_ms, int32_t strength);
+void sys_vibe_pattern_trigger_start(void);
 bool sys_app_is_watchface(void);
 void sys_event_service_client_subscribe(EventServiceInfo *handler);
 void sys_event_service_client_unsubscribe(EventServiceInfo *state, EventServiceInfo *handler);
