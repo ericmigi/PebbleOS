@@ -160,6 +160,51 @@ bool content_indicator_configure_direction(ContentIndicator *content_indicator,
   return true;
 }
 
+// --- Timeline (Quick View) + Quick Launch prefs: reference defaults
+// (shell/normal/prefs.c) in RAM.
+#include "applib/ui/click.h"
+static bool s_peek_enabled = false;  // observed reference default on emery QEMU
+static uint16_t s_peek_before_time_m = 10;
+// Reference state: Timeline settings already opened (no first-use dialog).
+// NOTE: the first-use expandable dialog also crashes in the port — its
+// ACTION_BAR_ICON_UP/DOWN gbitmap loads return NULL (resource path gap).
+static uint8_t s_timeline_settings_opened;  // InitialVersion: first-use dialog, like the reference
+bool timeline_peek_prefs_get_enabled(void) { return s_peek_enabled; }
+void timeline_peek_prefs_set_enabled(bool enabled) { s_peek_enabled = enabled; }
+uint16_t timeline_peek_prefs_get_before_time(void) { return s_peek_before_time_m; }
+void timeline_peek_prefs_set_before_time(uint16_t m) { s_peek_before_time_m = m; }
+uint8_t timeline_prefs_get_settings_opened(void) { return s_timeline_settings_opened; }
+void timeline_prefs_set_settings_opened(uint8_t version) { s_timeline_settings_opened = version; }
+
+// Reference defaults (shell/normal/prefs.c): taps = Health / Timeline Future,
+// holds disabled (back's Quiet Time toggle is not shown by this screen).
+int32_t quick_launch_get_app(ButtonId button) {
+  (void)button;
+  return 0;  // INSTALL_ID_INVALID: hold slots disabled
+}
+int32_t quick_launch_single_click_get_app(ButtonId button) {
+  if (button == BUTTON_ID_UP) {
+    return -82;  // Health (registry id, matches FW_APP enumeration)
+  }
+  if (button == BUTTON_ID_DOWN) {
+    return -10;  // Timeline Future
+  }
+  return 0;
+}
+ButtonId app_launch_button(void) { return BUTTON_ID_SELECT; }
+void quick_launch_set_app(ButtonId button, int32_t id) { (void)button; (void)id; }
+void quick_launch_set_enabled(ButtonId button, bool enabled) { (void)button; (void)enabled; }
+void quick_launch_single_click_set_app(ButtonId button, int32_t id) { (void)button; (void)id; }
+void quick_launch_single_click_set_enabled(ButtonId button, bool enabled) {
+  (void)button;
+  (void)enabled;
+}
+struct AppInstallEntry;
+bool app_install_entry_is_quick_launch_visible_only(const struct AppInstallEntry *entry) {
+  (void)entry;
+  return false;
+}
+
 // --- bt mac string (qemu BT driver fixed AA identity address)
 void bt_local_id_copy_address_mac_string(char *dest, size_t dest_size) {
   strncpy(dest, "AA:AA:AA:AA:AA:AA", dest_size);

@@ -63,12 +63,34 @@ static const uint8_t *prv_pack_resource(uint32_t resource_id, size_t *size_out) 
   return PACK_BASE + PACK_CONTENT_OFFSET + offset;
 }
 
+// Builtin resources (action bar icons etc.) are compiled into the firmware
+// in shipping; reuse the reference build's generated table.
+typedef struct BuiltInResourceData {
+  uint32_t resource_id;
+  const uint8_t *contents;
+  const uint32_t num_bytes;
+} BuiltInResourceData;
+extern const BuiltInResourceData g_builtin_resources[];
+extern const uint32_t g_num_builtin_resources;
+
+static const uint8_t *prv_builtin_resource(uint32_t resource_id, size_t *size_out) {
+  for (uint32_t i = 0; i < g_num_builtin_resources; ++i) {
+    if (g_builtin_resources[i].resource_id == resource_id) {
+      if (size_out) {
+        *size_out = g_builtin_resources[i].num_bytes;
+      }
+      return g_builtin_resources[i].contents;
+    }
+  }
+  return NULL;
+}
+
 static const uint8_t *prv_lookup(ResAppNum app_num, uint32_t resource_id, size_t *size_out) {
   if (app_num != SYSTEM_APP) {
     return NULL;
   }
   // port.c's private IDs (embedded fonts/icons + the sliding-text pack) win;
-  // everything else comes from the real system pack.
+  // everything else comes from the real system pack, then the builtin table.
   size_t port_size = 0;
   const uint8_t *port_data = port_sys_resource_read_only_bytes(app_num, resource_id, &port_size);
   if (port_data != NULL) {
@@ -77,7 +99,11 @@ static const uint8_t *prv_lookup(ResAppNum app_num, uint32_t resource_id, size_t
     }
     return port_data;
   }
-  return prv_pack_resource(resource_id, size_out);
+  const uint8_t *pack = prv_pack_resource(resource_id, size_out);
+  if (pack != NULL) {
+    return pack;
+  }
+  return prv_builtin_resource(resource_id, size_out);
 }
 
 bool sys_resource_is_valid(ResAppNum app_num, uint32_t resource_id) {
@@ -116,6 +142,10 @@ bool sys_resource_bytes_are_readonly(void *bytes) {
   if (address >= (uintptr_t)PACK_BASE && address < (uintptr_t)(PACK_BASE + PACK_MAX_SIZE)) {
     return true;
   }
+  // Builtin table lives in the code image (read-only XIP flash below SRAM).
+  if (address < 0x10000000u) {
+    return true;
+  }
   return port_sys_resource_bytes_are_readonly(bytes);
 }
 
@@ -132,6 +162,12 @@ void *applib_resource_mmap_or_load(ResAppNum app_num, uint32_t resource_id, size
 
 void applib_resource_munmap_or_free(void *bytes) {
   port_applib_resource_munmap_or_free(bytes);
+}
+
+// XIP-served resources (system pack, builtin table in the code image) are
+// read-only; gbitmap must not memmove them in place.
+bool applib_resource_is_mmapped(const void *bytes) {
+  return sys_resource_bytes_are_readonly((void *)bytes);
 }
 
 ResHandle applib_resource_get_handle(uint32_t resource_id) {

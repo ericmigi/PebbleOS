@@ -226,8 +226,18 @@ bool app_install_get_entry_for_install_id(AppInstallId install_id, AppInstallEnt
   const size_t count = fw_app_registry_count();
   for (size_t i = 0; i < count; ++i) {
     const FwAppRegistryEntry *reg = fw_app_registry_get(i);
-    if (!reg || reg->install_id != install_id || !reg->md) {
+    if (!reg || reg->install_id != install_id) {
       continue;
+    }
+    if (!reg->md) {
+      // Registry rows without an md (Timeline Future/Past, Health data
+      // source) still resolve for name lookups (Quick Launch subtitles).
+      *entry = (AppInstallEntry) {
+        .install_id = install_id,
+        .type = AppInstallStorageFw,
+      };
+      strncpy(entry->name, reg->name ? reg->name : "", sizeof(entry->name) - 1);
+      return true;
     }
     const PebbleProcessMdSystem *md = (const PebbleProcessMdSystem *)reg->md;
     *entry = (AppInstallEntry) {

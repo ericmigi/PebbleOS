@@ -784,10 +784,13 @@ bool applib_resource_track_mmapped(const void *bytes) {
   return false;
 }
 
+#if !defined(PBL_WATCHFACE_IN_FW)
+// The fw build's resource_pack.c owns this (XIP pack + builtin awareness).
 bool applib_resource_is_mmapped(const void *bytes) {
   ARG_UNUSED(bytes);
   return false;
 }
+#endif
 
 bool applib_resource_munmap(const void *bytes) {
   ARG_UNUSED(bytes);

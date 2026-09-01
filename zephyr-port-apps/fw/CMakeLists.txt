@@ -763,6 +763,9 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/services/vibes/vibe_client.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/quiet_time.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/vibe_patterns.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/timeline.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/quick_launch.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/quick_launch_app_menu.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/speaker_volume_window.c"
   "${PEBBLEOS_ROOT}/src/fw/services/notifications/alerts_preferences.c"
   "${PEBBLEOS_ROOT}/src/fw/services/notifications/do_not_disturb.c"
@@ -800,6 +803,9 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/services/vibes/vibe_client.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/quiet_time.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/vibe_patterns.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/timeline.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/quick_launch.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/quick_launch_app_menu.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/speaker_volume_window.c"
   "${PEBBLEOS_ROOT}/src/fw/services/notifications/alerts_preferences.c"
   "${PEBBLEOS_ROOT}/src/fw/services/notifications/do_not_disturb.c"
@@ -851,6 +857,7 @@ target_sources(app PRIVATE
   # Real compositor transitions (watchface <-> launcher shutter) on the port
   # compositor core (src/compositor_port.c).
   src/compositor_port.c
+  "${PEBBLEOS_ROOT}/build/src/fw/builtin_resources.auto.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/compositor_transitions.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_shutter_transitions.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_launcher_app_transitions.c"
@@ -885,6 +892,9 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/services/vibes/vibe_client.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/quiet_time.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/vibe_patterns.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/timeline.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/quick_launch.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/quick_launch_app_menu.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/speaker_volume_window.c"
   "${PEBBLEOS_ROOT}/src/fw/services/notifications/alerts_preferences.c"
   "${PEBBLEOS_ROOT}/src/fw/services/notifications/do_not_disturb.c"
@@ -899,6 +909,12 @@ set_source_files_properties(
     COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
     COMPILE_DEFINITIONS "sniprintf=snprintf;CONFIG_SPEAKER=1"
 )
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/build/src/fw/builtin_resources.auto.c"
+  PROPERTIES COMPILE_OPTIONS
+    "-iquote;${PEBBLEOS_ROOT}/build/src/fw;-iquote;${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/action_toggle.c"
   PROPERTIES COMPILE_OPTIONS
@@ -974,6 +990,7 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/apps/system/timeline/text_node.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_resources.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/compositor_port.c"
+  "${PEBBLEOS_ROOT}/build/src/fw/builtin_resources.auto.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/compositor_transitions.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_shutter_transitions.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_launcher_app_transitions.c"

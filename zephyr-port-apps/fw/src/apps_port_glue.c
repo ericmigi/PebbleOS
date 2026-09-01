@@ -375,9 +375,13 @@ STUB_SUBMODULE(settings_vibe_patterns_get_info, "Sounds & Haptics", SettingsMenu
 #if !defined(CONFIG_BOARD_QEMU_EMERY)
 STUB_SUBMODULE(settings_quiet_time_get_info, "Quiet Time", SettingsMenuItemQuietTime)
 #endif
+#if !defined(CONFIG_BOARD_QEMU_EMERY)
 STUB_SUBMODULE(settings_timeline_get_info, "Timeline", SettingsMenuItemTimeline)
+#endif
 STUB_SUBMODULE(settings_activity_tracker_get_info, "Background App", SettingsMenuItemActivity)
+#if !defined(CONFIG_BOARD_QEMU_EMERY)
 STUB_SUBMODULE(settings_quick_launch_get_info, "Quick Launch", SettingsMenuItemQuickLaunch)
+#endif
 #if !defined(CONFIG_BOARD_QEMU_EMERY)
 STUB_SUBMODULE(settings_time_get_info, "Date & Time", SettingsMenuItemDateTime)
 #endif
