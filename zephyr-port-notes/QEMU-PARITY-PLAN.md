@@ -128,8 +128,7 @@ Two tiers:
   next with pixel-inversion of both elapsed streams (parity3/4 notes
   technique). Freeze-clock-during-update-callback landed (made zephyr
   fully run-to-run deterministic) but did not merge the streams.
-- Settings submenu sweep COMPLETE 2026-08-31 except Background App
-  (worker_manager closure) and Health (was already real): Bluetooth,
+- Settings submenu sweep COMPLETE 2026-08-31 including Background App and Health: Bluetooth,
   Display, Date & Time, System, Notifications, Quiet Time, Sounds &
   Haptics, Timeline (incl. first-use dialog), Quick Launch — all
   settled screens 0px, all enter/exit transitions frame-exact. Fixed
@@ -139,3 +138,7 @@ Two tiers:
   ~30-60s idle, port lacks); Background App submenu; Music /
   notifications popup / timeline UI / Watchfaces persistence; standard
   walk regression re-run pending.
+- Settings sweep 100% + launcher idle timeout landed 2026-08-31; boot
+  segment incl. timeout close is 22v22 all-zero. Next queue: dual-anim
+  scroll blocker, Music app, notifications popup, Watchfaces picker +
+  persistence, timeline UI, PBW corpus walks.
