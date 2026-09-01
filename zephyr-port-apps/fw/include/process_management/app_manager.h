@@ -34,6 +34,7 @@ void app_manager_put_launch_app_event(const AppLaunchEventConfig *config);
 // (LauncherMenuArgs). Provided by fw_shell.c.
 typedef struct ProcessContext {
   const void *args;
+  AppInstallId install_id;
 } ProcessContext;
 
 ProcessContext *app_manager_get_task_context(void);

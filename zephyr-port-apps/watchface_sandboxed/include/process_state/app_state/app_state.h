@@ -34,3 +34,6 @@ bool process_manager_compiled_with_legacy2_sdk(void);
 void *app_state_get_user_data(void);
 void app_state_set_user_data(void *data);
 
+
+struct WindowStack;
+struct WindowStack *app_state_get_window_stack(void);

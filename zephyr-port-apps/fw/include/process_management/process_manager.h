@@ -23,3 +23,4 @@ void process_manager_send_callback_event_to_process(PebbleTask task, void (*call
 
 #include "kernel/events.h"
 bool process_manager_send_event_to_process(PebbleTask task, PebbleEvent *e);
+void process_manager_put_kill_process_event(PebbleTask task, bool gracefully);

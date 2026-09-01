@@ -199,10 +199,36 @@ void quick_launch_single_click_set_enabled(ButtonId button, bool enabled) {
   (void)button;
   (void)enabled;
 }
-struct AppInstallEntry;
-bool app_install_entry_is_quick_launch_visible_only(const struct AppInstallEntry *entry) {
+#include "process_management/app_install_manager.h"
+bool app_install_entry_is_quick_launch_visible_only(const AppInstallEntry *entry) {
   (void)entry;
   return false;
+}
+
+// --- Background App: no worker task on the qemu shell (reference shows
+// "No background apps").
+#include "process_management/worker_manager.h"
+static ProcessContext s_worker_context;  // install_id 0 = INSTALL_ID_INVALID
+AppInstallId worker_manager_get_current_worker_id(void) { return 0; }
+ProcessContext *worker_manager_get_task_context(void) { return &s_worker_context; }
+void worker_manager_put_launch_worker_event(AppInstallId id) { (void)id; }
+void worker_manager_set_default_install_id(AppInstallId id) { (void)id; }
+void process_manager_put_kill_process_event(PebbleTask task, bool gracefully) {
+  (void)task;
+  (void)gracefully;
+}
+
+bool app_install_entry_has_worker(const AppInstallEntry *entry) {
+  (void)entry;
+  return false;  // no PBW workers in the qemu registry
+}
+
+struct WindowStack;
+void switch_worker_confirm(AppInstallId new_worker_id, bool set_as_default,
+                           struct WindowStack *window_stack) {
+  (void)new_worker_id;
+  (void)set_as_default;
+  (void)window_stack;
 }
 
 // --- bt mac string (qemu BT driver fixed AA identity address)

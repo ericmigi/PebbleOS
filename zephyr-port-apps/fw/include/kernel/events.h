@@ -34,6 +34,7 @@ typedef enum {
   // changes in the port (no battery-connection source), needs a distinct slot.
   PEBBLE_BATTERY_CONNECTION_EVENT = 64,
   PEBBLE_BLOBDB_EVENT = 65,
+  PEBBLE_WORKER_LAUNCH_EVENT = 66,
   PEBBLE_BLE_DEVICE_NAME_UPDATED_EVENT = 41,
   // Subscribed to by the real launcher's glance service / glances; never fired
   // in the port (no phone / battery / weather / glance-slice sources yet).
@@ -162,6 +163,11 @@ typedef struct {
 #include "pbl/services/blob_db/api_types.h"
 
 typedef struct {
+  int32_t id;
+  void *data;
+} PebbleLaunchAppEvent;
+
+typedef struct {
   uint8_t db_id;
   BlobDBEventType type;
   uint8_t *key;
@@ -173,6 +179,7 @@ typedef struct {
     PebbleTickEvent clock_tick;
     PebbleDoNotDisturbEvent do_not_disturb;
     PebbleBlobDBEvent blob_db;
+    PebbleLaunchAppEvent launch_app;
     PebbleCallbackEvent callback;
     PebbleSubscriptionEvent subscription;
     PebbleButtonEvent button;
