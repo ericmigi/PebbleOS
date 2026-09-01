@@ -142,3 +142,16 @@ Two tiers:
   segment incl. timeout close is 22v22 all-zero. Next queue: dual-anim
   scroll blocker, Music app, notifications popup, Watchfaces picker +
   persistence, timeline UI, PBW corpus walks.
+
+## Functional parity bar (user-set, same level as pixels)
+
+Behavior must match, not just rendering. Gates per area:
+- Interactive walks: toggle/change a setting on both firmwares, verify
+  the state flip renders identically AND takes effect in the backing
+  service; then reboot both and verify persistence matches.
+- Replace RAM-glue prefs with the real shell prefs machinery
+  (shell/normal/prefs.c on settings_file/PFS) so persistence matches by
+  construction. RAM-only glue currently: display prefs, quick-launch
+  slots, timeline peek, theme, alert masks partially.
+- Known functional no-ops to burn down: factory reset, shutdown,
+  core dump, vibes/speaker, worker task, timeline peek service, BLE.
