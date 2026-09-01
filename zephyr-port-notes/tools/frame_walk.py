@@ -62,6 +62,11 @@ def launch(name, qemu, elf, spi_src, out, extra_machine):
 def run_both(sides, steps):
     # Both firmwares run at the same wall time so clock-driven pixels (watch
     # hands) match; keys go to both monitors back-to-back per step.
+    # Phase-control the walk start to early in a wall minute so no minute
+    # rollover (watch-hand redraw) lands mid-walk despite the ~0.5 s icount
+    # virtual-clock skew between the two instances.
+    while not (20 <= time.localtime().tm_sec <= 35):
+        time.sleep(2)
     try:
         t0 = time.time()
         for side in sides:

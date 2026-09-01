@@ -128,6 +128,13 @@ void watchface_set_default_install_id(AppInstallId id) { s_default_watchface_id 
 // the picker's "Active" subtitle tracks the selection.
 // ponytail: does not switch the running watchface. Route through the shell's
 // launch path once the shell/watchface service is ported.
+struct CompositorTransition;
+void fw_compositor_request_transition(const struct CompositorTransition *impl,
+                                      uint16_t first_sample_ms);
+const struct CompositorTransition *compositor_launcher_app_transition_get(
+    bool app_is_destination);
+void fw_compositor_skip_focus_dup(void);
+
 void app_manager_put_launch_app_event(const AppLaunchEventConfig *config) {
   if (!config) {
     return;
@@ -138,6 +145,11 @@ void app_manager_put_launch_app_event(const AppLaunchEventConfig *config) {
   const FwAppRegistryEntry *entry = fw_app_registry_find_by_id(config->id);
   if (entry && entry->md && entry->md->process_type != ProcessTypeWatchface) {
     printk("SHELL_LAUNCH %" PRId32 " %s\n", config->id, entry->name);
+    // Shipping (shell.c): launcher -> app uses the launcher-app moook slide;
+    // the destination's focus render is the stream tail (no extra dup).
+    fw_compositor_skip_focus_dup();
+    fw_compositor_request_transition(
+        compositor_launcher_app_transition_get(true /* app_is_destination */), 0);
     fw_shell_request_launch(entry->md);
     fw_system_app_request_exit();
     return;

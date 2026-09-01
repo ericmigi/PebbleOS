@@ -791,7 +791,11 @@ void fw_ui_pump_once(void) {
       // kernel-context click handlers, so its other buttons remain unhandled;
       // otherwise events drive the current window's click recognizers.
       if (event.button.button_id == BUTTON_ID_BACK &&
-          (s_app_launched || s_stack_top > 0 || fw_shell_back_should_pop())) {
+          (s_app_launched || s_stack_top > 0 || fw_shell_back_should_pop() ||
+           fw_system_app_launch_nesting() >= 2)) {
+        // Any launched-on-top app (nesting >= 2: launcher, Settings, ...)
+        // exits through its root pop; app_event_loop returns and the shell
+        // chains the next launch (relaunch launcher / watchface).
         prv_window_pop();
       } else if (!s_app_launched &&
                  !fw_shell_handle_button_down(event.button.button_id)) {

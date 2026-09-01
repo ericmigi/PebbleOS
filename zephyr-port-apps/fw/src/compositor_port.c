@@ -63,10 +63,22 @@ static struct {
 // that stream while a transition animates (fw_compositor_anim_snap_ticks) and
 // pace the frame callbacks onto it with absolute-deadline sleeps
 // (prv_snap_pace). Hardware keeps the raw pipeline.
-#define SNAP_TOTAL_MS 198
-static uint16_t s_snap_targets[] = { 0, 6, 36, 66, 88, 120, 154, 186, 218 };
-#define SNAP_NUM_TARGETS (sizeof(s_snap_targets) / sizeof(s_snap_targets[0]))
+static uint16_t s_snap_total_ms = 198;  // animation duration; progress inversion
+#define SNAP_TOTAL_MS s_snap_total_ms
+// Shutter (easing-curve) sample stream; index 2 patched per direction.
+static uint16_t s_shutter_targets[] = { 0, 6, 36, 66, 88, 120, 154, 186, 218 };
+// Moook transitions step one 33 ms curve frame per sample (dup at ~2 ms like
+// the reference's second boot-latency frame); trimmed to duration at schedule.
+static uint16_t s_moook_targets[] = { 0, 2, 33, 66, 99, 132, 165, 198, 231, 264,
+                                      297, 330, 363, 396, 429, 462, 495, 528 };
+static const uint16_t *s_snap_targets = s_shutter_targets;
+static uint8_t s_snap_num_targets = sizeof(s_shutter_targets) / sizeof(uint16_t);
+#define SNAP_NUM_TARGETS s_snap_num_targets
 static int64_t s_snap_t0 = -1;   // raw ms at animation_schedule; -1 = inactive
+static bool s_snap_shutter = true;  // shutter: fixed table; moook: duration-derived
+static bool s_skip_focus_dup;       // launcher->app open: no trailing focus dup
+
+void fw_compositor_skip_focus_dup(void) { s_skip_focus_dup = true; }
 static bool s_snap_armed;        // false while scheduling (clock frozen at t0)
 static bool s_snap_first_taken;  // first armed sample always maps to t0+0
 
@@ -258,6 +270,7 @@ static void prv_animation_teardown(Animation *animation) {
   if (s_animation_state.impl->teardown) {
     s_animation_state.impl->teardown(animation);
   }
+  const CompositorTransition *impl_was = s_animation_state.impl;
   s_animation_state.animation = NULL;
   s_animation_state.impl = NULL;
 #if defined(CONFIG_BOARD_QEMU_EMERY)
@@ -268,11 +281,18 @@ static void prv_animation_teardown(Animation *animation) {
   // Shipping's compositor_app_render_ready() follows the transition: the app
   // framebuffer is composited + flushed once more.
   watchface_port_push_frame();
-  PebbleEvent event = {
-    .type = PEBBLE_CALLBACK_EVENT,
-    .callback = { .callback = prv_did_focus_render },
-  };
-  event_put(&event);
+  // Launcher -> app (moook open): the destination app's first focus render IS
+  // the transition tail in the reference stream — one fewer trailing dup.
+  (void)impl_was;
+  const bool skip = s_skip_focus_dup;
+  s_skip_focus_dup = false;
+  if (!skip) {
+    PebbleEvent event = {
+      .type = PEBBLE_CALLBACK_EVENT,
+      .callback = { .callback = prv_did_focus_render },
+    };
+    event_put(&event);
+  }
 }
 
 void compositor_transition(const CompositorTransition *impl) {
@@ -300,6 +320,22 @@ void compositor_transition(const CompositorTransition *impl) {
   };
   animation_set_implementation(s_animation_state.animation, &s_compositor_animation_impl);
   impl->init(s_animation_state.animation);
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+  if (!s_snap_shutter) {
+    // Moook: one 33 ms curve step per sample across the impl-set duration.
+    const uint32_t total =
+        animation_get_duration(s_animation_state.animation, false, false);
+    s_snap_total_ms = (uint16_t)total;
+    uint8_t n = 2;  // 0 and the ~2 ms dup
+    for (; n < sizeof(s_moook_targets) / sizeof(uint16_t); ++n) {
+      if (s_moook_targets[n] >= total) {
+        break;
+      }
+    }
+    s_moook_targets[n] = (uint16_t)total;
+    s_snap_num_targets = n + 1;
+  }
+#endif
   animation_schedule(s_animation_state.animation);
 #if defined(CONFIG_BOARD_QEMU_EMERY)
   s_snap_armed = true;
@@ -326,7 +362,16 @@ void fw_compositor_request_transition(const CompositorTransition *impl,
   }
   prv_ensure_init();
 #if defined(CONFIG_BOARD_QEMU_EMERY)
-  s_snap_targets[2] = first_sample_ms;
+  if (first_sample_ms) {
+    s_shutter_targets[2] = first_sample_ms;
+    s_snap_targets = s_shutter_targets;
+    s_snap_num_targets = sizeof(s_shutter_targets) / sizeof(uint16_t);
+    s_snap_total_ms = 198;
+    s_snap_shutter = true;
+  } else {
+    s_snap_targets = s_moook_targets;
+    s_snap_shutter = false;  // total + target count set at schedule (duration)
+  }
 #else
   (void)first_sample_ms;
 #endif

@@ -792,6 +792,7 @@ target_sources(app PRIVATE
   src/compositor_port.c
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/compositor_transitions.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_shutter_transitions.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_launcher_app_transitions.c"
 )
 
 set_source_files_properties(
@@ -865,6 +866,7 @@ set_source_files_properties(
   "${CMAKE_CURRENT_SOURCE_DIR}/src/compositor_port.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/compositor_transitions.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_shutter_transitions.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_launcher_app_transitions.c"
   PROPERTIES COMPILE_OPTIONS
     "-include;${FW_GRAPHICS_APP_STATE};-include;resource/resource_ids.auto.h;-include;applib/app_logging.h;-iquote;${PEBBLEOS_ROOT}/build/src/fw;-iquote;${CMAKE_CURRENT_SOURCE_DIR}/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/gfx/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/include"
 )

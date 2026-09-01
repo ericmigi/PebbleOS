@@ -15,6 +15,7 @@ void fw_system_app_launch(const PebbleProcessMd *md);
 //! Pop the running app's windows down to its launch base so its app_event_loop
 //! returns (used when another app is launched out of the current one).
 void fw_system_app_request_exit(void);
+int fw_system_app_launch_nesting(void);
 
 //! Window-stack depth at the running app's launch; windows above it belong to
 //! the app (in-app push/pop transitions animate only between those).

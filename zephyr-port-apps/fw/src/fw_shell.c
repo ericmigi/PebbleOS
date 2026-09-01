@@ -33,6 +33,8 @@
 void fw_sandbox_display_init(void);
 void fw_compositor_request_transition(const CompositorTransition *impl,
                                       uint16_t first_sample_ms);
+const struct CompositorTransition *compositor_launcher_app_transition_get(
+    bool app_is_destination);
 
 // True while the launcher app owns the screen (from SELECT-open until its root
 // window pops back to the watchface).
@@ -102,9 +104,13 @@ void fw_shell_before_pop_render(Window *window, int new_depth) {
   // boot-rooted launcher closing to the (about to launch) watchface.
   if (s_launcher_active && new_depth <= 1) {
     s_launcher_active = false;
-    fw_compositor_request_transition(
-        compositor_shutter_transition_get(CompositorTransitionDirectionLeft, GColorWhite),
-        34 /* ref first anim sample, close */);
+    // SELECT-launch also pops the launcher; the launcher-app transition is
+    // already pending then — don't overwrite it with the watchface shutter.
+    if (!fw_shell_launch_pending()) {
+      fw_compositor_request_transition(
+          compositor_shutter_transition_get(CompositorTransitionDirectionLeft, GColorWhite),
+          34 /* ref first anim sample, close */);
+    }
   }
 }
 
@@ -118,6 +124,10 @@ void fw_shell_on_app_exit(const PebbleProcessMd *md) {
       fw_shell_launch_pending()) {
     return;
   }
+  // Shipping: app -> launcher reverses the launcher-app moook slide.
+  fw_compositor_request_transition(
+      (const CompositorTransition *)compositor_launcher_app_transition_get(
+          false /* app_is_destination */), 0);
   prv_request_launcher(false /* reset_scroll */);
 }
 
