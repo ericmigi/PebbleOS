@@ -155,3 +155,9 @@ Behavior must match, not just rendering. Gates per area:
   slots, timeline peek, theme, alert masks partially.
 - Known functional no-ops to burn down: factory reset, shutdown,
   core dump, vibes/speaker, worker task, timeline peek service, BLE.
+- Functional foundation 2026-08-31: real shell prefs + alerts prefs +
+  dnd initialized on PFS; RAM glue purged. NEXT functional items:
+  (1) modal dialog integration (expandable dialog renders empty, action
+  bar select not routed, pop overshoots to launcher — QT first-use
+  flow is the test case), (2) toggle+reboot persistence gates per
+  settings area, (3) remaining no-op actuations.
