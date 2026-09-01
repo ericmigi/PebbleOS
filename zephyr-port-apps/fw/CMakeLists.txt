@@ -738,6 +738,18 @@ target_sources(app PRIVATE
   src/shell_glue.c
   src/resource_pack.c
 
+  # Real settings submodules (qemu shell only; pt2 keeps the apps_port_glue.c
+  # stub rows until its service closures are ported). TU properties are set
+  # after this block (extra -include for headers shipping pulls via
+  # kernel/events.h; sniprintf is newlib-only, the minimal libc spells it
+  # snprintf).
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/bluetooth.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/display.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/time.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/option_menu.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/option_menu_window.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timezone_database/service.c"
+
   "${LAUNCHER}/launcher.c"
   "${LAUNCHER}/menu_layer.c"
   "${LAUNCHER}/app_glance.c"
@@ -780,6 +792,33 @@ target_sources(app PRIVATE
   src/compositor_port.c
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/compositor_transitions.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_shutter_transitions.c"
+)
+
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/bluetooth.c"
+  PROPERTIES
+    COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-include;pbl/services/bluetooth/bluetooth_ctl.h;-iquote;${FW_APP_IQUOTE}"
+    COMPILE_DEFINITIONS "sniprintf=snprintf"
+)
+# display.c row set must match the reference build's (touch + app-scaling rows).
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/display.c"
+  PROPERTIES
+    COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
+    COMPILE_DEFINITIONS "CONFIG_TOUCH=1;CONFIG_APP_SCALING=1"
+)
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/option_menu.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/time.c"
+  PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
+)
+# Same shadow set as the other applib UI TUs, but with the real generated
+# resource IDs (radio-button icons come from the system pack) resolved ahead of
+# the gfx shadow header.
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/option_menu_window.c"
+  PROPERTIES COMPILE_OPTIONS
+    "-include;${FW_GRAPHICS_APP_STATE};-include;process_management/process_manager.h;-include;util/time/time.h;-iquote;${CMAKE_CURRENT_SOURCE_DIR}/include;-iquote;${PEBBLEOS_ROOT}/build/src/fw;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/gfx/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/include"
 )
 
 # Launcher app TUs: same treatment as the settings/watchfaces app sources, plus

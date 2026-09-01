@@ -171,6 +171,8 @@ int fw_system_app_launch_nesting(void) { return s_launch_nesting; }
 // has popped every window it pushed, i.e. depth is back to this base.
 static int s_app_base_depth;
 
+int fw_system_app_base_depth(void) { return s_app_base_depth; }
+
 // ---------------------------------------------------------------------------
 // app_event_loop: the applib entry a system app's main() calls. By the time it
 // runs, the app has already pushed its root window via app_window_stack_push

@@ -21,6 +21,10 @@ time_t time_util_get_midnight_of(time_t ts);
 // weekday names with it. %a-only implementation in fw/src/shell_glue.c.
 size_t strftime(char *s, size_t max, const char *format, const struct tm *tm);
 
+// Zephyr's minimal libc also lacks mktime; the port's wall clock is UTC so it
+// is timegm (fw/src/apps_port_glue.c).
+time_t mktime(struct tm *tm_val);
+
 #define DAYS_PER_WEEK 7
 #define MONTHS_PER_YEAR 12
 #define MS_PER_SECOND (1000)
@@ -35,6 +39,18 @@ size_t strftime(char *s, size_t max, const char *format, const struct tm *tm);
 
 #define IS_WEEKDAY(d) ((d) >= Monday && (d) <= Friday)
 #define IS_WEEKEND(d) ((d) == Saturday || (d) == Sunday)
+
+// TimezoneInfo mirrors the shipping struct (settings/time.c + the timezone
+// database service use it; the port never programs RTC registers with it).
+#define TZ_LEN 6
+typedef struct TimezoneInfo {
+  char tm_zone[TZ_LEN - 1];
+  uint8_t dst_id;
+  int16_t timezone_id;
+  int32_t tm_gmtoff;
+  time_t dst_start;
+  time_t dst_end;
+} TimezoneInfo;
 
 // DayInWeek is pulled in by pbl/services/activity/activity.h (health settings).
 // Mirrors the shipping util/time/time.h enum.

@@ -46,7 +46,9 @@ struct tm *sys_localtime_r(const time_t *timep, struct tm *result) {
 }
 
 bool clock_is_24h_style(void) {
-  return true;
+  // The FreeRTOS reference under QEMU runs with the 12h default (Settings ->
+  // Date & Time -> Time Format shows "12h").
+  return false;
 }
 
 bool sys_app_is_watchface(void) {

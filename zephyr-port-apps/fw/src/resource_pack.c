@@ -137,3 +137,10 @@ void applib_resource_munmap_or_free(void *bytes) {
 ResHandle applib_resource_get_handle(uint32_t resource_id) {
   return sys_resource_is_valid(SYSTEM_APP, resource_id) ? (ResHandle)(uintptr_t)resource_id : NULL;
 }
+
+// resource.h entry used by the real timezone-database service (compiled on the
+// qemu shell); same lookup as sys_resource_load_range.
+size_t resource_load_byte_range_system(ResAppNum app_num, uint32_t resource_id,
+                                       uint32_t start_offset, uint8_t *data, size_t num_bytes) {
+  return sys_resource_load_range(app_num, resource_id, start_offset, data, num_bytes);
+}

@@ -22,6 +22,7 @@
 #include "applib/ui/dialogs/dialog.h"
 #include "applib/ui/dialogs/expandable_dialog.h"
 #include "applib/ui/dialogs/simple_dialog.h"
+#include "applib/ui/date_selection_window.h"
 #include "applib/ui/option_menu_window.h"
 #include "applib/ui/time_selection_window.h"
 #include "applib/ui/window.h"
@@ -42,6 +43,19 @@ void time_selection_window_configure(TimeSelectionWindowData *w,
 void time_selection_window_set_to_current_time(TimeSelectionWindowData *w) { (void)w; }
 
 void time_selection_window_deinit(TimeSelectionWindowData *w) { (void)w; }
+
+void date_selection_window_init(DateSelectionWindowData *w, const char *label, GColor color,
+                                DateSelectionCompleteCallback complete, void *context) {
+  (void)w;
+  (void)label;
+  (void)color;
+  (void)complete;
+  (void)context;
+}
+
+void date_selection_window_set_to_current_date(DateSelectionWindowData *w) { (void)w; }
+
+void date_selection_window_deinit(DateSelectionWindowData *w) { (void)w; }
 
 void day_picker_push(DayPickerConfig config, DayPickerCallback callback, void *context) {
   (void)config;
@@ -65,7 +79,11 @@ void action_menu_set_result_window(ActionMenu *action_menu, Window *result_windo
   (void)result_window;
 }
 
-void option_menu_set_highlight_colors(OptionMenu *option_menu, GColor background, GColor foreground) {
+// On qemu the real option_menu_window.c + settings/option_menu.c are compiled
+// (the Display submenu pushes real option menus); pt2 keeps the inert stubs.
+#if !defined(CONFIG_BOARD_QEMU_EMERY)
+void option_menu_set_highlight_colors(OptionMenu *option_menu, GColor background,
+                                      GColor foreground) {
   (void)option_menu;
   (void)background;
   (void)foreground;
@@ -90,6 +108,7 @@ void *settings_option_menu_get_context(SettingsOptionMenuData *data) {
   (void)data;
   return NULL;
 }
+#endif  // !CONFIG_BOARD_QEMU_EMERY
 
 // --- confirmation / first-run dialogs ---------------------------------------
 void dialog_set_text(Dialog *dialog, const char *text) {

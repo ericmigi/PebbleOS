@@ -370,6 +370,97 @@ static void prv_launcher_click_config_provider(void *context) {
 #endif  // !FW_REAL_SHELL
 
 // ---------------------------------------------------------------------------
+// In-app window push/pop slide transition, mirroring shipping
+// window_stack_animation_rect.c: the incoming window's root-layer frame tweens
+// on the moook curve from +DISP_COLS (push) / -DISP_COLS (pop) to 0. Only the
+// incoming window animates; the outgoing window's pixels stay in the
+// framebuffer between frames (it never moves in shipping either), and
+// patch-trace fills the overshoot trail like the reference render path.
+// Enabled for the real-shell build only (pt2's scaffold shell keeps
+// instant push/pop).
+// ---------------------------------------------------------------------------
+#ifdef FW_REAL_SHELL
+#include "applib/graphics/graphics_private.h"
+#include "applib/ui/animation_interpolate.h"
+#include "applib/ui/property_animation.h"
+
+// window_private.h's entry, defined in watchface_sandboxed/src/port.c.
+void window_schedule_render(Window *window);
+
+static struct {
+  Window *moving;
+  int16_t last_x;
+} s_win_trans;
+
+static bool s_next_push_animated;
+
+void fw_window_stack_set_next_push_animated(bool animated) {
+  s_next_push_animated = animated;
+}
+
+static void prv_win_trans_frame_setter(void *subject, GRect rect) {
+  Window *window = subject;
+  // Repeated curve samples inside one moook frame must not emit duplicate
+  // display frames (layer_set_frame no-ops on an unchanged frame in shipping).
+  if (grect_equal(&rect, &window->layer.frame)) {
+    return;
+  }
+  layer_set_frame(&window->layer, &rect);
+  window_schedule_render(window);
+}
+
+static void prv_win_trans_update(Animation *a, const AnimationProgress progress) {
+  property_animation_update_grect((PropertyAnimation *)a, progress);
+}
+
+static void prv_win_trans_teardown(Animation *a) {
+  s_win_trans.moving = NULL;
+  animation_destroy(a);
+}
+
+static void prv_win_trans_start(Window *window, bool from_left) {
+  static const PropertyAnimationImplementation s_impl = {
+    .base = {
+      .update = prv_win_trans_update,
+      .teardown = prv_win_trans_teardown,
+    },
+    .accessors = { .setter.grect = prv_win_trans_frame_setter },
+  };
+  const GRect end = window->layer.frame;
+  GRect start = end;
+  start.origin.x += from_left ? -DISP_COLS : DISP_COLS;
+  PropertyAnimation *pa = property_animation_create(&s_impl, window, NULL, NULL);
+  if (!pa) {
+    return;
+  }
+  property_animation_set_from_grect(pa, &start);
+  property_animation_set_to_grect(pa, &end);
+  Animation *anim = property_animation_get_animation(pa);
+  animation_set_custom_interpolation(anim, interpolate_moook);
+  animation_set_duration(anim, interpolate_moook_duration());
+  s_win_trans.moving = window;
+  s_win_trans.last_x = INT16_MAX;
+  // Park the incoming window offscreen; marking it dirty makes the pump render
+  // it there once (the reference's first transition frame repeats the old
+  // screen). Later curve samples only render when the frame actually moves.
+  layer_set_frame(&window->layer, &start);
+  window_schedule_render(window);
+  animation_schedule(anim);
+}
+
+// In-app transitions only run between two windows of the running app (shipping
+// gives each app its own window stack; the app's first push and last pop are
+// covered by the compositor instead).
+static bool prv_win_trans_should_animate(int depth_above_pop) {
+  return depth_above_pop > fw_system_app_base_depth() &&
+         !fw_compositor_transition_pending();
+}
+#else
+static bool s_next_push_animated;
+void fw_window_stack_set_next_push_animated(bool animated) { (void)animated; }
+#endif  // FW_REAL_SHELL
+
+// ---------------------------------------------------------------------------
 // Render + window-stack push/pop.
 // ---------------------------------------------------------------------------
 // Render + push only when something marked the top window dirty
@@ -385,6 +476,12 @@ static void prv_render_top(void) {
   extern uint64_t rtc_get_ticks(void);
   const uint32_t frame_start_ms = (uint32_t)rtc_get_ticks();
   layer_render_tree(window_get_root_layer(window), app_state_get_graphics_context());
+#ifdef FW_REAL_SHELL
+  if (s_win_trans.moving == window) {
+    graphics_patch_trace_of_moving_rect(app_state_get_graphics_context(),
+                                        &s_win_trans.last_x, window->layer.frame);
+  }
+#endif
   window->is_render_scheduled = false;
   // A pending/running compositor transition owns the panel: it composites the
   // app framebuffer itself and pushes the system framebuffer per frame.
@@ -431,10 +528,20 @@ static void prv_window_push(Window *window) {
   if (s_stack_top + 1 >= STACK_MAX) {
     return;
   }
+  const bool animated = s_next_push_animated;
+  s_next_push_animated = false;
   s_stack[++s_stack_top] = window;
   window->on_screen = true;
   printk("WINDOW_PUSH %p depth=%d\n", (void *)window, s_stack_top + 1);
   prv_apply_click_config(window);
+#ifdef FW_REAL_SHELL
+  if (animated && prv_win_trans_should_animate(s_stack_top)) {
+    prv_win_trans_start(window, false /* from the right */);
+    return;
+  }
+#else
+  (void)animated;
+#endif
   window_schedule_render(window);
   prv_render_top();
 }
@@ -472,6 +579,12 @@ static void prv_window_pop(void) {
   }
 
   prv_apply_click_config(prv_top_window());
+#ifdef FW_REAL_SHELL
+  if (prv_top_window() && prv_win_trans_should_animate(s_stack_top + 1)) {
+    prv_win_trans_start(prv_top_window(), true /* from the left */);
+    return;
+  }
+#endif
   window_schedule_render(prv_top_window());
   // A pending close transition means this pop leaves the exiting app; the
   // revealed window must render from its own app context (user_data still

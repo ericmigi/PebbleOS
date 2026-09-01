@@ -11,12 +11,15 @@
 #include "pbl/util/uuid.h"
 #include "pbl/services/music.h"
 #include <pbl/drivers/button_id.h>
+#include <bluetooth/bluetooth_types.h>
 
 typedef enum {
   PEBBLE_NULL_EVENT = 0,
   // Values match the shipping kernel/events.h enum (button service compat).
+  PEBBLE_BT_CONNECTION_EVENT = 3,
   PEBBLE_BUTTON_DOWN_EVENT = 5,
   PEBBLE_BUTTON_UP_EVENT = 6,
+  PEBBLE_BT_PAIRING_EVENT = 12,
   PEBBLE_COMM_SESSION_EVENT = 13,
   PEBBLE_MEDIA_EVENT = 14,
   PEBBLE_TICK_EVENT = 15,
@@ -27,6 +30,7 @@ typedef enum {
   PEBBLE_CALLBACK_EVENT = 27,
   PEBBLE_SUBSCRIPTION_EVENT = 29,
   PEBBLE_DO_NOT_DISTURB_EVENT = 32,
+  PEBBLE_BLE_DEVICE_NAME_UPDATED_EVENT = 41,
   // Subscribed to by the real launcher's glance service / glances; never fired
   // in the port (no phone / battery / weather / glance-slice sources yet).
   PEBBLE_WEATHER_EVENT = 60,
@@ -104,6 +108,15 @@ typedef struct {
 
 // Prototype-only shapes for headers the ported apps include (never fired).
 typedef struct {
+  bool is_active;
+} PebbleDoNotDisturbEvent;
+
+typedef struct {
+  uint8_t type;
+  void *reminder_id;
+} PebbleReminderEvent;
+
+typedef struct {
   uint8_t type;
 } PebbleHealthEvent;
 
@@ -124,9 +137,21 @@ typedef struct {
   bool is_system;
 } PebbleCommSessionEvent;
 
+typedef enum {
+  PebbleBluetoothConnectionEventStateConnected,
+  PebbleBluetoothConnectionEventStateDisconnected,
+} PebbleBluetoothConnectionEventState;
+
+typedef struct {
+  PebbleBluetoothConnectionEventState state : 1;
+  bool is_ble : 1;
+  BTDeviceInternal device;
+} PebbleBluetoothConnectionEvent;
+
 typedef struct {
   union {
     PebbleCommSessionEvent comm_session_event;
+    PebbleBluetoothConnectionEvent connection;
   };
 } PebbleBluetoothEvent;
 

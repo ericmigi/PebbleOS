@@ -59,12 +59,20 @@ void *app_malloc(size_t bytes) { return app_zalloc_check(bytes); }
 // key string unchanged and there is nothing to free.
 // ponytail: no translation catalog. Add i18n.c + a language resource for L10n.
 // ---------------------------------------------------------------------------
+// i18n_ctx_noop() keys carry a "context\4" prefix; the untranslated fallback is
+// the text after the separator (shipping strips it the same way).
+static const char *prv_i18n_strip_ctx(const char *string) {
+  const char *sep = string ? strchr(string, '\4') : NULL;
+  return sep ? sep + 1 : string;
+}
+
 const char *i18n_get(const char *string, const void *owner) {
   (void)owner;
-  return string;
+  return prv_i18n_strip_ctx(string);
 }
 
 void i18n_get_with_buffer(const char *string, char *buffer, size_t length) {
+  string = prv_i18n_strip_ctx(string);
   strncpy(buffer, string ? string : "", length ? length - 1 : 0);
   if (length) {
     buffer[length - 1] = '\0';
@@ -377,13 +385,208 @@ GBitmap *app_menu_data_source_get_node_icon(AppMenuDataSource *source, AppMenuNo
     return &md;                                                                             \
   }
 
+#if !defined(CONFIG_BOARD_QEMU_EMERY)
 STUB_SUBMODULE(settings_bluetooth_get_info, "Bluetooth", SettingsMenuItemBluetooth)
+#endif
 STUB_SUBMODULE(settings_notifications_get_info, "Notifications", SettingsMenuItemNotifications)
 STUB_SUBMODULE(settings_vibe_patterns_get_info, "Sounds & Haptics", SettingsMenuItemVibrations)
 STUB_SUBMODULE(settings_quiet_time_get_info, "Quiet Time", SettingsMenuItemQuietTime)
 STUB_SUBMODULE(settings_timeline_get_info, "Timeline", SettingsMenuItemTimeline)
 STUB_SUBMODULE(settings_activity_tracker_get_info, "Background App", SettingsMenuItemActivity)
 STUB_SUBMODULE(settings_quick_launch_get_info, "Quick Launch", SettingsMenuItemQuickLaunch)
+#if !defined(CONFIG_BOARD_QEMU_EMERY)
 STUB_SUBMODULE(settings_time_get_info, "Date & Time", SettingsMenuItemDateTime)
+#endif
+#if !defined(CONFIG_BOARD_QEMU_EMERY)
 STUB_SUBMODULE(settings_display_get_info, "Display", SettingsMenuItemDisplay)
+#endif
 STUB_SUBMODULE(settings_system_get_info, "System", SettingsMenuItemSystem)
+
+// ---------------------------------------------------------------------------
+// Bluetooth submodule backends (qemu shell): the real settings/bluetooth.c is
+// compiled 1:1 and links against these. They report the same state the
+// FreeRTOS reference reports under QEMU: airplane mode off (shell_glue.c), no
+// paired remotes, and the "Pebble AAAA" name derived from the qemu BT driver's
+// fixed AA:AA:AA:AA:AA:AA identity address (see src/bluetooth-fw/qemu/id.c +
+// services/bluetooth/local_id.c).
+// ---------------------------------------------------------------------------
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+#include <stdio.h>
+
+#include <bluetooth/bluetooth_types.h>
+#include <bluetooth/sm_types.h>
+
+#include "apps/system/settings/bluetooth.h"
+#include "apps/system/settings/remote.h"
+
+void bt_local_id_copy_device_name(char name_out[BT_DEVICE_NAME_BUFFER_SIZE], bool is_le) {
+  (void)is_le;
+  snprintf(name_out, BT_DEVICE_NAME_BUFFER_SIZE, "Pebble %02X%02X", 0xAA, 0xAA);
+}
+
+void bt_persistent_storage_for_each_ble_pairing(
+    void (*cb)(BTDeviceInternal *device, SMIdentityResolvingKey *irk, const char *name,
+               BTBondingID *id, void *context),
+    void *context) {
+  (void)cb;
+  (void)context;
+}
+
+bool bt_persistent_storage_get_ble_pairing_by_id(BTBondingID bonding,
+                                                 SMIdentityResolvingKey *irk_out,
+                                                 BTDeviceInternal *device_out, char *name_out) {
+  (void)bonding;
+  (void)irk_out;
+  (void)device_out;
+  (void)name_out;
+  return false;
+}
+
+// ponytail: airplane-mode toggle is inert (no BT stack state machine in the
+// port); flipping it for real needs shell_glue's flag + a PEBBLE_BT_STATE_EVENT.
+void bt_ctl_set_airplane_mode_async(bool enabled) { (void)enabled; }
+
+void bt_lock(void) {}
+void bt_unlock(void) {}
+
+GAPLEConnection *gap_le_connection_find_by_irk(const SMIdentityResolvingKey *irk) {
+  (void)irk;
+  return NULL;
+}
+
+GAPLEConnection *gap_le_connection_by_device(const BTDeviceInternal *device) {
+  (void)device;
+  return NULL;
+}
+
+void gap_le_device_name_request(const BTDeviceInternal *address) { (void)address; }
+void gap_le_device_name_request_all(void) {}
+
+void bt_pairability_use(void) {}
+void bt_pairability_release(void) {}
+
+// No remotes ever exist under QEMU, so the per-remote action menu is
+// unreachable; satisfy the link.
+void settings_remote_menu_push(struct SettingsBluetoothData *bt_data, StoredRemote *stored_remote) {
+  (void)bt_data;
+  (void)stored_remote;
+}
+#endif  // CONFIG_BOARD_QEMU_EMERY
+
+// ---------------------------------------------------------------------------
+// Display submodule backends (qemu shell): RAM-backed backlight/touch/language
+// state seeded to what the FreeRTOS reference reports under QEMU with the
+// shared qemu_spi_flash.bin prefs (preset Advanced, backlight + touch on,
+// English). ponytail: values are seeded, not read from the prefs DB; wire
+// shell/normal/prefs.c + settings_file to track the flash image instead.
+// ---------------------------------------------------------------------------
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+static bool s_backlight_enabled = true;
+static uint8_t s_backlight_preset = BacklightPreset_Advanced;
+static bool s_ambient_sensor_enabled = true;
+static uint8_t s_backlight_intensity = 50;  // BACKLIGHT_INTENSITY_HIGH (Standard preset)
+static uint32_t s_backlight_timeout_ms = DEFAULT_BACKLIGHT_TIMEOUT_MS;
+static bool s_backlight_motion = true;
+static BacklightTouchWake s_backlight_touch_wake = BacklightTouchWake_DoubleTap;
+static bool s_touch_enabled = true;
+static bool s_touch_nav_menu = true;
+static ShellLanguage s_language = ShellLanguageEnglish;
+static uint8_t s_legacy_app_render_mode = 1;  // shipping default: Scaled (Nearest)
+
+bool backlight_is_enabled(void) { return s_backlight_enabled; }
+void light_toggle_enabled(void) { s_backlight_enabled = !s_backlight_enabled; }
+BacklightPreset backlight_get_preset(void) { return s_backlight_preset; }
+void backlight_set_preset(BacklightPreset preset) { s_backlight_preset = preset; }
+uint8_t backlight_get_intensity(void) { return s_backlight_intensity; }
+void backlight_set_intensity(uint8_t intensity) { s_backlight_intensity = intensity; }
+uint32_t backlight_get_timeout_ms(void) { return s_backlight_timeout_ms; }
+void backlight_set_timeout_ms(uint32_t timeout_ms) { s_backlight_timeout_ms = timeout_ms; }
+bool backlight_is_motion_enabled(void) { return s_backlight_motion; }
+void backlight_set_motion_enabled(bool enable) { s_backlight_motion = enable; }
+bool backlight_is_ambient_sensor_enabled(void) { return s_ambient_sensor_enabled; }
+void light_toggle_ambient_sensor_enabled(void) {
+  s_ambient_sensor_enabled = !s_ambient_sensor_enabled;
+}
+BacklightTouchWake backlight_get_touch_wake(void) { return s_backlight_touch_wake; }
+void backlight_set_touch_wake(BacklightTouchWake wake) { s_backlight_touch_wake = wake; }
+void light_enable_interaction(void) {}
+uint32_t light_get_ambient_lux(void) { return 0; }
+void ambient_light_prime(void) {}
+void ambient_light_release(void) {}
+
+bool touch_is_globally_enabled(void) { return s_touch_enabled; }
+void touch_set_globally_enabled(bool enabled) { s_touch_enabled = enabled; }
+bool touch_navigation_menu_is_enabled(void) { return s_touch_nav_menu; }
+void touch_set_navigation_menu_enabled(bool enabled) { s_touch_nav_menu = enabled; }
+
+ShellLanguage shell_prefs_get_language(void) { return s_language; }
+void shell_prefs_set_language(ShellLanguage language) { s_language = language; }
+char *i18n_get_lang_name(void) { return "English"; }
+
+uint8_t shell_prefs_get_legacy_app_render_mode(void) { return s_legacy_app_render_mode; }
+void shell_prefs_set_legacy_app_render_mode(uint8_t mode) { s_legacy_app_render_mode = mode; }
+#endif  // CONFIG_BOARD_QEMU_EMERY
+
+// option_menu_window.c is compiled against the generated applib_malloc header
+// on qemu (its TU resolves build/src/fw first for the real resource IDs), so
+// its typed allocator resolves here, onto the same applib heap.
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+#include "applib/ui/option_menu_window.h"
+void *applib_malloc(size_t size);
+void *_applib_type_malloc_OptionMenu(void) { return applib_malloc(sizeof(OptionMenu)); }
+#endif
+
+// ---------------------------------------------------------------------------
+// Date & Time submodule backends (qemu shell): the reference under QEMU runs
+// with automatic time + automatic timezone and no timezone set, so the menu
+// shows Time Source/Automatic, Time Format/12h, Timezone Source/Automatic.
+// ponytail: toggles flip RAM state only; clock_set_time and the phone time
+// request are inert (no clock service / phone in the port).
+// ---------------------------------------------------------------------------
+#if defined(CONFIG_BOARD_QEMU_EMERY)
+#include <time.h>
+
+#include <zephyr/sys/timeutil.h>
+
+#include "pbl/services/clock.h"
+
+time_t rtc_get_time(void);
+
+static bool s_clock_manual_time;
+static bool s_clock_manual_timezone;
+static bool s_clock_timezone_set;
+static int16_t s_clock_timezone_region = -1;
+
+bool clock_time_source_is_manual(void) { return s_clock_manual_time; }
+void clock_set_manual_time_source(bool manual) { s_clock_manual_time = manual; }
+bool clock_timezone_source_is_manual(void) { return s_clock_manual_timezone; }
+void clock_set_manual_timezone_source(bool manual) { s_clock_manual_timezone = manual; }
+bool clock_is_timezone_set(void) { return s_clock_timezone_set; }
+
+void clock_set_timezone_by_region_id(uint16_t region_id) {
+  s_clock_timezone_region = (int16_t)region_id;
+  s_clock_timezone_set = true;
+}
+
+void clock_get_timezone_region(char *region_name, const size_t buffer_size) {
+  if (region_name && buffer_size) {
+    region_name[0] = '\0';
+  }
+}
+
+void clock_request_time_from_phone(void) {}
+
+void clock_set_time(time_t new_time) { (void)new_time; }
+
+void clock_get_time_tm(struct tm *time_tm) {
+  const time_t now = rtc_get_time();
+  gmtime_r(&now, time_tm);
+}
+
+void clock_set_24h_style(bool is_24h) { (void)is_24h; }
+
+// Minimal-libc gap; the port's wall clock is UTC, so mktime == timegm.
+time_t mktime(struct tm *tm_val) { return timeutil_timegm(tm_val); }
+
+int16_t shell_prefs_get_automatic_timezone_id(void) { return -1; }
+#endif  // CONFIG_BOARD_QEMU_EMERY
