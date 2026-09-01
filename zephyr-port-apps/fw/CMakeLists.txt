@@ -746,6 +746,24 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/bluetooth.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/display.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/time.c"
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/system.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/dialog.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/dialog_private.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/actionable_dialog.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/confirmation_dialog.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/number_window.c"
+  "${PEBBLEOS_ROOT}/src/fw/system/version.c"
+  "${PEBBLEOS_ROOT}/src/fw/mfg/qemu/mfg_info.c"
+  src/settings_system_glue.c
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/dialog.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/dialog_private.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/actionable_dialog.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/confirmation_dialog.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/number_window.c"
+  "${PEBBLEOS_ROOT}/src/fw/system/version.c"
+  "${PEBBLEOS_ROOT}/src/fw/mfg/qemu/mfg_info.c"
+  src/settings_system_glue.c
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/system.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/option_menu.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/option_menu_window.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timezone_database/service.c"
@@ -768,10 +786,13 @@ target_sources(app PRIVATE
   "${KINO}/kino_reel.c"
   "${KINO}/kino_reel_custom.c"
   "${KINO}/kino_player.c"
+  "${KINO}/kino_layer.c"
   "${KINO}/kino_reel_gbitmap.c"
   "${KINO}/kino_reel_gbitmap_sequence.c"
   "${KINO}/kino_reel_pdci.c"
   "${KINO}/kino_reel_pdcs.c"
+  "${KINO}/kino_reel/scale_segmented.c"
+  "${KINO}/kino_reel/transform.c"
 
   "${GFX}/gdraw_command.c"
   "${GFX}/gdraw_command_frame.c"
@@ -809,6 +830,12 @@ set_source_files_properties(
     COMPILE_DEFINITIONS "CONFIG_TOUCH=1;CONFIG_APP_SCALING=1"
 )
 set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/system.c"
+  PROPERTIES
+    COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
+    COMPILE_DEFINITIONS "sniprintf=snprintf"
+)
+set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/option_menu.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/time.c"
   PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
@@ -818,6 +845,11 @@ set_source_files_properties(
 # the gfx shadow header.
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/option_menu_window.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/dialog.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/dialog_private.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/actionable_dialog.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/confirmation_dialog.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/number_window.c"
   PROPERTIES COMPILE_OPTIONS
     "-include;${FW_GRAPHICS_APP_STATE};-include;process_management/process_manager.h;-include;util/time/time.h;-iquote;${CMAKE_CURRENT_SOURCE_DIR}/include;-iquote;${PEBBLEOS_ROOT}/build/src/fw;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/gfx/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/include"
 )
@@ -849,10 +881,13 @@ set_source_files_properties(
   "${KINO}/kino_reel.c"
   "${KINO}/kino_reel_custom.c"
   "${KINO}/kino_player.c"
+  "${KINO}/kino_layer.c"
   "${KINO}/kino_reel_gbitmap.c"
   "${KINO}/kino_reel_gbitmap_sequence.c"
   "${KINO}/kino_reel_pdci.c"
   "${KINO}/kino_reel_pdcs.c"
+  "${KINO}/kino_reel/scale_segmented.c"
+  "${KINO}/kino_reel/transform.c"
   "${GFX}/gdraw_command.c"
   "${GFX}/gdraw_command_frame.c"
   "${GFX}/gdraw_command_image.c"

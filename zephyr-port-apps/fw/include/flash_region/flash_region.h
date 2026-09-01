@@ -33,6 +33,14 @@
 #define FLASH_REGION_SYSTEM_RESOURCES_BANK_1_BEGIN 0x10820000u
 #define FLASH_REGION_SYSTEM_RESOURCES_BANK_1_END 0x10a20000u
 
+#define FLASH_REGION_MFG_INFO_BEGIN 0x11ffe000u
+#define FLASH_REGION_MFG_INFO_END 0x11fff000u
+
+// Recovery/System info reads (settings/system.c, version.c).
+#define FIRMWARE_OFFSET 0x0u
+#define FLASH_REGION_FIRMWARE_DEST_BEGIN FLASH_REGION_FIRMWARE_SLOT_0_BEGIN
+#define FLASH_REGION_FIRMWARE_DEST_END FLASH_REGION_FIRMWARE_SLOT_0_END
+
 // Carved from the CD region; not part of the FreeRTOS layout. Only touched by
 // the off-by-default OTA flash-path self-test.
 #define FLASH_REGION_OTA_SCRATCH_BEGIN 0x11f40000u

@@ -85,6 +85,22 @@ __attribute__((weak)) bool fw_compositor_anim_snap_ticks(uint64_t raw, uint64_t 
 }
 #endif
 
+// settings/system.c: uptime + duration formatting helpers.
+uint32_t time_get_uptime_seconds(void) {
+  return (uint32_t)(k_uptime_get() / 1000);
+}
+
+void time_util_split_seconds_into_parts(uint32_t seconds, uint32_t *day_part,
+                                        uint32_t *hour_part, uint32_t *minute_part,
+                                        uint32_t *second_part) {
+  *day_part = seconds / SEC_PER_DAY;
+  seconds %= SEC_PER_DAY;
+  *hour_part = seconds / SEC_PER_HOUR;
+  seconds %= SEC_PER_HOUR;
+  *minute_part = seconds / SEC_PER_MIN;
+  *second_part = seconds % SEC_PER_MIN;
+}
+
 RtcTicks sys_get_ticks(void) {
   // Quantize the animation clock to 10 ms buckets (this build's only callers
   // are applib animation.c and menu_layer's double-tap window). Frame pacing

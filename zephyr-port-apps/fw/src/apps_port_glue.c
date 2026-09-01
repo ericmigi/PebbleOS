@@ -412,7 +412,9 @@ STUB_SUBMODULE(settings_time_get_info, "Date & Time", SettingsMenuItemDateTime)
 #if !defined(CONFIG_BOARD_QEMU_EMERY)
 STUB_SUBMODULE(settings_display_get_info, "Display", SettingsMenuItemDisplay)
 #endif
+#if !defined(CONFIG_BOARD_QEMU_EMERY)
 STUB_SUBMODULE(settings_system_get_info, "System", SettingsMenuItemSystem)
+#endif
 
 // ---------------------------------------------------------------------------
 // Bluetooth submodule backends (qemu shell): the real settings/bluetooth.c is

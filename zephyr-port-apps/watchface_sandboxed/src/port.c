@@ -677,6 +677,11 @@ void *applib_malloc(size_t size) {
   return k_heap_alloc(&s_app_heap, size, K_NO_WAIT);
 }
 
+void *app_realloc(void *ptr, size_t size) {
+  applib_heap_ensure_init();
+  return k_heap_realloc(&s_app_heap, ptr, size, K_NO_WAIT);
+}
+
 void *applib_zalloc(size_t size) {
   void *ptr = applib_malloc(size);
   if (ptr) {
@@ -938,9 +943,9 @@ bool g_fw_privileged_window;
 // the window's click config + renders it). Declared here to avoid pulling the fw
 // launcher header into the watchface port TU.
 void fw_window_stack_push(Window *window);
+void fw_window_stack_set_next_push_animated(bool animated);
 
 void app_window_stack_push(Window *window, bool animated) {
-  ARG_UNUSED(animated);
   s_top_window = window;
   window->on_screen = true;
   if (g_fw_privileged_window && !window->is_loaded) {
@@ -954,6 +959,7 @@ void app_window_stack_push(Window *window, bool animated) {
     // Load ran first (it wires up the window's ClickConfigProvider), so the
     // shared stack push can now apply the click config + render. This makes
     // nested pushes (settings menu -> submenu) ride the same stack + BACK pump.
+    fw_window_stack_set_next_push_animated(animated);
     fw_window_stack_push(window);
   }
   window_schedule_render(window);

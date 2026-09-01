@@ -111,26 +111,6 @@ void *settings_option_menu_get_context(SettingsOptionMenuData *data) {
 #endif  // !CONFIG_BOARD_QEMU_EMERY
 
 // --- confirmation / first-run dialogs ---------------------------------------
-void dialog_set_text(Dialog *dialog, const char *text) {
-  (void)dialog;
-  (void)text;
-}
-
-void dialog_set_background_color(Dialog *dialog, GColor background_color) {
-  (void)dialog;
-  (void)background_color;
-}
-
-void dialog_set_icon(Dialog *dialog, uint32_t icon_id) {
-  (void)dialog;
-  (void)icon_id;
-}
-
-void dialog_set_timeout(Dialog *dialog, uint32_t timeout) {
-  (void)dialog;
-  (void)timeout;
-}
-
 SimpleDialog *simple_dialog_create(const char *dialog_name) {
   (void)dialog_name;
   return NULL;

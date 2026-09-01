@@ -63,3 +63,8 @@ typedef enum DayInWeek {
   Friday,
   Saturday,
 } DayInWeek;
+
+void time_util_split_seconds_into_parts(uint32_t seconds, uint32_t *day_part,
+                                        uint32_t *hour_part, uint32_t *minute_part,
+                                        uint32_t *second_part);
+uint32_t time_get_uptime_seconds(void);
