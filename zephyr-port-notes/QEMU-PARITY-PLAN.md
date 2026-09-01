@@ -120,3 +120,11 @@ Two tiers:
   frame-exact — 3x3 runs all px_diff==0. OPEN BUG: ~1/12 runs hard
   freeze at final WINDOW_POP (ticks stop, no fault) — root-cause when
   it recurs; instrument event pump if needed.
+- OPEN BLOCKER (deterministic, data captured): combined scroll+selection
+  menu animation renders 11 frames vs ref 10 with mid-flight content
+  offsets (ends exact; /tmp/sys6-* analysis: not a single inserted
+  frame — the two curves sample at different relative phases
+  mid-animation). Affects every content-scrolling menu step. Attack
+  next with pixel-inversion of both elapsed streams (parity3/4 notes
+  technique). Freeze-clock-during-update-callback landed (made zephyr
+  fully run-to-run deterministic) but did not merge the streams.

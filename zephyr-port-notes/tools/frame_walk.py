@@ -14,23 +14,37 @@ per-segment frame counts both sides + per-frame px_diff (aligned by index).
 """
 import argparse, os, shutil, socket, subprocess, sys, tempfile, time
 
-def mon_cmd(sock_path, cmd, tries=20):
-    for _ in range(tries):
-        try:
-            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            s.connect(sock_path)
-            s.settimeout(2)
+class Mon:
+    def __init__(self, sock_path):
+        self.path = sock_path
+        self.s = None
+
+    def _connect(self):
+        for _ in range(20):
             try:
-                s.recv(4096)
-            except socket.timeout:
-                pass
-            s.sendall((cmd + "\n").encode())
-            time.sleep(0.2)
-            s.close()
-            return
-        except (ConnectionRefusedError, FileNotFoundError):
-            time.sleep(1)
-    raise RuntimeError("monitor not reachable: " + sock_path)
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                s.connect(self.path)
+                s.settimeout(3)
+                self.s = s
+                self._drain()
+                return
+            except (ConnectionRefusedError, FileNotFoundError):
+                time.sleep(1)
+        raise RuntimeError("monitor not reachable: " + self.path)
+
+    def _drain(self):
+        buf = b""
+        try:
+            while b"(qemu)" not in buf:
+                buf += self.s.recv(4096)
+        except socket.timeout:
+            pass
+
+    def cmd(self, c):
+        if self.s is None:
+            self._connect()
+        self.s.sendall((c + "\n").encode())
+        self._drain()
 
 def frame_count(d):
     try:
@@ -56,8 +70,8 @@ def launch(name, qemu, elf, spi_src, out, extra_machine):
     if extra_machine:
         cmd += ["-audiodev", "none,id=snd0"]
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return {"name": name, "proc": proc, "frames": frames, "sock": sock, "segments": [],
-            "prev_label": "boot", "prev_idx": 0}
+    return {"name": name, "proc": proc, "frames": frames, "mon": Mon(sock),
+            "segments": [], "prev_label": "boot", "prev_idx": 0}
 
 def run_both(sides, steps):
     # Both firmwares run at the same wall time so clock-driven pixels (watch
@@ -83,7 +97,7 @@ def run_both(sides, steps):
                     side["segments"].append((side["prev_label"], side["prev_idx"], n))
                     side["prev_label"], side["prev_idx"] = step, n
                 for side in sides:
-                    mon_cmd(side["sock"], "sendkey " + step)
+                    side["mon"].cmd("sendkey " + step)
         time.sleep(2)
         for side in sides:
             side["segments"].append((side["prev_label"], side["prev_idx"],

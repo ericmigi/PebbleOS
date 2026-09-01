@@ -118,6 +118,24 @@ RtcTicks sys_get_ticks(void) {
   if (fw_compositor_anim_snap_ticks(ticks, &snapped)) {
     return snapped;
   }
+  // Freeze the clock across a single animation update callback: an animation
+  // scheduled from inside another's update (menu scroll following selection)
+  // then starts exactly on the running frame time and merges onto the same
+  // callback stream, like the reference (whose in-callback 'now' is the frame
+  // time to within a ms).
+  {
+    static RtcTicks s_frozen;
+    static bool s_frozen_valid;
+    AnimationState *state = kernel_applib_get_animation_state();
+    if (state->aux && state->aux->current_animation) {
+      if (!s_frozen_valid) {
+        s_frozen = ticks - (ticks % (10 * RTC_TICKS_HZ / 1000));
+        s_frozen_valid = true;
+      }
+      return s_frozen;
+    }
+    s_frozen_valid = false;
+  }
   return ticks - (ticks % (10 * RTC_TICKS_HZ / 1000));
 #else
   // Hardware keeps the raw clock: quantization is a QEMU determinism aid
