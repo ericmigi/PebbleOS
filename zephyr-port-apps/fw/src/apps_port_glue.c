@@ -95,22 +95,10 @@ void i18n_free_all(const void *owner) { (void)owner; }
 // ---------------------------------------------------------------------------
 static UnitsDistance s_units_distance = UnitsDistance_KM;
 
-UnitsDistance shell_prefs_get_units_distance(void) { return s_units_distance; }
-void shell_prefs_set_units_distance(UnitsDistance unit) { s_units_distance = unit; }
 
-GColor shell_prefs_get_theme_highlight_color(void) {
-  // Match shipping PebbleOS: the default menu selection accent is Vivid Cerulean
-  // (teal), not Jazzberry Jam (magenta). See shell/normal/prefs.c.
-  return PBL_IF_COLOR_ELSE(GColorVividCerulean, GColorBlack);
-}
 
-bool shell_prefs_get_menu_scroll_wrap_around_enable(void) { return false; }
 
 static MenuScrollVibeBehavior s_scroll_vibe = MenuScrollNoVibe;
-MenuScrollVibeBehavior shell_prefs_get_menu_scroll_vibe_behavior(void) { return s_scroll_vibe; }
-void shell_prefs_set_menu_scroll_vibe_behavior(MenuScrollVibeBehavior behavior) {
-  s_scroll_vibe = behavior;
-}
 
 // ---------------------------------------------------------------------------
 // Default watchface: RAM. The watchfaces picker reads this to mark the "Active"
@@ -120,8 +108,6 @@ void shell_prefs_set_menu_scroll_vibe_behavior(MenuScrollVibeBehavior behavior) 
 // Watchfaces glance shows its name as the subtitle.
 static AppInstallId s_default_watchface_id = -1;
 
-AppInstallId watchface_get_default_install_id(void) { return s_default_watchface_id; }
-void watchface_set_default_install_id(AppInstallId id) { s_default_watchface_id = id; }
 
 // Selecting a watchface row: record it as the active face. Shipping relaunches
 // the shell with the chosen face; the port just persists the choice + logs it so
@@ -192,8 +178,6 @@ bool app_install_entry_is_hidden(const AppInstallEntry *entry) {
 // ---------------------------------------------------------------------------
 static bool s_activity_tracking_enabled = true;
 
-bool activity_prefs_tracking_is_enabled(void) { return s_activity_tracking_enabled; }
-void activity_prefs_tracking_set_enabled(bool enable) { s_activity_tracking_enabled = enable; }
 bool activity_start_tracking(bool test_mode) {
   (void)test_mode;
   return true;
@@ -485,34 +469,16 @@ static bool s_touch_nav_menu = true;
 static ShellLanguage s_language = ShellLanguageEnglish;
 static uint8_t s_legacy_app_render_mode = 1;  // shipping default: Scaled (Nearest)
 
-bool backlight_is_enabled(void) { return s_backlight_enabled; }
 void light_toggle_enabled(void) { s_backlight_enabled = !s_backlight_enabled; }
-BacklightPreset backlight_get_preset(void) { return s_backlight_preset; }
-void backlight_set_preset(BacklightPreset preset) { s_backlight_preset = preset; }
-uint8_t backlight_get_intensity(void) { return s_backlight_intensity; }
-void backlight_set_intensity(uint8_t intensity) { s_backlight_intensity = intensity; }
-uint32_t backlight_get_timeout_ms(void) { return s_backlight_timeout_ms; }
-void backlight_set_timeout_ms(uint32_t timeout_ms) { s_backlight_timeout_ms = timeout_ms; }
-bool backlight_is_motion_enabled(void) { return s_backlight_motion; }
-void backlight_set_motion_enabled(bool enable) { s_backlight_motion = enable; }
-bool backlight_is_ambient_sensor_enabled(void) { return s_ambient_sensor_enabled; }
 void light_toggle_ambient_sensor_enabled(void) {
   s_ambient_sensor_enabled = !s_ambient_sensor_enabled;
 }
-BacklightTouchWake backlight_get_touch_wake(void) { return s_backlight_touch_wake; }
-void backlight_set_touch_wake(BacklightTouchWake wake) { s_backlight_touch_wake = wake; }
 void light_enable_interaction(void) {}
 uint32_t light_get_ambient_lux(void) { return 0; }
 void ambient_light_prime(void) {}
 void ambient_light_release(void) {}
 
-bool touch_is_globally_enabled(void) { return s_touch_enabled; }
-void touch_set_globally_enabled(bool enabled) { s_touch_enabled = enabled; }
-bool touch_navigation_menu_is_enabled(void) { return s_touch_nav_menu; }
-void touch_set_navigation_menu_enabled(bool enabled) { s_touch_nav_menu = enabled; }
 
-ShellLanguage shell_prefs_get_language(void) { return s_language; }
-void shell_prefs_set_language(ShellLanguage language) { s_language = language; }
 char *i18n_get_lang_name(void) { return "English"; }
 
 uint8_t shell_prefs_get_legacy_app_render_mode(void) { return s_legacy_app_render_mode; }
@@ -580,5 +546,4 @@ void clock_set_24h_style(bool is_24h) { (void)is_24h; }
 // Minimal-libc gap; the port's wall clock is UTC, so mktime == timegm.
 time_t mktime(struct tm *tm_val) { return timeutil_timegm(tm_val); }
 
-int16_t shell_prefs_get_automatic_timezone_id(void) { return -1; }
 #endif  // CONFIG_BOARD_QEMU_EMERY

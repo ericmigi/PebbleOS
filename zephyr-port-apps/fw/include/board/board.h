@@ -22,3 +22,22 @@ typedef struct {
   bool active_high;
 } OutputConfig;
 #endif
+
+// shell_prefs_init reads the board backlight/accel defaults; minimal shapes
+// matching board_qemu.h + instances in settings_system_glue.c.
+typedef struct {
+  uint8_t backlight_on_percent;
+  uint32_t ambient_light_dark_threshold;
+  uint32_t ambient_k_delta_threshold;
+  uint32_t ambient_light_lux_dark_offset;
+  uint32_t ambient_light_lux_num;
+  uint32_t ambient_light_lux_den;
+  uint32_t backlight_default_color;
+} BoardConfig;
+
+typedef struct {
+  uint8_t default_motion_sensitivity;
+} BoardConfigAccel;
+
+extern const BoardConfig BOARD_CONFIG;
+extern const BoardConfigAccel BOARD_CONFIG_ACCEL;

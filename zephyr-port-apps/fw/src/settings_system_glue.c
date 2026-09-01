@@ -6,6 +6,7 @@
 // are pixel-identical; destructive actions are no-ops.
 
 #include <stdbool.h>
+#include <zephyr/sys/printk.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -43,15 +44,7 @@ void light_allow(bool allowed) { (void)allowed; }
 bool stationary_get_enabled(void) { return true; }  // reference default: Stand-By Mode On
 void stationary_set_enabled(bool enabled) { (void)enabled; }
 uint32_t ambient_light_level_to_lux(uint32_t light_level) { return light_level; }
-uint32_t backlight_get_ambient_threshold(void) { return 0; }
-void backlight_set_ambient_threshold(uint32_t threshold) { (void)threshold; }
 
-bool shell_prefs_get_vibe_log_info_enabled(void) { return false; }
-void shell_prefs_set_vibe_log_info_enabled(bool enabled) { (void)enabled; }
-bool shell_prefs_get_accel_shake_log_info_enabled(void) { return false; }
-void shell_prefs_set_accel_shake_log_info_enabled(bool enabled) { (void)enabled; }
-bool shell_prefs_can_coredump_on_request(void) { return false; }
-void shell_prefs_set_coredump_on_request(bool enabled) { (void)enabled; }
 
 // --- destructive / heavyweight actions: no-ops on the qemu shell
 void core_dump_reset(bool force) { (void)force; }
@@ -112,8 +105,6 @@ void vibes_set_default_vibe_strength(int32_t strength) { (void)strength; }
 // Shell prefs the reference defaults to under QEMU.
 #include "shell/system_theme.h"
 static PreferredContentSize s_content_size = PreferredContentSizeDefault;
-PreferredContentSize system_theme_get_content_size(void) { return s_content_size; }
-void system_theme_set_content_size(PreferredContentSize size) { s_content_size = size; }
 
 #include "pbl/services/notifications/alerts.h"
 #include "pbl/services/notifications/alerts_private.h"
@@ -169,41 +160,27 @@ static uint16_t s_peek_before_time_m = 10;
 // NOTE: the first-use expandable dialog also crashes in the port — its
 // ACTION_BAR_ICON_UP/DOWN gbitmap loads return NULL (resource path gap).
 static uint8_t s_timeline_settings_opened;  // InitialVersion: first-use dialog, like the reference
-bool timeline_peek_prefs_get_enabled(void) { return s_peek_enabled; }
-void timeline_peek_prefs_set_enabled(bool enabled) { s_peek_enabled = enabled; }
-uint16_t timeline_peek_prefs_get_before_time(void) { return s_peek_before_time_m; }
-void timeline_peek_prefs_set_before_time(uint16_t m) { s_peek_before_time_m = m; }
-uint8_t timeline_prefs_get_settings_opened(void) { return s_timeline_settings_opened; }
-void timeline_prefs_set_settings_opened(uint8_t version) { s_timeline_settings_opened = version; }
 
 // Reference defaults (shell/normal/prefs.c): taps = Health / Timeline Future,
 // holds disabled (back's Quiet Time toggle is not shown by this screen).
-int32_t quick_launch_get_app(ButtonId button) {
-  (void)button;
-  return 0;  // INSTALL_ID_INVALID: hold slots disabled
-}
-int32_t quick_launch_single_click_get_app(ButtonId button) {
-  if (button == BUTTON_ID_UP) {
-    return -82;  // Health (registry id, matches FW_APP enumeration)
-  }
-  if (button == BUTTON_ID_DOWN) {
-    return -10;  // Timeline Future
-  }
-  return 0;
-}
 ButtonId app_launch_button(void) { return BUTTON_ID_SELECT; }
-void quick_launch_set_app(ButtonId button, int32_t id) { (void)button; (void)id; }
-void quick_launch_set_enabled(ButtonId button, bool enabled) { (void)button; (void)enabled; }
-void quick_launch_single_click_set_app(ButtonId button, int32_t id) { (void)button; (void)id; }
-void quick_launch_single_click_set_enabled(ButtonId button, bool enabled) {
-  (void)button;
-  (void)enabled;
-}
 #include "process_management/app_install_manager.h"
 bool app_install_entry_is_quick_launch_visible_only(const AppInstallEntry *entry) {
   (void)entry;
   return false;
 }
+
+// shell_prefs_init reads board backlight/accel defaults; mirror the
+// reference qemu board tables (src/fw/board/boards/board_qemu_emery.c).
+#include "board/board.h"
+const BoardConfig BOARD_CONFIG = {
+  .backlight_on_percent = 100,
+  .ambient_light_dark_threshold = 150,
+  .backlight_default_color = 0x00ffffff,
+};
+const BoardConfigAccel BOARD_CONFIG_ACCEL = {
+  .default_motion_sensitivity = 0,
+};
 
 // --- Background App: no worker task on the qemu shell (reference shows
 // "No background apps").
@@ -229,6 +206,64 @@ void switch_worker_confirm(AppInstallId new_worker_id, bool set_as_default,
   (void)new_worker_id;
   (void)set_as_default;
   (void)window_stack;
+}
+
+// prefs.c hooks into services the qemu shell does not run; keep its state
+// mirror + persistence, no-op the actuation like the QEMU reference where
+// the underlying hardware path is absent.
+void accel_manager_set_motion_backlight_enabled(bool enabled) { (void)enabled; }
+// Phone-sync of prefs over blob_db; no phone connection on the qemu shell.
+void prefs_sync_init(void) {}
+bool activity_is_initialized(void) { return false; }
+void activity_set_enabled(bool enabled) { (void)enabled; }
+void ambient_light_set_dark_threshold(uint32_t threshold) { (void)threshold; }
+void i18n_enable(bool enable) { (void)enable; }
+void i18n_set_resource(uint32_t resource_id) { (void)resource_id; }
+void timeline_peek_set_enabled(bool enabled) { (void)enabled; }
+void timeline_peek_set_show_before_time(uint16_t before_time_m) { (void)before_time_m; }
+
+// App-install uuid mapping over the port registry (prefs.c persists
+// quick-launch/watchface picks as uuids).
+#include "app_registry.h"
+size_t fw_app_registry_count(void);
+const FwAppRegistryEntry *fw_app_registry_get(size_t index);
+bool app_install_get_uuid_for_install_id(AppInstallId install_id, Uuid *uuid_out) {
+  const size_t count = fw_app_registry_count();
+  for (size_t i = 0; i < count; ++i) {
+    const FwAppRegistryEntry *reg = fw_app_registry_get(i);
+    if (reg && reg->install_id == install_id && reg->md) {
+      *uuid_out = reg->md->uuid;
+      return true;
+    }
+  }
+  return false;
+}
+
+AppInstallId app_install_get_id_for_uuid(const Uuid *uuid) {
+  const size_t count = fw_app_registry_count();
+  for (size_t i = 0; i < count; ++i) {
+    const FwAppRegistryEntry *reg = fw_app_registry_get(i);
+    if (reg && reg->md && uuid_equal(&reg->md->uuid, uuid)) {
+      return reg->install_id;
+    }
+  }
+  return 0;
+}
+
+typedef bool (*AppInstallEnumerateCb)(AppInstallEntry *entry, void *data);
+void app_install_enumerate_entries(AppInstallEnumerateCb cb, void *data) {
+  const size_t count = fw_app_registry_count();
+  for (size_t i = 0; i < count; ++i) {
+    const FwAppRegistryEntry *reg = fw_app_registry_get(i);
+    if (!reg) {
+      continue;
+    }
+    AppInstallEntry entry;
+    if (app_install_get_entry_for_install_id(reg->install_id, &entry) &&
+        !cb(&entry, data)) {
+      return;
+    }
+  }
 }
 
 // --- bt mac string (qemu BT driver fixed AA identity address)

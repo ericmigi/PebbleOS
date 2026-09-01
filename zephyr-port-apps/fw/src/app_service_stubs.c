@@ -44,9 +44,6 @@ time_t rtc_get_time(void);
 // Album art off keeps the Music app on its text/stock layout (no imaging).
 // ponytail: back these with the real watch_app_prefs_db.
 // ---------------------------------------------------------------------------
-bool shell_prefs_get_music_show_album_art(void) { return false; }
-bool shell_prefs_get_music_show_progress_bar(void) { return false; }
-bool shell_prefs_get_music_show_volume_controls(void) { return true; }
 
 // ---------------------------------------------------------------------------
 // accel tap service: no accelerometer wired in the port. Subscribing is a no-op

@@ -167,6 +167,26 @@ typedef struct {
   void *data;
 } PebbleLaunchAppEvent;
 
+// Prototype-only shapes for headers prefs.c pulls (never fired in the port).
+typedef struct {
+  uint8_t event_type;
+  union {
+    struct {
+      uint8_t bpm;
+      uint8_t quality;
+    } bpm;
+    void *debug;
+  };
+} PebbleHRMEvent;
+
+typedef struct {
+  void *item_id;
+  uint32_t time_ms;
+  uint8_t num_concurrent;
+  bool is_first_event;
+  bool is_future_empty;
+} PebbleTimelinePeekEvent;
+
 typedef struct {
   uint8_t db_id;
   BlobDBEventType type;

@@ -92,6 +92,14 @@ static void prv_kernel_main(void *parameter) {
   if (fw_pfs_boot() == 0) {
     PBL_LOG_ALWAYS("FW_PFS_UP");
     fw_app_registry_init();
+    // Real shell + notification prefs (shipping: shell_event_loop /
+    // services init); load and persist their settings files on PFS.
+    extern void shell_prefs_init(void);
+    shell_prefs_init();
+    extern void alerts_preferences_init(void);
+    alerts_preferences_init();
+    extern void do_not_disturb_init(void);
+    do_not_disturb_init();
   }
 
   // Board drivers / watchdog / analytics: real Zephyr-backed bring-up, after PFS.

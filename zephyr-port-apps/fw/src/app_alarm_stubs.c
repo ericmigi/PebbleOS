@@ -182,8 +182,6 @@ void alarm_get_string_for_custom(bool scheduled_days[DAYS_PER_WEEK], char *alarm
   }
 }
 
-void alarm_prefs_set_alarms_app_opened(uint8_t version) { (void)version; }
 
 // Report "already opened at the current version" so the app skips its first-run
 // expandable dialog and goes straight to the alarm list / new-alarm editor.
-uint8_t alarm_prefs_get_alarms_app_opened(void) { return 1; }
