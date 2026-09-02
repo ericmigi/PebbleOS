@@ -175,14 +175,24 @@ void app_window_stack_insert_next(Window *window) { (void)window; }
 
 void app_window_stack_pop_all(const bool animated) { (void)animated; }
 
+// Pop/remove drive the shared stack for real (option menus and dialogs
+// dismiss themselves through these).
+Window *fw_window_stack_top(void);
+void fw_window_stack_pop(void);
+
 Window *app_window_stack_pop(bool animated) {
   (void)animated;
-  return NULL;
+  Window *top = fw_window_stack_top();
+  fw_window_stack_pop();
+  return top;
 }
 
 bool app_window_stack_remove(Window *window, bool animated) {
-  (void)window;
   (void)animated;
+  if (fw_window_stack_top() == window) {
+    fw_window_stack_pop();
+    return true;
+  }
   return false;
 }
 

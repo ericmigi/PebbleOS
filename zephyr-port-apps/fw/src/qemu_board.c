@@ -39,8 +39,13 @@ void board_early_init(void) {}
 #define DISP_BL_GREEN 0x028u
 #define DISP_BL_BLUE 0x02Cu
 
-#define LIGHT_INTENSITY_DEFAULT 100u  // shell_prefs_init: CONFIG_QEMU "Blinding"
-#define LIGHT_TIMEOUT_MS 3000u       // shell prefs DEFAULT_BACKLIGHT_TIMEOUT_MS
+// Live user prefs (real shell prefs): intensity is percent (0-100), timeout
+// in ms — Battery Saver etc. change these and the light must follow, like the
+// reference's light service.
+uint8_t backlight_get_intensity(void);
+uint32_t backlight_get_timeout_ms(void);
+#define LIGHT_INTENSITY_DEFAULT backlight_get_intensity()
+#define LIGHT_TIMEOUT_MS backlight_get_timeout_ms()
 #define LIGHT_FADE_TIME_MS 500u
 #define LIGHT_FADE_MAX_STEPS 20u
 
@@ -83,6 +88,13 @@ void fw_light_button_pressed(void) {
 void fw_light_button_released(void) {
   if (s_light_buttons_down > 0) {
     s_light_buttons_down--;
+  }
+  // The reference's light interaction runs on release too, re-reading the
+  // (possibly just-changed) intensity pref — an option-menu pick dims the
+  // panel on the same press that chose it.
+  if (!s_light_fading && s_light_brightness > 0u) {
+    s_light_brightness = LIGHT_INTENSITY_DEFAULT;
+    prv_light_write_channels(s_light_brightness);
   }
   if (s_light_buttons_down == 0 && !s_light_fading) {
     k_timer_start(&s_light_timer, K_MSEC(LIGHT_TIMEOUT_MS), K_NO_WAIT);

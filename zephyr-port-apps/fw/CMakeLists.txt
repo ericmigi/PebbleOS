@@ -107,6 +107,9 @@ endif()
 
 target_compile_definitions(app PRIVATE
   CONFIG_PLATFORM_EMERY=1
+  # The qemu_emery board mirrors the FreeRTOS qemu_emery reference build,
+  # which compiles all shared code with CONFIG_QEMU (pt2 keeps it unset).
+  $<$<NOT:$<BOOL:${FW_BOARD_PT2}>>:CONFIG_QEMU=1>
   CONFIG_SCREEN_COLOR_DEPTH_BITS=8
   CONFIG_PBLBOOT=1
   CONFIG_FIRMWARE_SLOT=0
