@@ -172,3 +172,9 @@ Behavior must match, not just rendering. Gates per area:
   (airplane toggle), Health, Timeline settings toggle, Quick Launch
   set-slot flow, Music app, notifications popup, timeline UI,
   Watchfaces picker + persistence, dual-anim blocker.
+- Functional sweep additions 2026-09-02: Notifications submenu,
+  Bluetooth airplane toggle (persisted, async state event), Date & Time
+  (real time/date pickers, persisted time source, status-bar clock
+  format, 96K applib heap, strftime subset) — all gates px 0. Standard
+  walk regression clean. Next: Watchfaces picker + persistence, Health,
+  Music, notifications popup, timeline UI, dual-anim blocker.
