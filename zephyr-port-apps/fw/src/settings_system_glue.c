@@ -41,8 +41,13 @@ uint16_t i18n_get_version(void) { return 0; }
 
 // --- services with no QEMU behavior; reference reports these defaults
 void light_allow(bool allowed) { (void)allowed; }
-bool stationary_get_enabled(void) { return true; }  // reference default: Stand-By Mode On
-void stationary_set_enabled(bool enabled) { (void)enabled; }
+// Stand-By routes to the real (persisted) shell pref like the shipping
+// stationary service; the motion inhibit logic itself is not needed for
+// the qemu walks.
+bool shell_prefs_get_stationary_enabled(void);
+void shell_prefs_set_stationary_enabled(bool enabled);
+bool stationary_get_enabled(void) { return shell_prefs_get_stationary_enabled(); }
+void stationary_set_enabled(bool enabled) { shell_prefs_set_stationary_enabled(enabled); }
 uint32_t ambient_light_level_to_lux(uint32_t light_level) { return light_level; }
 
 
