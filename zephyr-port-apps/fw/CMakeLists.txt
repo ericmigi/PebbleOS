@@ -918,7 +918,7 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/services/vibes/vibe_client.c"
   PROPERTIES
     COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
-    COMPILE_DEFINITIONS "sniprintf=snprintf;CONFIG_SPEAKER=1"
+    COMPILE_DEFINITIONS "sniprintf=snprintf;CONFIG_SPEAKER=1;CONFIG_TOUCH=1"
 )
 set_source_files_properties(
   "${CMAKE_CURRENT_SOURCE_DIR}/src/fonts_pack.c"

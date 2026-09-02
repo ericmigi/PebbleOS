@@ -110,14 +110,14 @@ void vibes_set_default_vibe_strength(int32_t strength) { (void)strength; }
 #include "shell/system_theme.h"
 static PreferredContentSize s_content_size = PreferredContentSizeDefault;
 
+// Alert masks route through the real (PFS-persisted) alerts preferences.
 #include "pbl/services/notifications/alerts.h"
+#include "pbl/services/notifications/alerts_preferences_private.h"
 #include "pbl/services/notifications/alerts_private.h"
-static AlertMask s_alert_mask = AlertMaskAllOn;
-static AlertMask s_dnd_mask = AlertMaskAllOff;  // reference default: Quiet All Notifications
-AlertMask alerts_get_mask(void) { return s_alert_mask; }
-void alerts_set_mask(AlertMask mask) { s_alert_mask = mask; }
-AlertMask alerts_get_dnd_mask(void) { return s_dnd_mask; }
-void alerts_set_dnd_mask(AlertMask mask) { s_dnd_mask = mask; }
+AlertMask alerts_get_mask(void) { return alerts_preferences_get_alert_mask(); }
+void alerts_set_mask(AlertMask mask) { alerts_preferences_set_alert_mask(mask); }
+AlertMask alerts_get_dnd_mask(void) { return alerts_preferences_dnd_get_mask(); }
+void alerts_set_dnd_mask(AlertMask mask) { alerts_preferences_dnd_set_mask(mask); }
 void sys_vibe_pattern_enqueue_step_raw(uint32_t step_duration_ms, int32_t strength) {
   (void)step_duration_ms;
   (void)strength;
@@ -218,6 +218,12 @@ void switch_worker_confirm(AppInstallId new_worker_id, bool set_as_default,
 void accel_manager_set_motion_backlight_enabled(bool enabled) { (void)enabled; }
 // Phone-sync of prefs over blob_db; no phone connection on the qemu shell.
 void prefs_sync_init(void) {}
+// Touch service actuation (QEMU touch device is inert for these walks;
+// prefs persist through the real shell prefs).
+void touch_nav_master_changed(void) {}
+void touch_nav_set_enabled(bool enabled) { (void)enabled; }
+void touch_service_set_globally_enabled(bool enabled) { (void)enabled; }
+void touch_set_backlight_enabled(bool enabled) { (void)enabled; }
 bool activity_is_initialized(void) { return false; }
 void activity_set_enabled(bool enabled) { (void)enabled; }
 void ambient_light_set_dark_threshold(uint32_t threshold) { (void)threshold; }
