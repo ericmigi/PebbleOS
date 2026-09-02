@@ -161,3 +161,14 @@ Behavior must match, not just rendering. Gates per area:
   bar select not routed, pop overshoots to launcher — QT first-use
   flow is the test case), (2) toggle+reboot persistence gates per
   settings area, (3) remaining no-op actuations.
+- Functional sweep status 2026-09-02: PASSING with px 0 incl. reboot
+  persistence — Quiet Time (manual dialog+toggle, interruptions +
+  notifications cycles), Display (backlight preset flow + live dim),
+  Sounds & Haptics (mute, volume menu), System (Stand-By). Fixed:
+  CONFIG_QEMU + CONFIG_TOUCH build parity, real pop/remove for option
+  menus, pack-backed system fonts, live light prefs + release refresh,
+  persisted alert masks + stationary pref, tz-flag migration parity.
+  Remaining sweeps: Notifications submenu, Date & Time, Bluetooth
+  (airplane toggle), Health, Timeline settings toggle, Quick Launch
+  set-slot flow, Music app, notifications popup, timeline UI,
+  Watchfaces picker + persistence, dual-anim blocker.
