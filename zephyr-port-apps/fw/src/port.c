@@ -102,7 +102,9 @@ void time_util_split_seconds_into_parts(uint32_t seconds, uint32_t *day_part,
 }
 
 bool rtc_is_timezone_set(void) {
-  return true;  // reference QEMU has a timezone (localtime base)
+  // The reference qemu RTC driver reports no timezone on a fresh image (the
+  // flag is phone-set); alerts-preferences migration branches on this.
+  return false;
 }
 
 // Mirrors src/fw/util/time/time.c exactly.

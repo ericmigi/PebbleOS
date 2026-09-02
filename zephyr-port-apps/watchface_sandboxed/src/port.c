@@ -842,6 +842,16 @@ GFont fonts_get_system_font(const char *font_key) {
     if (!strcmp(font_key, "RESOURCE_ID_GOTHIC_24")) {
       return &s_font_g24;
     }
+    // Unembedded keys (LECO, BITHAM, ...) resolve from the system resource
+    // pack in the fw build; the weak default keeps the standalone demo on the
+    // gothic fallback.
+    {
+      extern GFont fw_fonts_lookup_pack(const char *font_key);
+      GFont pack_font = fw_fonts_lookup_pack(font_key);
+      if (pack_font) {
+        return pack_font;
+      }
+    }
   }
   return &s_font_system;
 #else
