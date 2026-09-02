@@ -78,6 +78,7 @@ GContext *app_state_get_graphics_context(void);
 static Window *s_stack[STACK_MAX];
 static int s_stack_top = -1;
 
+
 static Window *prv_top_window(void) {
   return (s_stack_top >= 0) ? s_stack[s_stack_top] : NULL;
 }

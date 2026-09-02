@@ -28,40 +28,7 @@
 #include "applib/ui/window.h"
 #include "apps/system/settings/option_menu.h"
 
-// --- new-alarm editor: time selection + day picker --------------------------
-void time_selection_window_init(TimeSelectionWindowData *w, const TimeSelectionWindowConfig *c) {
-  (void)w;
-  (void)c;
-}
-
-void time_selection_window_configure(TimeSelectionWindowData *w,
-                                     const TimeSelectionWindowConfig *c) {
-  (void)w;
-  (void)c;
-}
-
-void time_selection_window_set_to_current_time(TimeSelectionWindowData *w) { (void)w; }
-
-void time_selection_window_deinit(TimeSelectionWindowData *w) { (void)w; }
-
-void date_selection_window_init(DateSelectionWindowData *w, const char *label, GColor color,
-                                DateSelectionCompleteCallback complete, void *context) {
-  (void)w;
-  (void)label;
-  (void)color;
-  (void)complete;
-  (void)context;
-}
-
-void date_selection_window_set_to_current_date(DateSelectionWindowData *w) { (void)w; }
-
-void date_selection_window_deinit(DateSelectionWindowData *w) { (void)w; }
-
-void day_picker_push(DayPickerConfig config, DayPickerCallback callback, void *context) {
-  (void)config;
-  (void)callback;
-  (void)context;
-}
+// Real time/date selection windows are compiled now; stubs removed.
 
 // --- alarm-detail: action menu + option menus -------------------------------
 ActionMenu *app_action_menu_open(ActionMenuConfig *config) {

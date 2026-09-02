@@ -250,15 +250,19 @@ void clock_copy_time_string(char *buffer, uint8_t size) {
   time_t now = rtc_get_time();
   struct tm time_tm;
   gmtime_r(&now, &time_tm);
-  int hour = time_tm.tm_hour;
-  if (!clock_is_24h_style()) {
-    hour %= 12;
+  if (clock_is_24h_style()) {
+    snprintf(buffer, size, "%02d:%02d", time_tm.tm_hour, time_tm.tm_min);
+  } else {
+    int hour = time_tm.tm_hour % 12;
     if (hour == 0) {
       hour = 12;
     }
+    // Shipping: "%l:%M" + " %p" (clock_get_time_number/word).
+    snprintf(buffer, size, "%d:%02d %s", hour, time_tm.tm_min,
+             time_tm.tm_hour < 12 ? "AM" : "PM");
   }
-  snprintf(buffer, size, "%d:%02d", hour, time_tm.tm_min);
 }
+
 
 // No window-transition animation service in the port; the status bar never sits
 // under an animating fixed status bar.

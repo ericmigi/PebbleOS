@@ -164,19 +164,70 @@ time_t time_util_get_midnight_of(time_t ts) {
   return ts - (ts % (24 * 60 * 60));
 }
 
-// %a-only strftime (weekday abbreviation), all the launcher alarms glance uses.
+// strftime subset covering every format string the firmware uses
+// (%Y %m %d %e %H %I %l %M %S %p %P %a %b %B plus literals); the minimal
+// libc has no strftime, and the shipping pbl_std strftime needs Pebble's
+// extended struct tm (tm_gmtoff/tm_zone) which this build's libc lacks.
 size_t strftime(char *s, size_t max, const char *format, const struct tm *tm_val) {
   static const char *const s_days[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-  if (!s || max == 0) {
+  static const char *const s_months[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+  static const char *const s_months_full[] = {
+    "January", "February", "March", "April", "May", "June", "July", "August",
+    "September", "October", "November", "December" };
+  if (!s || max == 0 || !format || !tm_val) {
+    if (s && max) {
+      s[0] = '\0';
+    }
     return 0;
   }
-  const char *src = "";
-  if (format && !strcmp(format, "%a") && tm_val->tm_wday >= 0 && tm_val->tm_wday < 7) {
-    src = s_days[tm_val->tm_wday];
+  size_t out = 0;
+#define PUT_STR(str) \
+  do { \
+    for (const char *q = (str); *q && out + 1 < max; ++q) s[out++] = *q; \
+  } while (0)
+  char num[8];
+  for (const char *f = format; *f && out + 1 < max; ++f) {
+    if (*f != '%') {
+      s[out++] = *f;
+      continue;
+    }
+    ++f;
+    if (!*f) {
+      break;
+    }
+    int hour12 = tm_val->tm_hour % 12;
+    if (hour12 == 0) {
+      hour12 = 12;
+    }
+    switch (*f) {
+      case 'Y': snprintf(num, sizeof(num), "%04d", tm_val->tm_year + 1900); PUT_STR(num); break;
+      case 'm': snprintf(num, sizeof(num), "%02d", tm_val->tm_mon + 1); PUT_STR(num); break;
+      case 'd': snprintf(num, sizeof(num), "%02d", tm_val->tm_mday); PUT_STR(num); break;
+      case 'e': snprintf(num, sizeof(num), "%2d", tm_val->tm_mday); PUT_STR(num); break;
+      case 'H': snprintf(num, sizeof(num), "%02d", tm_val->tm_hour); PUT_STR(num); break;
+      case 'I': snprintf(num, sizeof(num), "%02d", hour12); PUT_STR(num); break;
+      case 'l': snprintf(num, sizeof(num), "%d", hour12); PUT_STR(num); break;
+      case 'M': snprintf(num, sizeof(num), "%02d", tm_val->tm_min); PUT_STR(num); break;
+      case 'S': snprintf(num, sizeof(num), "%02d", tm_val->tm_sec); PUT_STR(num); break;
+      case 'p': PUT_STR(tm_val->tm_hour < 12 ? "AM" : "PM"); break;
+      case 'P': PUT_STR(tm_val->tm_hour < 12 ? "am" : "pm"); break;
+      case 'a':
+        if (tm_val->tm_wday >= 0 && tm_val->tm_wday < 7) PUT_STR(s_days[tm_val->tm_wday]);
+        break;
+      case 'b':
+        if (tm_val->tm_mon >= 0 && tm_val->tm_mon < 12) PUT_STR(s_months[tm_val->tm_mon]);
+        break;
+      case 'B':
+        if (tm_val->tm_mon >= 0 && tm_val->tm_mon < 12) PUT_STR(s_months_full[tm_val->tm_mon]);
+        break;
+      case '%': s[out++] = '%'; break;
+      default: break;
+    }
   }
-  strncpy(s, src, max - 1);
-  s[max - 1] = '\0';
-  return strlen(s);
+#undef PUT_STR
+  s[out] = '\0';
+  return out;
 }
 
 int health_util_format_hours_minutes_seconds(char *buffer, size_t buffer_size, int duration_s,

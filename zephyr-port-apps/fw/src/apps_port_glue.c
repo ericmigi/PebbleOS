@@ -420,7 +420,62 @@ bool bt_persistent_storage_get_ble_pairing_by_id(BTBondingID bonding,
 
 // ponytail: airplane-mode toggle is inert (no BT stack state machine in the
 // port); flipping it for real needs shell_glue's flag + a PEBBLE_BT_STATE_EVENT.
-void bt_ctl_set_airplane_mode_async(bool enabled) { (void)enabled; }
+// Airplane mode: persisted flag + async completion via PEBBLE_BT_STATE_EVENT,
+// mirroring the reference's bt_ctl state machine outcome (the settings UI
+// shows Enabling.../Disabling... until the event lands).
+#include "pbl/services/settings/settings_file.h"
+#define BT_CFG_FILE "btcfg"
+#define BT_CFG_LEN 64
+#define BT_CFG_KEY_AIRPLANE "airplane"
+
+static bool s_airplane_mode;
+static bool s_airplane_loaded;
+
+static void prv_airplane_load(void) {
+  if (s_airplane_loaded) {
+    return;
+  }
+  s_airplane_loaded = true;
+  SettingsFile file;
+  if (settings_file_open(&file, BT_CFG_FILE, BT_CFG_LEN) != S_SUCCESS) {
+    return;
+  }
+  bool value = false;
+  if (settings_file_get(&file, BT_CFG_KEY_AIRPLANE, strlen(BT_CFG_KEY_AIRPLANE),
+                        &value, sizeof(value)) == S_SUCCESS) {
+    s_airplane_mode = value;
+  }
+  settings_file_close(&file);
+}
+
+bool fw_bt_airplane_mode_on(void) {
+  prv_airplane_load();
+  return s_airplane_mode;
+}
+
+static void prv_airplane_event(void *data) {
+  (void)data;
+  PebbleEvent event = {
+    .type = PEBBLE_BT_STATE_EVENT,
+  };
+  event_put(&event);
+}
+
+void bt_ctl_set_airplane_mode_async(bool enabled) {
+  prv_airplane_load();
+  s_airplane_mode = enabled;
+  SettingsFile file;
+  if (settings_file_open(&file, BT_CFG_FILE, BT_CFG_LEN) == S_SUCCESS) {
+    settings_file_set(&file, BT_CFG_KEY_AIRPLANE, strlen(BT_CFG_KEY_AIRPLANE),
+                      &enabled, sizeof(enabled));
+    settings_file_close(&file);
+  }
+  PebbleEvent event = {
+    .type = PEBBLE_CALLBACK_EVENT,
+    .callback = { .callback = prv_airplane_event },
+  };
+  event_put(&event);
+}
 
 void bt_lock(void) {}
 void bt_unlock(void) {}
@@ -515,8 +570,11 @@ static bool s_clock_manual_timezone;
 static bool s_clock_timezone_set;
 static int16_t s_clock_timezone_region = -1;
 
-bool clock_time_source_is_manual(void) { return s_clock_manual_time; }
-void clock_set_manual_time_source(bool manual) { s_clock_manual_time = manual; }
+// Shipping routes the time-source flag through the persisted shell pref.
+bool shell_prefs_is_time_source_manual(void);
+void shell_prefs_set_time_source_manual(bool manual);
+bool clock_time_source_is_manual(void) { return shell_prefs_is_time_source_manual(); }
+void clock_set_manual_time_source(bool manual) { shell_prefs_set_time_source_manual(manual); }
 bool clock_timezone_source_is_manual(void) { return s_clock_manual_timezone; }
 void clock_set_manual_timezone_source(bool manual) { s_clock_manual_timezone = manual; }
 bool clock_is_timezone_set(void) { return s_clock_timezone_set; }

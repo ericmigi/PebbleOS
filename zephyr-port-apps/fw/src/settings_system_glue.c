@@ -223,6 +223,16 @@ void switch_worker_confirm(AppInstallId new_worker_id, bool set_as_default,
 void accel_manager_set_motion_backlight_enabled(bool enabled) { (void)enabled; }
 // Phone-sync of prefs over blob_db; no phone connection on the qemu shell.
 void prefs_sync_init(void) {}
+
+// Mirrors src/fw/services/clock/service.c exactly.
+void clock_hour_and_minute_add(int *hour, int *minute, int delta_minutes) {
+  int new_minutes = (*hour * 60 + *minute + delta_minutes) % (24 * 60);
+  if (new_minutes < 0) {
+    new_minutes += 24 * 60;
+  }
+  *hour = new_minutes / 60;
+  *minute = new_minutes % 60;
+}
 // Touch service actuation (QEMU touch device is inert for these walks;
 // prefs persist through the real shell prefs).
 void touch_nav_master_changed(void) {}

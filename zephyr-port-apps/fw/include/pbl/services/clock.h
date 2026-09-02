@@ -42,3 +42,5 @@ void clock_set_time(time_t utc_time);
 void clock_set_24h_style(bool is_24h_style);
 void clock_get_time_tm(struct tm *time_tm);
 void clock_request_time_from_phone(void);
+
+void clock_hour_and_minute_add(int *hour, int *minute, int delta_minutes);

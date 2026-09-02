@@ -129,6 +129,7 @@ static void prv_window_bg_update_proc(Layer *layer, GContext *ctx) {
   graphics_fill_rect(ctx, &layer->bounds);
 }
 
+
 void window_init(Window *window, const char *debug_name) {
   memset(window, 0, sizeof(*window));
   size_t fb_size = 0;
