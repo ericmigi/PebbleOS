@@ -178,3 +178,11 @@ Behavior must match, not just rendering. Gates per area:
   format, 96K applib heap, strftime subset) — all gates px 0. Standard
   walk regression clean. Next: Watchfaces picker + persistence, Health,
   Music, notifications popup, timeline UI, dual-anim blocker.
+- Dual-anim blocker now has a SETTLED-STATE symptom (worse than frame
+  jitter): from launcher down#3 onward zephyr's scroll offset lands
+  ~20px short of ref (selected-row glance expansion + scroll target
+  compose in the wrong order/sample). d1/d2 identical; d3+ diverges
+  (/tmp/fs-wf2). This blocks Watchfaces-picker parity and any deep
+  launcher walk — attack next: trace menu_layer selection-expand
+  scroll target vs scroll animation in the port (freeze-clock
+  interaction suspected).
