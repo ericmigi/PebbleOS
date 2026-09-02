@@ -66,10 +66,14 @@ struct WindowStack *modal_manager_get_window_stack(int priority) {
   return (struct WindowStack *)1;  // opaque token; the port has one stack
 }
 
+// Modal dialogs land on the shared stack through the same load-running push
+// as app windows (app_window_stack_push runs load/appear, wires the click
+// config, then pushes) — pushing the raw stack skips the dialog's load
+// handler and renders an empty window.
+void app_window_stack_push(struct Window *window, bool animated);
 void window_stack_push(struct WindowStack *stack, struct Window *window, bool animated) {
   (void)stack;
-  (void)animated;
-  fw_window_stack_push(window);
+  app_window_stack_push(window, animated);
 }
 
 bool window_stack_remove(struct Window *window, bool animated) {
