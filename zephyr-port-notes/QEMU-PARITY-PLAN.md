@@ -178,6 +178,14 @@ Behavior must match, not just rendering. Gates per area:
   format, 96K applib heap, strftime subset) — all gates px 0. Standard
   walk regression clean. Next: Watchfaces picker + persistence, Health,
   Music, notifications popup, timeline UI, dual-anim blocker.
+- LAUNCHER DEEP-SCROLL blocker (distinct from dual-anim): real
+  launcher, lit, deterministic — d1/d2 px 0, from down#3 zephyr keeps a
+  top battery/status strip visible while the reference has scrolled it
+  off the top (zephyr content sits ~1 row lower; ref shows Workout at
+  bottom, zephyr cuts it). Scroll offset target logs identical (-61)
+  and the offset setter reaches it, so it is the status/glance area
+  being pinned vs scroll-content in the port, not the scroll math.
+  Deferred; settled first-screen + shallow (<=2 row) walks stay px 0.
 - Dual-anim blocker now has a SETTLED-STATE symptom (worse than frame
   jitter): from launcher down#3 onward zephyr's scroll offset lands
   ~20px short of ref (selected-row glance expansion + scroll target
