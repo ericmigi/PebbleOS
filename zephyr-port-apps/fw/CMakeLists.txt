@@ -110,6 +110,7 @@ target_compile_definitions(app PRIVATE
   # The qemu_emery board mirrors the FreeRTOS qemu_emery reference build,
   # which compiles all shared code with CONFIG_QEMU (pt2 keeps it unset).
   $<$<NOT:$<BOOL:${FW_BOARD_PT2}>>:CONFIG_QEMU=1>
+  $<$<NOT:$<BOOL:${FW_BOARD_PT2}>>:CONFIG_TOUCH=1>
   CONFIG_SCREEN_COLOR_DEPTH_BITS=8
   CONFIG_PBLBOOT=1
   CONFIG_FIRMWARE_SLOT=0
@@ -892,7 +893,7 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/display.c"
   PROPERTIES
     COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
-    COMPILE_DEFINITIONS "CONFIG_TOUCH=1;CONFIG_APP_SCALING=1"
+    COMPILE_DEFINITIONS "CONFIG_APP_SCALING=1"
 )
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/system.c"
@@ -933,7 +934,7 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/services/vibes/vibe_client.c"
   PROPERTIES
     COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
-    COMPILE_DEFINITIONS "sniprintf=snprintf;CONFIG_SPEAKER=1;CONFIG_TOUCH=1"
+    COMPILE_DEFINITIONS "sniprintf=snprintf;CONFIG_SPEAKER=1"
 )
 set_source_files_properties(
   "${CMAKE_CURRENT_SOURCE_DIR}/src/fonts_pack.c"

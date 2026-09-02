@@ -34,3 +34,6 @@ bool sys_app_is_watchface(void);
 void sys_event_service_client_subscribe(EventServiceInfo *handler);
 void sys_event_service_client_unsubscribe(EventServiceInfo *state, EventServiceInfo *handler);
 void sys_event_service_cleanup(PebbleEvent *event);
+
+struct GRect;
+void sys_touch_set_action_bar(const struct GRect *frame, uint8_t icon_mask);

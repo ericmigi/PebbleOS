@@ -239,6 +239,49 @@ void touch_nav_master_changed(void) {}
 void touch_nav_set_enabled(bool enabled) { (void)enabled; }
 void touch_service_set_globally_enabled(bool enabled) { (void)enabled; }
 void touch_set_backlight_enabled(bool enabled) { (void)enabled; }
+
+// Touch/recognizer plumbing compiled in by CONFIG_TOUCH; the qemu walks
+// never inject touch, so these are inert like the reference with no finger.
+struct GRect;
+void sys_touch_set_action_bar(const struct GRect *frame, uint8_t icon_mask) {
+  (void)frame;
+  (void)icon_mask;
+}
+void *app_state_get_touch_nav_state(void) { return NULL; }
+void *modal_manager_get_touch_nav_state(void) { return NULL; }
+#include "applib/ui/recognizer/recognizer.h"
+#include "applib/ui/recognizer/recognizer_list.h"
+#include "applib/ui/recognizer/recognizer_manager.h"
+void recognizer_destroy(Recognizer *recognizer) { (void)recognizer; }
+bool recognizer_list_iterate(RecognizerList *list, RecognizerListIteratorCb iter_cb,
+                             void *context) {
+  (void)list;
+  (void)iter_cb;
+  (void)context;
+  return false;
+}
+void recognizer_manager_cancel_and_reset(RecognizerManager *manager) { (void)manager; }
+void recognizer_manager_deregister_recognizer(RecognizerManager *manager,
+                                              Recognizer *recognizer) {
+  (void)manager;
+  (void)recognizer;
+}
+void recognizer_manager_register_recognizer(RecognizerManager *manager,
+                                            Recognizer *recognizer) {
+  (void)manager;
+  (void)recognizer;
+}
+void recognizer_remove_from_list(Recognizer *recognizer, RecognizerList *list) {
+  (void)recognizer;
+  (void)list;
+}
+struct TouchNavClient;
+void touch_nav_registry_add(struct TouchNavClient *client) { (void)client; }
+void touch_nav_registry_remove(struct TouchNavClient *client) { (void)client; }
+RecognizerManager *window_get_recognizer_manager(struct Window *window) {
+  (void)window;
+  return NULL;
+}
 bool activity_is_initialized(void) { return false; }
 void activity_set_enabled(bool enabled) { (void)enabled; }
 void ambient_light_set_dark_threshold(uint32_t threshold) { (void)threshold; }
