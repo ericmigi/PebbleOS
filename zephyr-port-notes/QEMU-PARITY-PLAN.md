@@ -186,6 +186,10 @@ Behavior must match, not just rendering. Gates per area:
   and the offset setter reaches it, so it is the status/glance area
   being pinned vs scroll-content in the port, not the scroll math.
   Deferred; settled first-screen + shallow (<=2 row) walks stay px 0.
+  Confirmed narrow: Music, Alarms, Health apps all launch from the
+  launcher and render px 0 (select-first walks), so app navigation is
+  unaffected — the divergence is display-only on long boot-launcher
+  down-scrolls.
 - Dual-anim blocker now has a SETTLED-STATE symptom (worse than frame
   jitter): from launcher down#3 onward zephyr's scroll offset lands
   ~20px short of ref (selected-row glance expansion + scroll target
