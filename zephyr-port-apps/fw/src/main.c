@@ -100,6 +100,8 @@ static void prv_kernel_main(void *parameter) {
     alerts_preferences_init();
     extern void do_not_disturb_init(void);
     do_not_disturb_init();
+    extern void fw_qemu_notif_rx_init(void);
+    fw_qemu_notif_rx_init();
   }
 
   // Board drivers / watchdog / analytics: real Zephyr-backed bring-up, after PFS.

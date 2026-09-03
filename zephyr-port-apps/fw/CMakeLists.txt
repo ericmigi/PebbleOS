@@ -876,6 +876,7 @@ target_sources(app PRIVATE
   # compositor core (src/compositor_port.c).
   src/compositor_port.c
   src/fonts_pack.c
+  src/qemu_notif_rx.c
   "${PEBBLEOS_ROOT}/build/src/fw/builtin_resources.auto.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/compositor_transitions.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_shutter_transitions.c"
