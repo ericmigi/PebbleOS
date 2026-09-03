@@ -25,3 +25,8 @@ void sys_font_reload_font(FontInfo *font_info);
 
 void sys_vibe_pattern_enqueue_step_raw(uint32_t step_duration_ms, int32_t strength);
 void sys_vibe_pattern_trigger_start(void);
+
+#include "pbl/drivers/rtc.h"
+RtcTicks sys_get_ticks(void);
+struct GRect;
+void sys_touch_set_action_bar(const struct GRect *frame, uint8_t icon_mask);

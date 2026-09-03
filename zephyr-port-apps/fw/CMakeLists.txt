@@ -877,6 +877,7 @@ target_sources(app PRIVATE
   src/compositor_port.c
   src/fonts_pack.c
   src/qemu_notif_rx.c
+  src/qemu_notif_display.c
   "${PEBBLEOS_ROOT}/build/src/fw/builtin_resources.auto.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/compositor_transitions.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_shutter_transitions.c"
@@ -937,6 +938,12 @@ set_source_files_properties(
     COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
     COMPILE_DEFINITIONS "sniprintf=snprintf;CONFIG_SPEAKER=1"
 )
+set_source_files_properties(
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/qemu_notif_display.c"
+  PROPERTIES COMPILE_OPTIONS
+    "-include;${FW_GRAPHICS_APP_STATE};-iquote;${PEBBLEOS_ROOT}/build/src/fw;-iquote;${CMAKE_CURRENT_SOURCE_DIR}/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/gfx/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/include"
+)
+
 set_source_files_properties(
   "${CMAKE_CURRENT_SOURCE_DIR}/src/fonts_pack.c"
   PROPERTIES COMPILE_OPTIONS

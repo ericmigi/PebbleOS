@@ -9,7 +9,9 @@
 #include <zephyr/kernel.h>
 
 #define SANDBOX_APP_SEGMENT_CAPACITY 4096U
-#define SANDBOX_APP_HEAP_SIZE 16384U
+// Sized for the fw shell: real dialogs/pickers/fonts all allocate here
+// (16K exhausted silently once the settings pickers landed).
+#define SANDBOX_APP_HEAP_SIZE 98304U
 
 typedef struct {
   uint8_t app_segment[SANDBOX_APP_SEGMENT_CAPACITY];

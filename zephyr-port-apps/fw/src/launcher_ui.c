@@ -763,6 +763,9 @@ void fw_ui_pump_once(void) {
   // hung loop stops kicking and the watchdog correctly resets.
   task_watchdog_bit_set(PebbleTask_KernelMain);
 
+  extern void fw_notification_poll(void);
+  fw_notification_poll();
+
   PebbleEvent event;
   if (!event_take_timeout(&event, 1000)) {
     return;

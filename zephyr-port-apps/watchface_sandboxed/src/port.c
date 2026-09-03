@@ -674,7 +674,11 @@ void applib_heap_ensure_init(void) {
 
 void *applib_malloc(size_t size) {
   applib_heap_ensure_init();
-  return k_heap_alloc(&s_app_heap, size, K_NO_WAIT);
+  void *ptr = k_heap_alloc(&s_app_heap, size, K_NO_WAIT);
+  if (!ptr) {
+    printk("APPLIB_OOM %u\n", (unsigned)size);
+  }
+  return ptr;
 }
 
 void *app_realloc(void *ptr, size_t size) {
