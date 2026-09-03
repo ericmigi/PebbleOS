@@ -22,6 +22,11 @@ import uuid
 QEMU_HDR = 0xFEED
 QEMU_FTR = 0xBEEF
 PROTO_SPP = 1
+PROTO_ANCS = 0xf001
+# ANCS NotificationAttributeID
+ANCS_ATTR_APPID, ANCS_ATTR_TITLE, ANCS_ATTR_SUBTITLE = 0, 1, 2
+ANCS_ATTR_MESSAGE, ANCS_ATTR_DATE = 3, 5
+ANCS_CMD_GET_NOTIF_ATTRS = 0
 EP_BLOBDB = 0xb1db
 BLOBDB_INSERT = 0x01
 DB_NOTIFS = 0x04
@@ -61,6 +66,30 @@ def blobdb_insert(item_id, value, token=0x1234):
     return payload
 
 
+def _ancs_attr(aid, content):
+    # ANCS Data Source attribute: id | length(2 LE) | value (not null-terminated)
+    return struct.pack('<BH', aid, len(content)) + content
+
+
+def ancs_notif_attr_response(title, subtitle, body, uid=1,
+                             app_id='com.apple.MobileSMS',
+                             date='20260903T081300'):
+    """Build the exact bytes an iPhone's ANCS Data Source characteristic sends in
+    response to a Get-Notification-Attributes command:
+      command_id(1) | notification_uid(4 LE) | [attr_id | len(2 LE) | value] ...
+    This is what the on-device GATT layer would hand to fw_ancs_feed."""
+    attrs = _ancs_attr(ANCS_ATTR_APPID, app_id.encode('utf-8'))
+    if title:
+        attrs += _ancs_attr(ANCS_ATTR_TITLE, title.encode('utf-8'))
+    if subtitle:
+        attrs += _ancs_attr(ANCS_ATTR_SUBTITLE, subtitle.encode('utf-8'))
+    if body:
+        attrs += _ancs_attr(ANCS_ATTR_MESSAGE, body.encode('utf-8'))
+    attrs += _ancs_attr(ANCS_ATTR_DATE, date.encode('utf-8'))
+    header = struct.pack('<BI', ANCS_CMD_GET_NOTIF_ATTRS, uid)
+    return header + attrs
+
+
 def pebble_protocol(endpoint, payload):
     return struct.pack('>HH', len(payload), endpoint) + payload
 
@@ -77,11 +106,18 @@ def main():
     ap.add_argument('--subtitle', default='')
     ap.add_argument('--body', default='Hello from the injector')
     ap.add_argument('--icon', type=lambda s: int(s, 0), default=DEFAULT_ICON)
+    ap.add_argument('--ancs', action='store_true',
+                    help='send a real ANCS attribute-response over PROTO_ANCS instead of a BlobDB insert')
     args = ap.parse_args()
 
-    item_id, value = timeline_item(args.title, args.subtitle, args.body, args.icon)
-    pp = pebble_protocol(EP_BLOBDB, blobdb_insert(item_id, value))
-    frame = qemu_frame(PROTO_SPP, pp)
+    if args.ancs:
+        data = ancs_notif_attr_response(args.title, args.subtitle, args.body)
+        frame = qemu_frame(PROTO_ANCS, data)
+        item_id = 'ancs'
+    else:
+        item_id, value = timeline_item(args.title, args.subtitle, args.body, args.icon)
+        pp = pebble_protocol(EP_BLOBDB, blobdb_insert(item_id, value))
+        frame = qemu_frame(PROTO_SPP, pp)
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((args.host, args.port))

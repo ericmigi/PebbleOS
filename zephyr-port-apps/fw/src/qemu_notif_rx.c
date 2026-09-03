@@ -22,6 +22,7 @@
 #define QEMU_HDR_SIG 0xFEED
 #define QEMU_FTR_SIG 0xBEEF
 #define QEMU_PROTO_SPP 1
+#define QEMU_PROTO_ANCS 0xf001
 #define BLOB_DB_ENDPOINT 0xb1db
 #define BLOB_DB_CMD_INSERT 0x01
 #define BLOB_DB_CMD_INSERT_TS 0x0D
@@ -161,6 +162,9 @@ static void prv_rx_thread(void *a, void *b, void *c) {
         if (ftr_got == 2) {
           if (proto == QEMU_PROTO_SPP) {
             prv_handle_pp(msg, dlen);
+          } else if (proto == QEMU_PROTO_ANCS) {
+            extern void fw_ancs_feed(const uint8_t *resp, size_t len);
+            fw_ancs_feed(msg, dlen);
           }
           st = S_SIG_MSB;
         }
