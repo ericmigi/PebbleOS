@@ -251,14 +251,6 @@ int health_util_format_hours_minutes_seconds(char *buffer, size_t buffer_size, i
 
 void *_applib_type_zalloc_GBitmapSequence(void) { return task_zalloc(sizeof(GBitmapSequence)); }
 
-// Glance slices never exist in the port, so attribute lookups take defaults.
-const char *attribute_get_string(const AttributeList *attr_list, AttributeId id,
-                                 char *default_value) {
-  (void)attr_list;
-  (void)id;
-  return default_value;
-}
-
 TimelineResourceId weather_type_get_timeline_resource_id(WeatherType weather_type) {
   (void)weather_type;
   return TIMELINE_RESOURCE_TIMELINE_WEATHER;

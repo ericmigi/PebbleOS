@@ -872,6 +872,11 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/build/src/fw/resource/timeline_resource_table.auto.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_layout.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_node.c"
+  src/layout_layer_glue.c
+  "${PEBBLEOS_ROOT}/src/fw/util/stringlist.c"
+  src/notif_layout_stubs.c
   "${PEBBLEOS_ROOT}/lib/util/uuid.c"
 
   # Real compositor transitions (watchface <-> launcher shutter) on the port
@@ -958,6 +963,11 @@ set_source_files_properties(
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_layout.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_node.c"
+  src/layout_layer_glue.c
+  "${PEBBLEOS_ROOT}/src/fw/util/stringlist.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/notif_layout_stubs.c"
   PROPERTIES COMPILE_OPTIONS
     "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
 )
@@ -965,7 +975,7 @@ set_source_files_properties(
 set_source_files_properties(
   "${CMAKE_CURRENT_SOURCE_DIR}/src/qemu_notif_display.c"
   PROPERTIES COMPILE_OPTIONS
-    "-include;${FW_GRAPHICS_APP_STATE};-iquote;${PEBBLEOS_ROOT}/build/src/fw;-iquote;${CMAKE_CURRENT_SOURCE_DIR}/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/gfx/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/include"
+    "-include;fw_zephyr_pre.h;-include;${FW_GRAPHICS_APP_STATE};-iquote;${PEBBLEOS_ROOT}/build/src/fw;-iquote;${CMAKE_CURRENT_SOURCE_DIR}/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/gfx/include;-iquote;${PEBBLEOS_ROOT}/zephyr-port-apps/kernel/include"
 )
 
 set_source_files_properties(

@@ -545,8 +545,10 @@ void shell_prefs_set_legacy_app_render_mode(uint8_t mode) { s_legacy_app_render_
 // its typed allocator resolves here, onto the same applib heap.
 #if defined(CONFIG_BOARD_QEMU_EMERY)
 #include "applib/ui/option_menu_window.h"
+#include "applib/ui/kino/kino_layer.h"
 void *applib_malloc(size_t size);
 void *_applib_type_malloc_OptionMenu(void) { return applib_malloc(sizeof(OptionMenu)); }
+void *_applib_type_malloc_KinoLayer(void) { return applib_malloc(sizeof(KinoLayer)); }
 #endif
 
 // ---------------------------------------------------------------------------
