@@ -872,6 +872,7 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/build/src/fw/resource/timeline_resource_table.auto.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_layout.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/swap_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_node.c"
   src/layout_layer_glue.c
@@ -963,6 +964,7 @@ set_source_files_properties(
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_layout.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/swap_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_node.c"
   src/layout_layer_glue.c

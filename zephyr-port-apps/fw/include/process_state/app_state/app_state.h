@@ -24,3 +24,8 @@ struct ClickManager *app_state_get_click_manager(void);
 // Provided by fw/src/app_service_stubs.c.
 typedef struct WindowStack WindowStack;
 WindowStack *app_state_get_window_stack(void);
+
+// Touch-nav state accessor (swap_layer). The port has no touch recognizer
+// subsystem; a stub returns a static inert TouchNavState (see notif glue).
+struct TouchNavState;
+struct TouchNavState *app_state_get_touch_nav_state(void);
