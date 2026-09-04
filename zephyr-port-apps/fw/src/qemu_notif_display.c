@@ -22,6 +22,7 @@
 #include "applib/ui/app_window_stack.h"
 #include "applib/ui/layer.h"
 #include "applib/ui/window.h"
+#include "applib/ui/status_bar_layer.h"
 #include "pbl/services/timeline/attribute.h"
 #include "pbl/services/timeline/item.h"
 #include "pbl/services/timeline/layout_layer.h"
@@ -45,6 +46,7 @@ static Attribute s_attrs[3];
 static TimelineItem s_item;
 static NotificationLayoutInfo s_info;
 static Uuid s_app_id;  // zeroed = invalid: no phone app icon in the port
+static StatusBarLayer s_status;
 
 void fw_notification_show(const char *title, const char *subtitle, const char *body) {
   strncpy(s_title, title ? title : "", sizeof(s_title) - 1);
@@ -95,6 +97,15 @@ void fw_notification_poll(void) {
   if (layout) {
     layer_add_child(root, &layout->layer);
   }
+
+  // Clock status bar overlaying the notification's colour band (added last so it
+  // renders on top). Clear background lets the band show through; white text is
+  // legible over it. Mirrors notification_window's status_layer.
+  status_bar_layer_init(&s_status);
+  status_bar_layer_set_colors(&s_status, GColorClear, GColorWhite);
+  status_bar_layer_set_separator_mode(&s_status, StatusBarLayerSeparatorModeNone);
+  layer_add_child(root, &s_status.layer);
+
   fw_window_stack_push(window);
   printk("NOTIF_SHOWN \"%s\"\n", s_title);
 }
