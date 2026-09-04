@@ -41,7 +41,6 @@ extern Window *window_create(void);
 extern void app_window_stack_push(Window *window, bool animated);
 extern void app_event_loop(void);
 extern void fw_system_app_launch(const PebbleProcessMd *md);
-extern void fw_shell_on_app_exit(const PebbleProcessMd *md);
 
 static char s_title[64];
 static char s_subtitle[64];
@@ -130,6 +129,10 @@ void fw_notification_poll(void) {
   // fw_shell_request_launch: the pump's event_take_timeout returns early on a 1s
   // idle timeout, before it would drain a queued launch, so a queued
   // notification would not appear until the next button event.
+  //
+  // No fw_shell_on_app_exit: that force-chains the launcher on app exit, but a
+  // dismissed notification must return to whatever was underneath (watchface or
+  // launcher). fw_system_app_launch returns to the calling pump, which re-renders
+  // the underlying screen on its own.
   fw_system_app_launch((const PebbleProcessMd *)&s_notif_md);
-  fw_shell_on_app_exit((const PebbleProcessMd *)&s_notif_md);
 }
