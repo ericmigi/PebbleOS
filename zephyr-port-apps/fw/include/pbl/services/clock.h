@@ -44,3 +44,11 @@ void clock_get_time_tm(struct tm *time_tm);
 void clock_request_time_from_phone(void);
 
 void clock_hour_and_minute_add(int *hour, int *minute, int delta_minutes);
+
+// Relative/formatted timestamp helpers used by the timeline layouts
+// (notification/reminder cards). Implemented in fw/src/clock_relative_glue.c
+// (lifted from shipping clock/service.c).
+void clock_get_since_time(char *buffer, int buf_size, time_t timestamp);
+void clock_get_until_time(char *buffer, int buf_size, time_t timestamp, int max_relative_hrs);
+size_t clock_get_time_number(char *buffer, size_t buffer_size, time_t timestamp);
+size_t clock_get_time_word(char *buffer, size_t buffer_size, time_t timestamp);

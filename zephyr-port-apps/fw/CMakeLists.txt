@@ -870,6 +870,8 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/apps/system/timeline/text_node.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_resources.c"
   "${PEBBLEOS_ROOT}/build/src/fw/resource/timeline_resource_table.auto.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_layout.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"
   "${PEBBLEOS_ROOT}/lib/util/uuid.c"
 
   # Real compositor transitions (watchface <-> launcher shutter) on the port
@@ -879,6 +881,7 @@ target_sources(app PRIVATE
   src/qemu_notif_rx.c
   src/qemu_notif_display.c
   src/qemu_ancs.c
+  src/clock_relative_glue.c
   "${PEBBLEOS_ROOT}/src/fw/comm/ble/kernel_le_client/ancs/ancs_util.c"
   "${PEBBLEOS_ROOT}/build/src/fw/builtin_resources.auto.c"
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/compositor_transitions.c"
@@ -944,6 +947,19 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/comm/ble/kernel_le_client/ancs/ancs_util.c"
   PROPERTIES COMPILE_OPTIONS
     "-iquote;${CMAKE_CURRENT_SOURCE_DIR}/ancs_compat"
+)
+
+set_source_files_properties(
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/clock_relative_glue.c"
+  PROPERTIES COMPILE_OPTIONS
+    "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
+)
+
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_layout.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"
+  PROPERTIES COMPILE_OPTIONS
+    "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
 )
 
 set_source_files_properties(

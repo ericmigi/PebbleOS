@@ -16,6 +16,7 @@ uint16_t time_ms(time_t *tloc, uint16_t *out_ms);
 
 // Midnight (UTC) of the day containing ts (fw/src/shell_glue.c).
 time_t time_util_get_midnight_of(time_t ts);
+bool time_util_range_spans_day(time_t start, time_t end, time_t start_of_day);
 
 // Zephyr's minimal libc has no strftime; the launcher alarms glance formats
 // weekday names with it. %a-only implementation in fw/src/shell_glue.c.
