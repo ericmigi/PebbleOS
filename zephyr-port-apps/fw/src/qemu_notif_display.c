@@ -133,6 +133,7 @@ static LayoutLayer *prv_get_layout(SwapLayer *sl, int8_t rel_position, void *ctx
     c->attrs[n++] = (Attribute){ .id = AttributeIdIconTiny, .uint32 = c->icon };
   }
 
+  c->item.header.type = TimelineItemTypeNotification;
   c->item.header.timestamp = rtc_get_time();
   c->item.attr_list = (AttributeList){ .num_attributes = n, .attributes = c->attrs };
   c->info = (NotificationLayoutInfo){ .item = &c->item, .show_notification_timestamp = true };
