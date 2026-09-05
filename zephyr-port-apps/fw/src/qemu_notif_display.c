@@ -1,30 +1,28 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 // Notification display on the Zephyr port. qemu_notif_rx.c / qemu_ancs.c decode
-// a notification and call fw_notification_show (thread-safe stash + flag).
-// fw_notification_poll runs on KernelMain from the shared UI pump and requests a
-// privileged system-app launch; prv_notif_app_main then builds the real timeline
-// notification_layout card and runs the standard app_event_loop.
+// a notification and call fw_notification_show (ring append + flag).
+// fw_notification_poll runs on KernelMain from the shared UI pump and launches a
+// notification system-app (prv_notif_app_main), which hosts the shipping
+// timeline notification_layout card inside a swap_layer — same structure as
+// notification_window: card offset below the status bar, status-bar colour
+// coordinated with the band, UP/DOWN swap between notifications.
 //
-// Launching through fw_shell_request_launch + app_event_loop (the same path the
-// launcher uses for Settings/Music) gives a clean push/pop lifecycle: BACK pops
-// the card and app_event_loop returns, restoring the launcher/watchface intact.
-// Pushing a raw window from inside the pump corrupted the underlying app's loop
-// (it kept rendering the popped card and stopped taking input).
+// Multiple notifications: fw_notification_show appends to a ring; each visible
+// card carries its absolute ring index in its heap context bundle, so
+// get_layout(rel) resolves relative to the current card and UP/DOWN swap to the
+// older/newer notification. A notification arriving while the app is already up
+// reloads the swap_layer to focus the newest.
 //
-// The card pixels come from the shipping timeline notification_layout (title,
-// body, relative timestamp, colour band) plus a clock status bar, near
-// pixel-identical to the FreeRTOS reference.
-//
-// ponytail: the dismissed window + layout are not freed (one static show at a
-// time; a per-notification leak until multi-notification nav is wired). No peek
-// intro animation / scroll / action menu — that chrome is the swap_layer +
-// modal_manager epic. The card body itself matches the reference.
+// ponytail: on dismiss (BACK) the app returns without freeing the live swap
+// layouts / window (a per-session leak); wire swap_layer_deinit + window free
+// when the app gains a real teardown. No peek intro animation / action menu yet.
 
 #include "applib/graphics/gtypes.h"
 #include "applib/ui/layer.h"
 #include "applib/ui/status_bar_layer.h"
 #include "applib/ui/window.h"
+#include "kernel/pbl_malloc.h"
 #include "pbl/services/timeline/attribute.h"
 #include "pbl/services/timeline/item.h"
 #include "pbl/services/timeline/layout_layer.h"
@@ -41,84 +39,125 @@ extern time_t rtc_get_time(void);
 extern Window *window_create(void);
 extern void app_window_stack_push(Window *window, bool animated);
 extern void app_event_loop(void);
-extern void layout_destroy(LayoutLayer *layout);
 extern void fw_system_app_launch(const PebbleProcessMd *md);
+extern void layout_destroy(LayoutLayer *layout);
 
-static char s_title[64];
-static char s_subtitle[64];
-static char s_body[128];
+#define NOTIF_RING 8
+
+typedef struct {
+  char title[64];
+  char subtitle[64];
+  char body[128];
+} NotifEntry;
+
+static NotifEntry s_ring[NOTIF_RING];
+static volatile uint32_t s_count;  // monotonic total received (single writer: RX thread)
 static volatile bool s_pending;
+static bool s_app_running;
 
-static Attribute s_attrs[3];
-static TimelineItem s_item;
-static NotificationLayoutInfo s_info;
 static Uuid s_app_id;  // zeroed = invalid: no phone app icon in the port
 static StatusBarLayer s_status;
 static SwapLayer s_swap;
 static GRect s_win_bounds;
 
+// Per-visible-card heap bundle. `item` is first so layout_get_context (which
+// returns notification_layout's info.item) yields the bundle pointer; freed in
+// the swap_layer layout_removed callback.
+typedef struct {
+  TimelineItem item;
+  uint32_t abs_index;
+  NotificationLayoutInfo info;
+  Attribute attrs[3];
+  char title[64];
+  char subtitle[64];
+  char body[128];
+} NotifLayoutCtx;
+
 void fw_notification_show(const char *title, const char *subtitle, const char *body) {
-  strncpy(s_title, title ? title : "", sizeof(s_title) - 1);
-  s_title[sizeof(s_title) - 1] = '\0';
-  strncpy(s_subtitle, subtitle ? subtitle : "", sizeof(s_subtitle) - 1);
-  s_subtitle[sizeof(s_subtitle) - 1] = '\0';
-  strncpy(s_body, body ? body : "", sizeof(s_body) - 1);
-  s_body[sizeof(s_body) - 1] = '\0';
+  NotifEntry *e = &s_ring[s_count % NOTIF_RING];
+  strncpy(e->title, title ? title : "", sizeof(e->title) - 1);
+  e->title[sizeof(e->title) - 1] = '\0';
+  strncpy(e->subtitle, subtitle ? subtitle : "", sizeof(e->subtitle) - 1);
+  e->subtitle[sizeof(e->subtitle) - 1] = '\0';
+  strncpy(e->body, body ? body : "", sizeof(e->body) - 1);
+  e->body[sizeof(e->body) - 1] = '\0';
+  s_count++;
   s_pending = true;
 }
 
-// swap_layer fetches the notification card for the focused position; single
-// notification, so only rel_position 0 has a layout.
+// Absolute ring index of the swap_layer's current card (newest when none yet).
+static uint32_t prv_current_index(SwapLayer *sl) {
+  LayoutLayer *cur = swap_layer_get_current_layout(sl);
+  if (!cur) {
+    return s_count ? s_count - 1 : 0;
+  }
+  NotifLayoutCtx *c = (NotifLayoutCtx *)layout_get_context(cur);  // item is first member
+  return c->abs_index;
+}
+
 static LayoutLayer *prv_get_layout(SwapLayer *sl, int8_t rel_position, void *ctx) {
-  (void)sl; (void)ctx;
-  if (rel_position != 0) {
+  (void)ctx;
+  const uint32_t count = s_count;
+  const int64_t base = (int64_t)prv_current_index(sl);
+  const int64_t abs = base + rel_position;
+  if (abs < 0 || (uint64_t)abs >= count) {
     return NULL;
   }
+  if (count > NOTIF_RING && (uint64_t)abs < (uint64_t)count - NOTIF_RING) {
+    return NULL;  // evicted from the ring
+  }
+
+  const NotifEntry *e = &s_ring[abs % NOTIF_RING];
+  NotifLayoutCtx *c = kernel_malloc(sizeof(*c));
+  if (!c) {
+    return NULL;
+  }
+  memset(c, 0, sizeof(*c));
+  c->abs_index = (uint32_t)abs;
+  strncpy(c->title, e->title, sizeof(c->title) - 1);
+  strncpy(c->subtitle, e->subtitle, sizeof(c->subtitle) - 1);
+  strncpy(c->body, e->body, sizeof(c->body) - 1);
+
+  uint8_t n = 0;
+  c->attrs[n++] = (Attribute){ .id = AttributeIdTitle, .cstring = c->title };
+  if (c->subtitle[0]) {
+    c->attrs[n++] = (Attribute){ .id = AttributeIdSubtitle, .cstring = c->subtitle };
+  }
+  c->attrs[n++] = (Attribute){ .id = AttributeIdBody, .cstring = c->body };
+
+  c->item.header.timestamp = rtc_get_time();
+  c->item.attr_list = (AttributeList){ .num_attributes = n, .attributes = c->attrs };
+  c->info = (NotificationLayoutInfo){ .item = &c->item, .show_notification_timestamp = true };
+
   const LayoutLayerConfig config = {
     .frame = &s_win_bounds,
-    .attributes = &s_item.attr_list,
+    .attributes = &c->item.attr_list,
     .mode = LayoutLayerModeCard,
     .app_id = &s_app_id,
-    .context = &s_info,
+    .context = &c->info,
   };
   return notification_layout_create(&config);
 }
 
 static void prv_layout_removed(SwapLayer *sl, LayoutLayer *layout, void *ctx) {
   (void)sl; (void)ctx;
-  layout_destroy(layout);  // s_item is static, so no timeline_item_destroy
+  void *bundle = layout_get_context(layout);  // == &ctx->item == bundle (item first)
+  layout_destroy(layout);
+  kernel_free(bundle);
 }
 
-// Coordinate the status-bar clock colour with the card: swap_layer passes the
-// current layout's bg colour and whether the status bar sits over the banner.
-// Fill the status bar (and the strip above the swap_layer, via the window bg)
-// with that colour so the top is continuous, clock legible over it.
+// Coordinate the status-bar clock colour with the card: fill only the status-bar
+// strip with the band colour (the layout paints just the banner + text, leaving
+// the body to the window background, so filling the window would paint the body).
 static void prv_update_colors(SwapLayer *sl, GColor bg_color, bool status_bar_filled, void *ctx) {
   (void)sl; (void)ctx;
   const GColor status_color = status_bar_filled ? bg_color : GColorWhite;
-  // Only the status-bar strip is filled with the band colour; the card body is
-  // the (default) window background, matching the reference's grey body under a
-  // coloured banner. Filling the whole window would paint the body too, because
-  // notification_layout paints only the banner + text and leaves the body to the
-  // container background.
   status_bar_layer_set_colors(&s_status, status_color, gcolor_legible_over(status_color));
 }
 
-// main_func for the notification system-app: builds the card, pushes it via the
-// app window stack, and pumps app_event_loop until BACK pops it.
+// main_func for the notification system-app: builds the swap_layer-hosted card
+// and pumps app_event_loop until BACK pops it.
 static void prv_notif_app_main(void) {
-  uint8_t n = 0;
-  s_attrs[n++] = (Attribute){ .id = AttributeIdTitle, .cstring = s_title };
-  if (s_subtitle[0]) {
-    s_attrs[n++] = (Attribute){ .id = AttributeIdSubtitle, .cstring = s_subtitle };
-  }
-  s_attrs[n++] = (Attribute){ .id = AttributeIdBody, .cstring = s_body };
-
-  memset(&s_item, 0, sizeof(s_item));
-  s_item.header.timestamp = rtc_get_time();
-  s_item.attr_list = (AttributeList){ .num_attributes = n, .attributes = s_attrs };
-  s_info = (NotificationLayoutInfo){ .item = &s_item, .show_notification_timestamp = true };
-
   Window *window = window_create();
   if (!window) {
     return;
@@ -131,9 +170,6 @@ static void prv_notif_app_main(void) {
   status_bar_layer_set_separator_mode(&s_status, StatusBarLayerSeparatorModeNone);
   const int16_t status_bar_height = s_status.layer.frame.size.h;
 
-  // Host the card in a swap_layer offset below the status bar (mirrors
-  // notification_window): the layout's colour band + icon then sit under the
-  // clock instead of colliding with it, and UP/DOWN scroll the card.
   const GRect swap_frame = GRect(0, status_bar_height, s_win_bounds.size.w,
                                  s_win_bounds.size.h - status_bar_height);
   swap_layer_init(&s_swap, &swap_frame);
@@ -148,7 +184,7 @@ static void prv_notif_app_main(void) {
   swap_layer_reload_data(&s_swap);
 
   app_window_stack_push(window, false /* animated */);
-  printk("NOTIF_SHOWN \"%s\"\n", s_title);
+  printk("NOTIF_SHOWN \"%s\"\n", s_ring[(s_count ? s_count - 1 : 0) % NOTIF_RING].title);
   app_event_loop();
 }
 
@@ -163,20 +199,27 @@ static const PebbleProcessMdSystem s_notif_md = {
   .name = "Notification",
 };
 
-// Called from fw_ui_pump_once (KernelMain). Requests the notification app launch.
+// Called from fw_ui_pump_once (KernelMain). Launches the notification app, or
+// reloads the swap_layer to focus the newest if the app is already up.
 void fw_notification_poll(void) {
   if (!s_pending) {
     return;
   }
   s_pending = false;
-  // Launch inline (mirrors the pump's own s_pending_md processing). Not via
-  // fw_shell_request_launch: the pump's event_take_timeout returns early on a 1s
-  // idle timeout, before it would drain a queued launch, so a queued
-  // notification would not appear until the next button event.
-  //
-  // No fw_shell_on_app_exit: that force-chains the launcher on app exit, but a
-  // dismissed notification must return to whatever was underneath (watchface or
-  // launcher). fw_system_app_launch returns to the calling pump, which re-renders
-  // the underlying screen on its own.
+
+  if (s_app_running) {
+    // A new notification arrived while the card is up: refetch so the newest
+    // becomes current (reload nulls current -> get_layout(0) returns newest).
+    swap_layer_reload_data(&s_swap);
+    return;
+  }
+
+  // Launch inline (mirrors the pump's own s_pending_md processing); the pump's
+  // event_take_timeout returns early on its 1s idle timeout before draining a
+  // queued launch. No fw_shell_on_app_exit: a dismissed notification returns to
+  // whatever was underneath, and fw_system_app_launch returns to the calling
+  // pump which re-renders it.
+  s_app_running = true;
   fw_system_app_launch((const PebbleProcessMd *)&s_notif_md);
+  s_app_running = false;
 }
