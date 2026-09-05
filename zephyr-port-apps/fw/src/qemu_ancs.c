@@ -25,7 +25,8 @@
 #include "comm/ble/kernel_le_client/ancs/ancs_types.h"
 #include "comm/ble/kernel_le_client/ancs/ancs_util.h"
 
-void fw_notification_show(const char *title, const char *subtitle, const char *body);
+void fw_notification_show(const char *title, const char *subtitle, const char *body,
+                          uint32_t icon);
 
 static void prv_copy_attr(char *dst, size_t cap, const ANCSAttribute *attr) {
   dst[0] = '\0';
@@ -63,5 +64,5 @@ void fw_ancs_feed(const uint8_t *resp, size_t len) {
   prv_copy_attr(body, sizeof(body), attrs[FetchedNotifAttributeIndexMessage]);
 
   printk("ANCS_RX title=\"%s\" body=\"%s\"\n", title, body);
-  fw_notification_show(title, subtitle, body);
+  fw_notification_show(title, subtitle, body, 0 /* icon: ANCS fallback */);
 }

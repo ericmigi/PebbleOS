@@ -48,6 +48,7 @@ typedef struct {
   char title[64];
   char subtitle[64];
   char body[128];
+  uint32_t icon;
 } NotifEntry;
 
 static NotifEntry s_ring[NOTIF_RING];
@@ -66,14 +67,16 @@ static GRect s_win_bounds;
 typedef struct {
   TimelineItem item;
   uint32_t abs_index;
+  uint32_t icon;
   NotificationLayoutInfo info;
-  Attribute attrs[3];
+  Attribute attrs[4];
   char title[64];
   char subtitle[64];
   char body[128];
 } NotifLayoutCtx;
 
-void fw_notification_show(const char *title, const char *subtitle, const char *body) {
+void fw_notification_show(const char *title, const char *subtitle, const char *body,
+                          uint32_t icon) {
   NotifEntry *e = &s_ring[s_count % NOTIF_RING];
   strncpy(e->title, title ? title : "", sizeof(e->title) - 1);
   e->title[sizeof(e->title) - 1] = '\0';
@@ -81,6 +84,7 @@ void fw_notification_show(const char *title, const char *subtitle, const char *b
   e->subtitle[sizeof(e->subtitle) - 1] = '\0';
   strncpy(e->body, body ? body : "", sizeof(e->body) - 1);
   e->body[sizeof(e->body) - 1] = '\0';
+  e->icon = icon;
   s_count++;
   s_pending = true;
 }
@@ -117,6 +121,7 @@ static LayoutLayer *prv_get_layout(SwapLayer *sl, int8_t rel_position, void *ctx
   strncpy(c->title, e->title, sizeof(c->title) - 1);
   strncpy(c->subtitle, e->subtitle, sizeof(c->subtitle) - 1);
   strncpy(c->body, e->body, sizeof(c->body) - 1);
+  c->icon = e->icon;
 
   uint8_t n = 0;
   c->attrs[n++] = (Attribute){ .id = AttributeIdTitle, .cstring = c->title };
@@ -124,6 +129,9 @@ static LayoutLayer *prv_get_layout(SwapLayer *sl, int8_t rel_position, void *ctx
     c->attrs[n++] = (Attribute){ .id = AttributeIdSubtitle, .cstring = c->subtitle };
   }
   c->attrs[n++] = (Attribute){ .id = AttributeIdBody, .cstring = c->body };
+  if (c->icon) {
+    c->attrs[n++] = (Attribute){ .id = AttributeIdIconTiny, .uint32 = c->icon };
+  }
 
   c->item.header.timestamp = rtc_get_time();
   c->item.attr_list = (AttributeList){ .num_attributes = n, .attributes = c->attrs };

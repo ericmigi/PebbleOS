@@ -31,6 +31,7 @@
 #define ATTR_TITLE 1
 #define ATTR_SUBTITLE 2
 #define ATTR_BODY 3
+#define ATTR_ICON 4
 
 #define RX_STACK_SIZE 3072
 #define RX_PRIORITY 6
@@ -42,15 +43,20 @@ static struct k_thread s_rx_thread;
 
 // Display entry (qemu_notif_display.c); weak so the transport can land before
 // the UI does.
-void fw_notification_show(const char *title, const char *subtitle, const char *body);
+void fw_notification_show(const char *title, const char *subtitle, const char *body,
+                          uint32_t icon);
 __attribute__((weak)) void fw_notification_show(const char *title, const char *subtitle,
-                                                const char *body) {
+                                                const char *body, uint32_t icon) {
+  (void)icon;
   printk("NOTIF_RX title=\"%s\" subtitle=\"%s\" body=\"%s\"\n",
          title ? title : "", subtitle ? subtitle : "", body ? body : "");
 }
 
 static uint16_t prv_rd16be(const uint8_t *p) { return ((uint16_t)p[0] << 8) | p[1]; }
 static uint16_t prv_rd16le(const uint8_t *p) { return ((uint16_t)p[1] << 8) | p[0]; }
+static uint32_t prv_rd32le(const uint8_t *p) {
+  return ((uint32_t)p[3] << 24) | ((uint32_t)p[2] << 16) | ((uint32_t)p[1] << 8) | p[0];
+}
 
 // Parse a raw Pebble Protocol payload (already de-framed): [len:2 BE][ep:2 BE][data].
 static void prv_handle_pp(const uint8_t *msg, uint16_t len) {
@@ -98,6 +104,7 @@ static void prv_handle_pp(const uint8_t *msg, uint16_t len) {
   const uint8_t *vend = value + val_len;
   static char title[64], subtitle[64], body[128];
   title[0] = subtitle[0] = body[0] = '\0';
+  uint32_t icon = 0;
   for (uint8_t i = 0; i < attr_count && a + 3 <= vend; ++i) {
     const uint8_t id = a[0];
     const uint16_t alen = prv_rd16le(a + 1);
@@ -110,6 +117,7 @@ static void prv_handle_pp(const uint8_t *msg, uint16_t len) {
     if (id == ATTR_TITLE) { dst = title; cap = sizeof(title); }
     else if (id == ATTR_SUBTITLE) { dst = subtitle; cap = sizeof(subtitle); }
     else if (id == ATTR_BODY) { dst = body; cap = sizeof(body); }
+    else if (id == ATTR_ICON && alen == 4) { icon = prv_rd32le(content); }
     if (dst) {
       const size_t n = (alen < cap - 1) ? alen : cap - 1;
       memcpy(dst, content, n);
@@ -117,7 +125,7 @@ static void prv_handle_pp(const uint8_t *msg, uint16_t len) {
     }
     a = content + alen;
   }
-  fw_notification_show(title, subtitle, body);
+  fw_notification_show(title, subtitle, body, icon);
 }
 
 static void prv_rx_thread(void *a, void *b, void *c) {
