@@ -29,6 +29,7 @@
 #include "pbl/services/timeline/item.h"
 #include "pbl/services/timeline/layout_layer.h"
 #include "pbl/services/timeline/notification_layout.h"
+#include "pbl/services/timeline/swap_layer.h"
 #include "process_management/pebble_process_md.h"
 #include "util/uuid.h"
 
@@ -40,6 +41,7 @@ extern time_t rtc_get_time(void);
 extern Window *window_create(void);
 extern void app_window_stack_push(Window *window, bool animated);
 extern void app_event_loop(void);
+extern void layout_destroy(LayoutLayer *layout);
 extern void fw_system_app_launch(const PebbleProcessMd *md);
 
 static char s_title[64];
@@ -52,6 +54,8 @@ static TimelineItem s_item;
 static NotificationLayoutInfo s_info;
 static Uuid s_app_id;  // zeroed = invalid: no phone app icon in the port
 static StatusBarLayer s_status;
+static SwapLayer s_swap;
+static GRect s_win_bounds;
 
 void fw_notification_show(const char *title, const char *subtitle, const char *body) {
   strncpy(s_title, title ? title : "", sizeof(s_title) - 1);
@@ -61,6 +65,28 @@ void fw_notification_show(const char *title, const char *subtitle, const char *b
   strncpy(s_body, body ? body : "", sizeof(s_body) - 1);
   s_body[sizeof(s_body) - 1] = '\0';
   s_pending = true;
+}
+
+// swap_layer fetches the notification card for the focused position; single
+// notification, so only rel_position 0 has a layout.
+static LayoutLayer *prv_get_layout(SwapLayer *sl, int8_t rel_position, void *ctx) {
+  (void)sl; (void)ctx;
+  if (rel_position != 0) {
+    return NULL;
+  }
+  const LayoutLayerConfig config = {
+    .frame = &s_win_bounds,
+    .attributes = &s_item.attr_list,
+    .mode = LayoutLayerModeCard,
+    .app_id = &s_app_id,
+    .context = &s_info,
+  };
+  return notification_layout_create(&config);
+}
+
+static void prv_layout_removed(SwapLayer *sl, LayoutLayer *layout, void *ctx) {
+  (void)sl; (void)ctx;
+  layout_destroy(layout);  // s_item is static, so no timeline_item_destroy
 }
 
 // main_func for the notification system-app: builds the card, pushes it via the
@@ -83,25 +109,27 @@ static void prv_notif_app_main(void) {
     return;
   }
   Layer *root = window_get_root_layer(window);
-  GRect bounds;
-  layer_get_bounds(root, &bounds);
-
-  const LayoutLayerConfig config = {
-    .frame = &bounds,
-    .attributes = &s_item.attr_list,
-    .mode = LayoutLayerModeCard,
-    .app_id = &s_app_id,
-    .context = &s_info,
-  };
-  LayoutLayer *layout = notification_layout_create(&config);
-  if (layout) {
-    layer_add_child(root, &layout->layer);
-  }
+  layer_get_bounds(root, &s_win_bounds);
 
   status_bar_layer_init(&s_status);
   status_bar_layer_set_colors(&s_status, GColorClear, GColorWhite);
   status_bar_layer_set_separator_mode(&s_status, StatusBarLayerSeparatorModeNone);
-  layer_add_child(root, &s_status.layer);
+  const int16_t status_bar_height = s_status.layer.frame.size.h;
+
+  // Host the card in a swap_layer offset below the status bar (mirrors
+  // notification_window): the layout's colour band + icon then sit under the
+  // clock instead of colliding with it, and UP/DOWN scroll the card.
+  const GRect swap_frame = GRect(0, status_bar_height, s_win_bounds.size.w,
+                                 s_win_bounds.size.h - status_bar_height);
+  swap_layer_init(&s_swap, &swap_frame);
+  swap_layer_set_callbacks(&s_swap, NULL, (SwapLayerCallbacks){
+    .get_layout_handler = prv_get_layout,
+    .layout_removed_handler = prv_layout_removed,
+  });
+  swap_layer_set_click_config_onto_window(&s_swap, window);
+  layer_add_child(root, swap_layer_get_layer(&s_swap));
+  layer_add_child(root, &s_status.layer);  // status bar on top
+  swap_layer_reload_data(&s_swap);
 
   app_window_stack_push(window, false /* animated */);
   printk("NOTIF_SHOWN \"%s\"\n", s_title);

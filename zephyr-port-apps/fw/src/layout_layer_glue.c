@@ -45,3 +45,7 @@ void *layout_get_context(LayoutLayer *layout) {
   }
   return NULL;
 }
+
+void layout_destroy(LayoutLayer *layout) {
+  layout->impl->destructor(layout);
+}
