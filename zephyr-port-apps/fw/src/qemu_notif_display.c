@@ -89,6 +89,21 @@ static void prv_layout_removed(SwapLayer *sl, LayoutLayer *layout, void *ctx) {
   layout_destroy(layout);  // s_item is static, so no timeline_item_destroy
 }
 
+// Coordinate the status-bar clock colour with the card: swap_layer passes the
+// current layout's bg colour and whether the status bar sits over the banner.
+// Fill the status bar (and the strip above the swap_layer, via the window bg)
+// with that colour so the top is continuous, clock legible over it.
+static void prv_update_colors(SwapLayer *sl, GColor bg_color, bool status_bar_filled, void *ctx) {
+  (void)sl; (void)ctx;
+  const GColor status_color = status_bar_filled ? bg_color : GColorWhite;
+  // Only the status-bar strip is filled with the band colour; the card body is
+  // the (default) window background, matching the reference's grey body under a
+  // coloured banner. Filling the whole window would paint the body too, because
+  // notification_layout paints only the banner + text and leaves the body to the
+  // container background.
+  status_bar_layer_set_colors(&s_status, status_color, gcolor_legible_over(status_color));
+}
+
 // main_func for the notification system-app: builds the card, pushes it via the
 // app window stack, and pumps app_event_loop until BACK pops it.
 static void prv_notif_app_main(void) {
@@ -125,6 +140,7 @@ static void prv_notif_app_main(void) {
   swap_layer_set_callbacks(&s_swap, NULL, (SwapLayerCallbacks){
     .get_layout_handler = prv_get_layout,
     .layout_removed_handler = prv_layout_removed,
+    .update_colors_handler = prv_update_colors,
   });
   swap_layer_set_click_config_onto_window(&s_swap, window);
   layer_add_child(root, swap_layer_get_layer(&s_swap));
