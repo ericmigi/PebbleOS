@@ -31,6 +31,11 @@
 #include "applib/ui/action_menu_window.h"
 #include "applib/ui/action_menu_hierarchy.h"
 #include "applib/ui/click.h"
+#include "applib/ui/animation.h"
+#include "applib/ui/property_animation.h"
+#include "apps/system/timeline/peek_layer.h"
+#include "pbl/services/evented_timer.h"
+#include "pbl/services/timeline/timeline_resources.h"
 #include "process_management/pebble_process_md.h"
 #include "util/uuid.h"
 
@@ -44,8 +49,11 @@ extern void app_window_stack_push(Window *window, bool animated);
 extern void app_event_loop(void);
 extern void fw_system_app_launch(const PebbleProcessMd *md);
 extern void layout_destroy(LayoutLayer *layout);
+extern void *layout_get_context(LayoutLayer *layout);
 extern void fw_window_stack_pop(void);
 extern void window_single_click_subscribe(ButtonId button_id, ClickHandler handler);
+extern const LayoutColors *layout_get_notification_colors(const LayoutLayer *layout);
+extern TimelineResourceId notification_layout_get_fallback_icon_id(uint8_t type);
 
 #define NOTIF_RING 8
 
@@ -205,6 +213,70 @@ static void prv_notif_click_config(void *context) {
   window_single_click_subscribe(BUTTON_ID_SELECT, prv_select_click);
 }
 
+// Arrival peek intro: the notification icon appears full-window, "unfolds"
+// (peek_layer_play), then slides up to reveal the card. Minimal vs
+// notification_window (no swap-frame slide / scale-to-image / moook interp).
+static PeekLayer *s_peek;
+
+static void prv_peek_anim_stopped(Animation *animation, bool finished, void *context) {
+  (void)animation; (void)finished; (void)context;
+  if (s_peek) {
+    peek_layer_destroy(s_peek);
+    s_peek = NULL;
+  }
+}
+
+static void prv_hide_peek(void *data) {
+  (void)data;
+  if (!s_peek) {
+    return;
+  }
+  Layer *pl = (Layer *)s_peek;
+  const GRect start = pl->frame;
+  GRect stop = start;
+  stop.origin.y -= stop.size.h;  // slide up off-screen to reveal the card
+  PropertyAnimation *pa = property_animation_create_layer_frame(pl, &start, &stop);
+  if (!pa) {
+    prv_peek_anim_stopped(NULL, false, NULL);
+    return;
+  }
+  Animation *anim = property_animation_get_animation(pa);
+  animation_set_duration(anim, 300);
+  animation_set_handlers(anim, (AnimationHandlers){ .stopped = prv_peek_anim_stopped }, NULL);
+  animation_schedule(anim);
+}
+
+static void prv_play_peek(void *data) {
+  (void)data;
+  if (!s_peek) {
+    return;
+  }
+  peek_layer_play(s_peek);
+  evented_timer_register(500, false, prv_hide_peek, NULL);
+}
+
+static void prv_start_peek(Layer *root, LayoutLayer *current) {
+  if (!current) {
+    return;
+  }
+  s_peek = peek_layer_create(s_win_bounds);
+  if (!s_peek) {
+    return;
+  }
+  TimelineItem *item = layout_get_context(current);  // bundle item
+  const TimelineResourceId fallback =
+      notification_layout_get_fallback_icon_id(TimelineItemTypeNotification);
+  const TimelineResourceInfo res = {
+    .res_id = attribute_get_uint32(&item->attr_list, AttributeIdIconTiny, fallback),
+    .app_id = &s_app_id,
+    .fallback_id = fallback,
+  };
+  peek_layer_set_icon(s_peek, &res);
+  peek_layer_set_background_color(s_peek, layout_get_notification_colors(current)->bg_color);
+  layer_add_child(root, (Layer *)s_peek);  // on top, covers the card
+  evented_timer_register(100, false, prv_play_peek, NULL);
+}
+
 // main_func for the notification system-app: builds the swap_layer-hosted card
 // and pumps app_event_loop until BACK pops it.
 static void prv_notif_app_main(void) {
@@ -233,6 +305,8 @@ static void prv_notif_app_main(void) {
   layer_add_child(root, swap_layer_get_layer(&s_swap));
   layer_add_child(root, &s_status.layer);  // status bar on top
   swap_layer_reload_data(&s_swap);
+
+  prv_start_peek(root, swap_layer_get_current_layout(&s_swap));
 
   app_window_stack_push(window, false /* animated */);
   printk("NOTIF_SHOWN \"%s\"\n", s_ring[(s_count ? s_count - 1 : 0) % NOTIF_RING].title);
