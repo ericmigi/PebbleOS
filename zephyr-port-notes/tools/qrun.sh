@@ -15,7 +15,7 @@ MACH="pebble-emery"
 [ "$KIND" = ref ] && MACH="pebble-emery,audiodev=snd0"
 setsid "$QEMU" -rtc base=localtime -machine "$MACH" $AUDIO -display none \
   -kernel "$ELF" \
-  -serial file:/tmp/q-console.log -serial tcp::12344,server=on,wait=off -serial null \
+  -serial file:/tmp/q-console.log -serial unix:/tmp/spp.sock,server=on,wait=off -serial null \
   -monitor unix:/tmp/q-mon.sock,server=on,wait=off \
   -drive if=mtd,format=raw,file=/tmp/q-spi.bin >/tmp/q-qemu.log 2>&1 < /dev/null &
 disown
