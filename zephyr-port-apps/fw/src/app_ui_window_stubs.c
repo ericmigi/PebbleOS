@@ -3,8 +3,8 @@
 // Inert stubs for the applib helper windows the Alarms app reaches only on user
 // interaction (new-alarm editor time/day pickers, alarm-detail action menu and
 // option menus, and the confirmation / first-run dialogs). The Alarms app
-// launches straight into its real alarm-list menu (app_alarm_stubs.c serves one
-// canned alarm), which renders with the real menu_layer + menu_cell_layer; these
+// launches straight into its real alarm-list menu (backed by the real alarm
+// service), which renders with the real menu_layer + menu_cell_layer; these
 // deeper windows are never entered during launch/first render.
 //
 // ponytail: navigating into the editor / detail / dialogs is a no-op here. These

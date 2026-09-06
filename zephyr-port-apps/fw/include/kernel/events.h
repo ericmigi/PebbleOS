@@ -195,7 +195,13 @@ typedef struct {
 } PebbleBlobDBEvent;
 
 typedef struct {
+  time_t alarm_time;
+  const char *alarm_label;
+} PebbleAlarmClockEvent;
+
+typedef struct {
   union {
+    PebbleAlarmClockEvent alarm_clock;
     PebbleTickEvent clock_tick;
     PebbleDoNotDisturbEvent do_not_disturb;
     PebbleBlobDBEvent blob_db;

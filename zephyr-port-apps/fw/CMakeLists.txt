@@ -264,7 +264,8 @@ target_sources(app PRIVATE
   src/app_registry.c
   src/app_registry_stubs.c
   src/app_service_stubs.c
-  src/app_alarm_stubs.c
+  src/alarm_glue.c
+  "${PEBBLEOS_ROOT}/src/fw/services/alarms/alarm.c"
   src/app_ui_window_stubs.c
   src/button_zephyr.c
   src/input_service.c
@@ -630,7 +631,8 @@ set_source_files_properties(
 set_source_files_properties(
   "${CMAKE_CURRENT_SOURCE_DIR}/src/app_service_stubs.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/animation_stubs.c"
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/app_alarm_stubs.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/alarms/alarm.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/alarm_glue.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/app_ui_window_stubs.c"
   PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
 )
