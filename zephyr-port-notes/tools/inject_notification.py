@@ -106,6 +106,7 @@ def main():
     ap.add_argument('--subtitle', default='')
     ap.add_argument('--body', default='Hello from the injector')
     ap.add_argument('--icon', type=lambda s: int(s, 0), default=DEFAULT_ICON)
+    ap.add_argument('--sock', default=None, help='connect to a unix-domain serial socket instead of tcp host:port')
     ap.add_argument('--ancs', action='store_true',
                     help='send a real ANCS attribute-response over PROTO_ANCS instead of a BlobDB insert')
     args = ap.parse_args()
@@ -119,8 +120,12 @@ def main():
         pp = pebble_protocol(EP_BLOBDB, blobdb_insert(item_id, value))
         frame = qemu_frame(PROTO_SPP, pp)
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((args.host, args.port))
+    if args.sock:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.connect(args.sock)
+    else:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((args.host, args.port))
     s.sendall(frame)
     time.sleep(0.3)
     s.close()

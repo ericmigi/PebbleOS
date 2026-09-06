@@ -30,21 +30,7 @@
 
 // Real time/date selection windows are compiled now; stubs removed.
 
-// --- alarm-detail: action menu + option menus -------------------------------
-ActionMenu *app_action_menu_open(ActionMenuConfig *config) {
-  (void)config;
-  return NULL;
-}
-
-ActionMenuLevel *action_menu_get_root_level(ActionMenu *action_menu) {
-  (void)action_menu;
-  return NULL;
-}
-
-void action_menu_set_result_window(ActionMenu *action_menu, Window *result_window) {
-  (void)action_menu;
-  (void)result_window;
-}
+// action_menu_window.c is now compiled; its real functions are used.
 
 // On qemu the real option_menu_window.c + settings/option_menu.c are compiled
 // (the Display submenu pushes real option menus); pt2 keeps the inert stubs.

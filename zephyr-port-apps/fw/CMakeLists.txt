@@ -873,6 +873,11 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_layout.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/swap_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/action_menu_window.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/action_menu_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/action_menu_hierarchy.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/crumbs_layer.c"
+  src/action_menu_glue.c
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_node.c"
   src/layout_layer_glue.c
@@ -964,12 +969,17 @@ set_source_files_properties(
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_layout.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/action_menu_window.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/action_menu_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/action_menu_hierarchy.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/swap_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_node.c"
   src/layout_layer_glue.c
   "${PEBBLEOS_ROOT}/src/fw/util/stringlist.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/notif_layout_stubs.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/crumbs_layer.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/action_menu_glue.c"
   PROPERTIES COMPILE_OPTIONS
     "-include;fw_zephyr_pre.h;-iquote;${FW_APP_IQUOTE}"
 )

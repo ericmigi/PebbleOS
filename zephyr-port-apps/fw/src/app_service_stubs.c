@@ -274,7 +274,7 @@ bool window_stack_is_animating_with_fixed_status_bar(WindowStack *window_stack) 
 // The port models a single visible window (launcher_ui.c), not a per-app
 // WindowStack object. The one consumer (status bar) only passes the result to
 // window_stack_is_animating_with_fixed_status_bar above, which ignores it.
-WindowStack *app_state_get_window_stack(void) { return NULL; }
+// app_state_get_window_stack now bridged in action_menu_glue.c
 
 // Checked task-heap alloc (the port backs task_malloc with the app/kernel heap).
 void *task_malloc_check(size_t bytes) {

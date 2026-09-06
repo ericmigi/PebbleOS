@@ -546,9 +546,15 @@ void shell_prefs_set_legacy_app_render_mode(uint8_t mode) { s_legacy_app_render_
 #if defined(CONFIG_BOARD_QEMU_EMERY)
 #include "applib/ui/option_menu_window.h"
 #include "applib/ui/kino/kino_layer.h"
+#include "applib/ui/action_menu_window_private.h"
 void *applib_malloc(size_t size);
+void *task_zalloc(size_t size);
 void *_applib_type_malloc_OptionMenu(void) { return applib_malloc(sizeof(OptionMenu)); }
 void *_applib_type_malloc_KinoLayer(void) { return applib_malloc(sizeof(KinoLayer)); }
+void *_applib_type_malloc_AnimationContext(void) { return applib_malloc(sizeof(AnimationContext)); }
+void *_applib_type_zalloc_ActionMenuData(void) { return task_zalloc(sizeof(ActionMenuData)); }
+size_t _applib_type_size_ActionMenuLevel(void) { return sizeof(ActionMenuLevel); }
+size_t _applib_type_size_ActionMenuItem(void) { return sizeof(ActionMenuItem); }
 #endif
 
 // ---------------------------------------------------------------------------

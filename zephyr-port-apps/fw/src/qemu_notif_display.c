@@ -28,6 +28,9 @@
 #include "pbl/services/timeline/layout_layer.h"
 #include "pbl/services/timeline/notification_layout.h"
 #include "pbl/services/timeline/swap_layer.h"
+#include "applib/ui/action_menu_window.h"
+#include "applib/ui/action_menu_hierarchy.h"
+#include "applib/ui/click.h"
 #include "process_management/pebble_process_md.h"
 #include "util/uuid.h"
 
@@ -41,6 +44,8 @@ extern void app_window_stack_push(Window *window, bool animated);
 extern void app_event_loop(void);
 extern void fw_system_app_launch(const PebbleProcessMd *md);
 extern void layout_destroy(LayoutLayer *layout);
+extern void fw_window_stack_pop(void);
+extern void window_single_click_subscribe(ButtonId button_id, ClickHandler handler);
 
 #define NOTIF_RING 8
 
@@ -164,6 +169,42 @@ static void prv_update_colors(SwapLayer *sl, GColor bg_color, bool status_bar_fi
   status_bar_layer_set_colors(&s_status, status_color, gcolor_legible_over(status_color));
 }
 
+// SELECT opens a 1-item action menu ("Dismiss"), mirroring notification_window.
+static bool s_dismiss_pending;
+
+static void prv_dismiss_action(ActionMenu *menu, const ActionMenuItem *action, void *ctx) {
+  (void)menu; (void)action; (void)ctx;
+  s_dismiss_pending = true;
+}
+
+static void prv_menu_did_close(ActionMenu *menu, const ActionMenuItem *performed, void *ctx) {
+  (void)menu; (void)performed; (void)ctx;
+  if (s_dismiss_pending) {
+    s_dismiss_pending = false;
+    fw_window_stack_pop();  // menu closed -> notification is top; pop it to dismiss
+  }
+}
+
+static void prv_select_click(ClickRecognizerRef recognizer, void *context) {
+  (void)recognizer; (void)context;
+  ActionMenuLevel *root = action_menu_level_create(1);
+  if (!root) {
+    return;
+  }
+  action_menu_level_add_action(root, "Dismiss", prv_dismiss_action, NULL);
+  ActionMenuConfig config = {
+    .root_level = root,
+    .colors = { .background = GColorDarkGray, .foreground = GColorWhite },
+    .did_close = prv_menu_did_close,
+  };
+  app_action_menu_open(&config);  // ponytail: root_level leaked per open
+}
+
+static void prv_notif_click_config(void *context) {
+  (void)context;
+  window_single_click_subscribe(BUTTON_ID_SELECT, prv_select_click);
+}
+
 // main_func for the notification system-app: builds the swap_layer-hosted card
 // and pumps app_event_loop until BACK pops it.
 static void prv_notif_app_main(void) {
@@ -186,6 +227,7 @@ static void prv_notif_app_main(void) {
     .get_layout_handler = prv_get_layout,
     .layout_removed_handler = prv_layout_removed,
     .update_colors_handler = prv_update_colors,
+    .click_config_provider = prv_notif_click_config,
   });
   swap_layer_set_click_config_onto_window(&s_swap, window);
   layer_add_child(root, swap_layer_get_layer(&s_swap));
