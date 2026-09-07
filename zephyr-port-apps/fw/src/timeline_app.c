@@ -25,12 +25,15 @@
 #include "pbl/services/settings/settings_file.h"
 #include "pbl/services/timeline/attribute.h"
 #include "pbl/services/timeline/item.h"
+#include "pbl/services/timeline/layout_layer.h"
+#include "pbl/services/timeline/timeline_layout.h"
 
 extern Window *window_create(void);
 extern void app_window_stack_push(struct Window *window, bool animated);
 extern void app_event_loop(void);
 extern time_t rtc_get_time(void);
 extern size_t clock_copy_time_string_timestamp(char *buffer, uint8_t size, time_t timestamp);
+extern time_t time_util_get_midnight_of(time_t ts);
 
 #define MAX_LISTED 24
 
@@ -39,6 +42,7 @@ static int s_count;
 static char s_title[MAX_LISTED][64];
 static char s_when[MAX_LISTED][32];
 static char s_subtitle[MAX_LISTED][64];
+static Uuid s_uuid[MAX_LISTED];
 static char s_detail_buf[192];
 static MenuLayer s_menu;
 static ScrollLayer s_detail_scroll;
@@ -62,6 +66,7 @@ static bool prv_pin_cb(SettingsFile *file, SettingsRecordInfo *info, void *ctx) 
     strncpy(s_subtitle[s_count], attribute_get_string(&item.attr_list, AttributeIdSubtitle, empty),
             sizeof(s_subtitle[0]) - 1);
     clock_copy_time_string_timestamp(s_when[s_count], sizeof(s_when[0]), ts);
+    s_uuid[s_count] = item.header.id;
     s_count++;
   }
   timeline_item_free_allocated_buffer(&item);
@@ -85,7 +90,12 @@ static void prv_draw_row(GContext *gctx, const Layer *cell, MenuIndex *idx, void
   menu_cell_basic_draw(gctx, cell, s_title[r], s_when[r][0] ? s_when[r] : NULL, NULL);
 }
 
-// SELECT opens a scrollable detail: title, time, and subtitle (alarm kind etc.).
+// SELECT opens the pin as a real layout card (alarm_layout via layout_create),
+// the same card the shipping timeline shows, instead of a text detail.
+static TimelineItem s_card_item;
+static TimelineLayoutInfo s_card_info;
+static LayoutLayer *s_card;
+
 static void prv_select(MenuLayer *ml, MenuIndex *idx, void *ctx) {
   (void)ml;
   (void)ctx;
@@ -93,27 +103,34 @@ static void prv_select(MenuLayer *ml, MenuIndex *idx, void *ctx) {
     return;
   }
   const int r = idx->row;
-  snprintf(s_detail_buf, sizeof(s_detail_buf), "%s\n%s%s%s", s_title[r], s_when[r],
-           s_subtitle[r][0] ? "\n" : "", s_subtitle[r]);
+
+  // Free a previously-opened card (one detail open at a time).
+  if (s_card) {
+    layout_destroy(s_card);
+    s_card = NULL;
+    timeline_item_free_allocated_buffer(&s_card_item);
+  }
+  if (pin_db_get(&s_uuid[r], &s_card_item) != S_SUCCESS) {
+    return;
+  }
+  timeline_layout_init_info(&s_card_info, &s_card_item, time_util_get_midnight_of(rtc_get_time()));
 
   Window *window = window_create();
   Layer *root = window_get_root_layer(window);
   GRect bounds;
   layer_get_bounds(root, &bounds);
-  scroll_layer_init(&s_detail_scroll, &bounds);
-  const GRect tf = GRect(4, 0, bounds.size.w - 8, 2000);
-  text_layer_init(&s_detail_text, &tf);
-  text_layer_set_font(&s_detail_text, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
-  text_layer_set_text(&s_detail_text, s_detail_buf);
-  int h = 200;
-  if (h < bounds.size.h) {
-    h = bounds.size.h;
+  const LayoutLayerConfig config = {
+    .frame = &bounds,
+    .attributes = &s_card_item.attr_list,
+    .mode = LayoutLayerModeCard,
+    .app_id = &s_card_info.app_id,
+    .context = &s_card_info,
+  };
+  s_card = layout_create(s_card_item.header.layout, &config);
+  if (!s_card) {
+    return;
   }
-  text_layer_set_size(&s_detail_text, GSize(bounds.size.w - 8, h));
-  scroll_layer_add_child(&s_detail_scroll, text_layer_get_layer(&s_detail_text));
-  scroll_layer_set_content_size(&s_detail_scroll, GSize(bounds.size.w, h));
-  scroll_layer_set_click_config_onto_window(&s_detail_scroll, window);
-  layer_add_child(root, scroll_layer_get_layer(&s_detail_scroll));
+  layer_add_child(root, (Layer *)s_card);
   app_window_stack_push(window, true);
 }
 

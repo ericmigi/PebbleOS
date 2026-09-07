@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+#include <stdint.h>
 
 // Port closure for the timeline / blob_db item store. The port renders wall
 // clock as UTC everywhere (see rtc_get_time_tm / clock glue), so local time IS
@@ -83,3 +84,34 @@ bool generic_layout_verify(bool existing_attributes[]) { (void)existing_attribut
 bool health_layout_verify(bool existing_attributes[]) { (void)existing_attributes; return true; }
 bool sports_layout_verify(bool existing_attributes[]) { (void)existing_attributes; return true; }
 bool weather_layout_verify(bool existing_attributes[]) { (void)existing_attributes; return true; }
+
+// Card-render closure for layout_create (timeline_app opens alarm pin cards).
+// layout_layer.c's constructor table references every family; only alarm (+
+// notification, compiled) render in the port, so the others return NULL. The
+// timeline_layout card view also pulls peek/sidebar/string helpers not ported.
+#include "pbl/services/timeline/layout_layer.h"
+
+LayoutLayer *generic_layout_create(const LayoutLayerConfig *config) { (void)config; return NULL; }
+LayoutLayer *calendar_layout_create(const LayoutLayerConfig *config) { (void)config; return NULL; }
+LayoutLayer *weather_layout_create(const LayoutLayerConfig *config) { (void)config; return NULL; }
+LayoutLayer *sports_layout_create(const LayoutLayerConfig *config) { (void)config; return NULL; }
+LayoutLayer *health_layout_create(const LayoutLayerConfig *config) { (void)config; return NULL; }
+
+// Timeline peek + sidebar are not ported (no Timeline peek / round sidebar here).
+unsigned int timeline_peek_get_concurrent_height(unsigned int num_concurrent) {
+  (void)num_concurrent;
+  return 0;
+}
+uint16_t timeline_layer_get_ideal_sidebar_width(void) { return 0; }
+
+// Uppercase a string in place (lib/util/string.c; minimal libc lacks it here).
+void toupper_str(char *str) {
+  if (!str) {
+    return;
+  }
+  for (; *str; ++str) {
+    if (*str >= 'a' && *str <= 'z') {
+      *str = (char)(*str - 'a' + 'A');
+    }
+  }
+}
