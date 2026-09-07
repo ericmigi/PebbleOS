@@ -56,9 +56,27 @@ bool sys_app_is_watchface(void) {
   return false;
 }
 
+// No hardware RNG wired on the qemu shell. uuid_generate() needs non-repeating
+// values or every generated Uuid collides (notifications/pins all share one key
+// and the store looks like it holds a single item). A seeded xorshift gives
+// per-call uniqueness within a session.
+// ponytail: not a secure RNG; wire the real entropy source for crypto uses.
 bool rng_rand(uint32_t *rand_out) {
-  ARG_UNUSED(rand_out);
-  return false;
+  if (!rand_out) {
+    return false;
+  }
+  static uint32_t s_state;
+  if (s_state == 0) {
+    s_state = (uint32_t)rtc_get_time() ^ 0x9e3779b9u;
+    if (s_state == 0) {
+      s_state = 0x1234567u;
+    }
+  }
+  s_state ^= s_state << 13;
+  s_state ^= s_state >> 17;
+  s_state ^= s_state << 5;
+  *rand_out = s_state;
+  return true;
 }
 
 static EventServiceInfo s_event_service_state;
