@@ -574,17 +574,22 @@ size_t _applib_type_size_ActionMenuItem(void) { return sizeof(ActionMenuItem); }
 time_t rtc_get_time(void);
 
 static bool s_clock_manual_time;
-static bool s_clock_manual_timezone;
 static bool s_clock_timezone_set;
 static int16_t s_clock_timezone_region = -1;
 
-// Shipping routes the time-source flag through the persisted shell pref.
+// Shipping routes the time-source + timezone-source flags through persisted
+// shell prefs (clock/service.c). Delegate so the Date & Time toggles survive a
+// reboot instead of living in RAM.
 bool shell_prefs_is_time_source_manual(void);
 void shell_prefs_set_time_source_manual(bool manual);
+bool shell_prefs_is_timezone_source_manual(void);
+void shell_prefs_set_timezone_source_manual(bool manual);
 bool clock_time_source_is_manual(void) { return shell_prefs_is_time_source_manual(); }
 void clock_set_manual_time_source(bool manual) { shell_prefs_set_time_source_manual(manual); }
-bool clock_timezone_source_is_manual(void) { return s_clock_manual_timezone; }
-void clock_set_manual_timezone_source(bool manual) { s_clock_manual_timezone = manual; }
+bool clock_timezone_source_is_manual(void) { return shell_prefs_is_timezone_source_manual(); }
+void clock_set_manual_timezone_source(bool manual) {
+  shell_prefs_set_timezone_source_manual(manual);
+}
 bool clock_is_timezone_set(void) { return s_clock_timezone_set; }
 
 void clock_set_timezone_by_region_id(uint16_t region_id) {
