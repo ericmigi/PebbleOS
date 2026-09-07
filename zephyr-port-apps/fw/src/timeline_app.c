@@ -1,23 +1,19 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-// Minimal Timeline Future/Past apps for the launcher. The shipping timeline app
-// renders pins as layout cards (layout_layer + all 7 layout modules, a large
-// port); this instead lists pins from pin_db as a MenuLayer (title + time),
-// split into future (timestamp >= now) and past. Makes alarm pins visible
-// (alarm_pin writes them to pin_db) without the render-side port.
-// ponytail: text/menu list, not the shipping pin cards; upgrade with
-// layout_layer when the render side is ported.
+// Timeline Future/Past apps for the launcher. Lists pins from pin_db as a
+// MenuLayer (title + time), split into future (timestamp >= now) and past;
+// SELECT opens the pin as its real layout card (layout_create, e.g.
+// alarm_layout) — the same card the shipping timeline shows.
+// ponytail: MenuLayer list + single card on SELECT, not the shipping
+// swap_layer of swipeable cards; add swap_layer for pin-to-pin swipe.
 
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 
-#include "applib/fonts/fonts.h"
 #include "applib/ui/layer.h"
 #include "applib/ui/menu_layer.h"
 #include "applib/ui/menu_cell_layer.h"
-#include "applib/ui/scroll_layer.h"
-#include "applib/ui/text_layer.h"
 #include "applib/ui/window.h"
 #include "kernel/pbl_malloc.h"
 #include "pbl/services/blob_db/pin_db.h"
@@ -43,10 +39,7 @@ static char s_title[MAX_LISTED][64];
 static char s_when[MAX_LISTED][32];
 static char s_subtitle[MAX_LISTED][64];
 static Uuid s_uuid[MAX_LISTED];
-static char s_detail_buf[192];
 static MenuLayer s_menu;
-static ScrollLayer s_detail_scroll;
-static TextLayer s_detail_text;
 
 static bool prv_pin_cb(SettingsFile *file, SettingsRecordInfo *info, void *ctx) {
   (void)ctx;
