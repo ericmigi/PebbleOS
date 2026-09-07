@@ -59,6 +59,22 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
                  tick_time->tm_sec);
 }
 
+// Shipping drives tick_timer_service from a RegularTimer that the port never
+// pumps, so the clock and music progress never advanced. Emit PEBBLE_TICK_EVENT
+// once a second from a repeating new_timer (which the port does pump); the
+// per-task tick_timer_service state turns it into second/minute tick callbacks.
+extern time_t rtc_get_time(void);
+static TimerID s_tick_timer;
+
+static void prv_second_tick(void *data) {
+  (void)data;
+  PebbleEvent e = {
+    .type = PEBBLE_TICK_EVENT,
+    .clock_tick = { .tick_time = rtc_get_time() },
+  };
+  event_put(&e);
+}
+
 static void prv_kernel_main(void *parameter) {
   (void)parameter;
   task_init();
@@ -75,6 +91,9 @@ static void prv_kernel_main(void *parameter) {
 
   s_probe_timer = new_timer_create();
   new_timer_start(s_probe_timer, 1500, prv_timer_fired, NULL, 0);
+
+  s_tick_timer = new_timer_create();
+  new_timer_start(s_tick_timer, 1000, prv_second_tick, NULL, TIMER_START_FLAG_REPEATING);
 
   PBL_LOG_ALWAYS("FW_SERVICES_OK");
 

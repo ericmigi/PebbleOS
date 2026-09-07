@@ -12,8 +12,11 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
 
 #include "pbl/services/music.h"
+
+extern time_t rtc_get_time(void);
 
 #define FW_MUSIC_LEN 64
 
@@ -24,6 +27,19 @@ static char s_album[FW_MUSIC_LEN];
 static MusicPlayState s_play_state = MusicPlayStatePlaying;
 static uint32_t s_pos_ms;
 static uint32_t s_len_ms;
+// Wall-clock baseline for the current s_pos_ms; while playing, the elapsed
+// time since this baseline is added on top so the progress bar ticks.
+static time_t s_pos_base_time;
+
+// Fold the time played since the baseline into s_pos_ms and reset the baseline.
+// Only advances while actually playing, so pause/rewind freeze the position.
+static void prv_fold_elapsed(void) {
+  const time_t now = rtc_get_time();
+  if (s_play_state == MusicPlayStatePlaying && now > s_pos_base_time) {
+    s_pos_ms += (uint32_t)(now - s_pos_base_time) * 1000u;
+  }
+  s_pos_base_time = now;
+}
 
 static void prv_copy(char *dst, const char *src, size_t src_len) {
   size_t n = src_len < FW_MUSIC_LEN - 1 ? src_len : FW_MUSIC_LEN - 1;
@@ -41,6 +57,7 @@ void fw_music_set_now_playing(const char *title, size_t title_len, const char *a
   s_play_state = MusicPlayStatePlaying;  // a fresh track defaults to playing
   s_pos_ms = 0;
   s_len_ms = 0;  // cleared until a progress update arrives
+  s_pos_base_time = rtc_get_time();
 }
 
 // Called by the music endpoint after a now-playing update (track position +
@@ -48,11 +65,13 @@ void fw_music_set_now_playing(const char *title, size_t title_len, const char *a
 void fw_music_set_progress(uint32_t pos_ms, uint32_t len_ms) {
   s_pos_ms = pos_ms;
   s_len_ms = len_ms;
+  s_pos_base_time = rtc_get_time();
 }
 
 // Called by the music endpoint on a PlayStateInfo message. `raw` is the wire
 // MusicEndpointPlaybackState (0=paused,1=playing,2=rewinding,3=forwarding).
 void fw_music_set_play_state(uint8_t raw) {
+  prv_fold_elapsed();  // bank time played under the old state before switching
   switch (raw) {
     case 0:
       s_play_state = MusicPlayStatePaused;
@@ -95,12 +114,24 @@ MusicPlayState music_get_playback_state(void) {
 bool music_is_progress_reporting_supported(void) { return s_len_ms > 0; }
 
 void music_get_pos(uint32_t *track_pos_ms, uint32_t *track_length_ms) {
+  // Extrapolate the live position: base + time played since the baseline
+  // (mirrors services/music/service.c), clamped to the track length.
+  uint32_t pos = s_pos_ms + music_get_ms_since_pos_last_updated();
+  if (s_len_ms && pos > s_len_ms) {
+    pos = s_len_ms;
+  }
   if (track_pos_ms) {
-    *track_pos_ms = s_pos_ms;
+    *track_pos_ms = pos;
   }
   if (track_length_ms) {
     *track_length_ms = s_len_ms;
   }
 }
 
-uint32_t music_get_ms_since_pos_last_updated(void) { return 0; }
+uint32_t music_get_ms_since_pos_last_updated(void) {
+  if (s_play_state != MusicPlayStatePlaying || s_len_ms == 0) {
+    return 0;
+  }
+  const time_t now = rtc_get_time();
+  return (now > s_pos_base_time) ? (uint32_t)(now - s_pos_base_time) * 1000u : 0;
+}
