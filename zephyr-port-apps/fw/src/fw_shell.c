@@ -53,11 +53,22 @@ ProcessContext *app_manager_get_task_context(void) { return &s_task_context; }
 #include "pbl/services/new_timer/new_timer.h"
 static TimerID s_idle_timer = TIMER_INVALID_ID;
 
+extern int fw_window_stack_depth(void);
+static void prv_idle_timeout_expired(void *data);
+
 static void prv_idle_close_launcher(void *data) {
   (void)data;
-  if (s_launcher_active && !fw_shell_launch_pending()) {
-    fw_window_stack_pop();  // launcher root; before_pop_render requests the shutter
+  if (!s_launcher_active || fw_shell_launch_pending()) {
+    return;
   }
+  // A notification popup (or any window) may be layered above the launcher.
+  // Idle-close must retire the launcher itself, never whatever sits on top of
+  // it, so if the launcher is not the top window, re-arm and try again later.
+  if (fw_window_stack_depth() > 1) {
+    new_timer_start(s_idle_timer, 30000, prv_idle_timeout_expired, NULL, 0);
+    return;
+  }
+  fw_window_stack_pop();  // launcher root; before_pop_render requests the shutter
 }
 
 static void prv_idle_timeout_expired(void *data) {
