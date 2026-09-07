@@ -24,6 +24,7 @@
 #include "applib/ui/window.h"
 #include "kernel/pbl_malloc.h"
 #include "pbl/services/timeline/attribute.h"
+#include "kernel/events.h"
 #include "pbl/services/timeline/item.h"
 #include "pbl/services/notifications/notification_storage.h"
 #include "pbl/services/timeline/layout_layer.h"
@@ -119,6 +120,13 @@ void fw_notification_show(const char *title, const char *subtitle, const char *b
   uuid_generate(&item.header.id);
   item.attr_list = (AttributeList){ .num_attributes = n, .attributes = attrs };
   notification_storage_store(&item);
+
+  // Live-refresh the launcher Notifications glance (subscribed to
+  // PEBBLE_SYS_NOTIFICATION_EVENT) so it shows the new notification immediately.
+  extern void event_put(PebbleEvent * event);
+  PebbleEvent ev = {.type = PEBBLE_SYS_NOTIFICATION_EVENT};
+  ev.sys_notification.type = NotificationAdded;
+  event_put(&ev);
 }
 
 // Absolute ring index of the swap_layer's current card (newest when none yet).
