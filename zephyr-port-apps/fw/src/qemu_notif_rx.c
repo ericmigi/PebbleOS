@@ -135,6 +135,11 @@ static void prv_handle_music(const uint8_t *data, uint16_t pp_len) {
 #define BLOB_DB_CMD_INSERT 0x01
 #define BLOB_DB_CMD_INSERT_TS 0x0D
 #define BLOB_DB_ID_NOTIFS 0x04
+#define BLOB_DB_ID_PINS 0x01
+
+// pin_db stores the raw serialized TimelineItem keyed by its UUID; Timeline
+// Future/Past re-read pin_db on open, so no event emission is needed here.
+extern int32_t pin_db_insert(const uint8_t *key, int key_len, const uint8_t *val, int val_len);
 
 #define ATTR_TITLE 1
 #define ATTR_SUBTITLE 2
@@ -197,7 +202,7 @@ static void prv_handle_pp(const uint8_t *msg, uint16_t len) {
     return;
   }
   const uint8_t db_id = data[3];
-  if (db_id != BLOB_DB_ID_NOTIFS) {
+  if (db_id != BLOB_DB_ID_NOTIFS && db_id != BLOB_DB_ID_PINS) {
     return;
   }
   const uint8_t key_len = data[4];
@@ -210,6 +215,13 @@ static void prv_handle_pp(const uint8_t *msg, uint16_t len) {
   iter += 2;
   const uint8_t *value = iter;
   if (value + val_len > end) {
+    return;
+  }
+  // Pins: store the raw serialized item straight into pin_db (Timeline
+  // Future/Past render it as a real layout card). Notifs fall through to the
+  // decode-and-show path below.
+  if (db_id == BLOB_DB_ID_PINS) {
+    pin_db_insert(data + 5, key_len, value, val_len);
     return;
   }
   // TimelineItem (LE): uuid16 + parent16 + ts4 + dur2 + type1 + flags2 + layout1

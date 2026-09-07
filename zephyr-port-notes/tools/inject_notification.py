@@ -57,13 +57,40 @@ def timeline_item(title, subtitle, body, icon):
     return item_id, hdr + blob
 
 
-def blobdb_insert(item_id, value, token=0x1234):
+def blobdb_insert(item_id, value, token=0x1234, db_id=DB_NOTIFS):
     key = item_id.bytes
     payload = (struct.pack('<BH', BLOBDB_INSERT, token) +
-               struct.pack('<B', DB_NOTIFS) +
+               struct.pack('<B', db_id) +
                struct.pack('<B', len(key)) + key +
                struct.pack('<H', len(value)) + value)
     return payload
+
+
+DB_PINS = 0x01
+TYPE_PIN = 2
+LAYOUT_ALARM = 8
+ATTR_ALARM_KIND = 45
+ALARM_KIND_JUST_ONCE = 3
+# Alarms-data-source parent UUID (timeline.h UUID_ALARMS_DATA_SOURCE).
+PIN_PARENT = uuid.UUID(bytes=bytes([0x67, 0xa3, 0x2d, 0x95, 0xef, 0x69, 0x46, 0xd4,
+                                    0xa0, 0xb9, 0x85, 0x4c, 0xc6, 0x2f, 0x97, 0xf9]))
+
+
+def pin_item(title, subtitle, when_ts, kind=ALARM_KIND_JUST_ONCE):
+    # Alarm pin: LayoutIdAlarm renders a card; alarm_layout_verify needs only
+    # Title + Subtitle. AlarmKind picks the icon (defaults otherwise).
+    attrs = [_attr(ATTR_TITLE, title.encode('utf-8')),
+             _attr(ATTR_SUBTITLE, subtitle.encode('utf-8')),
+             _attr(ATTR_ALARM_KIND, struct.pack('<B', kind))]
+    blob = b''.join(attrs)
+    item_id = uuid.uuid4()
+    # header: id16 + parent16 + <ts u64, dur u16, type u8, flags+status u16, layout u8>
+    #         + <payload_len u16, num_attrs u8, num_actions u8>
+    # time_t is 8 bytes on the arm-zephyr-eabi target (picolibc 64-bit time_t).
+    hdr = (item_id.bytes + PIN_PARENT.bytes +
+           struct.pack('<QHBHB', int(when_ts), 0, TYPE_PIN, 0x0001, LAYOUT_ALARM) +
+           struct.pack('<HBB', len(blob), len(attrs), 0))
+    return item_id, hdr + blob
 
 
 def _ancs_attr(aid, content):
@@ -158,9 +185,18 @@ def main():
     ap.add_argument('--length', type=int, default=0, help='music track length ms (enables progress bar)')
     ap.add_argument('--ancs', action='store_true',
                     help='send a real ANCS attribute-response over PROTO_ANCS instead of a BlobDB insert')
+    ap.add_argument('--pin', action='store_true',
+                    help='insert an alarm timeline pin into the Pins DB (endpoint 0xb1db, db 0x01)')
+    ap.add_argument('--when', type=int, default=3600,
+                    help='pin time as seconds from now (default +3600; use a future value so it lands in Timeline Future)')
     args = ap.parse_args()
 
-    if args.weather:
+    if args.pin:
+        item_id, value = pin_item(args.title, args.subtitle or 'ONCE', int(time.time()) + args.when)
+        pp = pebble_protocol(EP_BLOBDB, blobdb_insert(item_id, value, db_id=DB_PINS))
+        frame = qemu_frame(PROTO_SPP, pp)
+        item_id = 'pin:' + args.title
+    elif args.weather:
         pp = pebble_protocol(EP_WEATHER, weather_now(args.location, args.temp, args.wtype, args.phrase))
         frame = qemu_frame(PROTO_SPP, pp)
         item_id = 'weather:' + args.location
