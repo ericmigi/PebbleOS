@@ -90,6 +90,20 @@ def ancs_notif_attr_response(title, subtitle, body, uid=1,
     return header + attrs
 
 
+EP_MUSIC = 0x0020
+MUSIC_CMD_NOW_PLAYING = 0x10
+
+
+def _mstr(text):
+    b = text.encode('utf-8')[:255]
+    return struct.pack('<B', len(b)) + b
+
+
+def music_now_playing(artist, album, title):
+    # Wire order (services/music/endpoint.c): cmd | artist | album | title
+    return struct.pack('<B', MUSIC_CMD_NOW_PLAYING) + _mstr(artist) + _mstr(album) + _mstr(title)
+
+
 def pebble_protocol(endpoint, payload):
     return struct.pack('>HH', len(payload), endpoint) + payload
 
@@ -107,11 +121,19 @@ def main():
     ap.add_argument('--body', default='Hello from the injector')
     ap.add_argument('--icon', type=lambda s: int(s, 0), default=DEFAULT_ICON)
     ap.add_argument('--sock', default=None, help='connect to a unix-domain serial socket instead of tcp host:port')
+    ap.add_argument('--music', action='store_true',
+                    help='send a now-playing update on the music endpoint (0x0020)')
+    ap.add_argument('--artist', default='Some Artist')
+    ap.add_argument('--album', default='Some Album')
     ap.add_argument('--ancs', action='store_true',
                     help='send a real ANCS attribute-response over PROTO_ANCS instead of a BlobDB insert')
     args = ap.parse_args()
 
-    if args.ancs:
+    if args.music:
+        pp = pebble_protocol(EP_MUSIC, music_now_playing(args.artist, args.album, args.title))
+        frame = qemu_frame(PROTO_SPP, pp)
+        item_id = 'music:' + args.title
+    elif args.ancs:
         data = ancs_notif_attr_response(args.title, args.subtitle, args.body)
         frame = qemu_frame(PROTO_ANCS, data)
         item_id = 'ancs'

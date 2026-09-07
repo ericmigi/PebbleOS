@@ -24,6 +24,37 @@
 #define QEMU_PROTO_SPP 1
 #define QEMU_PROTO_ANCS 0xf001
 #define BLOB_DB_ENDPOINT 0xb1db
+#define MUSIC_ENDPOINT 0x0020
+#define MUSIC_CMD_NOW_PLAYING 0x10
+
+extern void fw_music_set_now_playing(const char *title, size_t title_len, const char *artist,
+                                     size_t artist_len, const char *album, size_t album_len);
+
+// Music now-playing on endpoint 0x0020: [cmd:1][artist][album][title], each
+// string a 1-byte length prefix + bytes (mirrors services/music/endpoint.c).
+static void prv_handle_music(const uint8_t *data, uint16_t pp_len) {
+  if (pp_len < 1 || data[0] != MUSIC_CMD_NOW_PLAYING) {
+    return;
+  }
+  const uint8_t *iter = data + 1;
+  const uint8_t *end = data + pp_len;
+  const char *strs[3] = {"", "", ""};
+  size_t lens[3] = {0, 0, 0};
+  for (int i = 0; i < 3; i++) {
+    if (iter >= end) {
+      return;
+    }
+    const uint8_t slen = *iter++;
+    if (iter + slen > end) {
+      return;
+    }
+    strs[i] = (const char *)iter;
+    lens[i] = slen;
+    iter += slen;
+  }
+  // Wire order is artist, album, title.
+  fw_music_set_now_playing(strs[2], lens[2], strs[0], lens[0], strs[1], lens[1]);
+}
 #define BLOB_DB_CMD_INSERT 0x01
 #define BLOB_DB_CMD_INSERT_TS 0x0D
 #define BLOB_DB_ID_NOTIFS 0x04
@@ -66,7 +97,14 @@ static void prv_handle_pp(const uint8_t *msg, uint16_t len) {
   const uint16_t pp_len = prv_rd16be(msg);
   const uint16_t endpoint = prv_rd16be(msg + 2);
   const uint8_t *data = msg + 4;
-  if (4 + pp_len > len || endpoint != BLOB_DB_ENDPOINT) {
+  if (4 + pp_len > len) {
+    return;
+  }
+  if (endpoint == MUSIC_ENDPOINT) {
+    prv_handle_music(data, pp_len);
+    return;
+  }
+  if (endpoint != BLOB_DB_ENDPOINT) {
     return;
   }
   // BlobDB: [cmd:1][token:2][db_id:1][key_len:1][key:N][val_len:2][value:M]

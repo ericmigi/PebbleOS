@@ -92,20 +92,6 @@ bool imaging_request_album_art(uint8_t token, ImagingFormat format, uint16_t wid
 // playback on phone" so the Music app renders its real no-music window.
 // ponytail: port pbl/services/music (now-playing state over PP media endpoint).
 // ---------------------------------------------------------------------------
-void music_get_now_playing(char *title, char *artist, char *album) {
-  if (title) {
-    title[0] = '\0';
-  }
-  if (artist) {
-    artist[0] = '\0';
-  }
-  if (album) {
-    album[0] = '\0';
-  }
-}
-
-bool music_has_now_playing(void) { return false; }
-
 bool music_get_player_name(char *player_name_out) {
   if (player_name_out) {
     player_name_out[0] = '\0';
@@ -128,8 +114,6 @@ int32_t music_get_playback_rate_percent(void) { return 0; }
 
 uint8_t music_get_volume_percent(void) { return 0; }
 
-MusicPlayState music_get_playback_state(void) { return MusicPlayStateInvalid; }
-
 bool music_is_playback_state_reporting_supported(void) { return false; }
 
 bool music_is_progress_reporting_supported(void) { return false; }
@@ -144,8 +128,6 @@ bool music_is_command_supported(MusicCommand command) {
 }
 
 bool music_skip_seeks_within_track(void) { return false; }
-
-bool music_needs_user_to_start_playback_on_phone(void) { return true; }
 
 void music_request_reduced_latency(bool reduced_latency) { (void)reduced_latency; }
 
