@@ -14,9 +14,13 @@
 // older/newer notification. A notification arriving while the app is already up
 // reloads the swap_layer to focus the newest.
 //
+// SELECT opens a 1-item action menu ("Dismiss") that removes the notification
+// from history; an arrival peek intro plays before the card.
 // ponytail: on dismiss (BACK) the app returns without freeing the live swap
 // layouts / window (a per-session leak); wire swap_layer_deinit + window free
-// when the app gains a real teardown. No peek intro animation / action menu yet.
+// when the app gains a real teardown. The popup is launched inline from the
+// pump, so app_event_loop returns on the pump's idle timeout and the card
+// auto-dismisses after a couple seconds unless the user acts first.
 
 #include "applib/graphics/gtypes.h"
 #include "applib/ui/layer.h"
@@ -64,6 +68,7 @@ typedef struct {
   char subtitle[64];
   char body[128];
   uint32_t icon;
+  Uuid id;  // storage id, so dismissing the card removes it from history
 } NotifEntry;
 
 static NotifEntry s_ring[NOTIF_RING];
@@ -120,6 +125,7 @@ void fw_notification_show(const char *title, const char *subtitle, const char *b
   uuid_generate(&item.header.id);
   item.attr_list = (AttributeList){ .num_attributes = n, .attributes = attrs };
   notification_storage_store(&item);
+  e->id = item.header.id;  // remember it so Dismiss can remove it from history
 
   // Live-refresh the launcher Notifications glance (subscribed to
   // PEBBLE_SYS_NOTIFICATION_EVENT) so it shows the new notification immediately.
@@ -210,6 +216,17 @@ static bool s_dismiss_pending;
 static void prv_dismiss_action(ActionMenu *menu, const ActionMenuItem *action, void *ctx) {
   (void)menu; (void)action; (void)ctx;
   s_dismiss_pending = true;
+
+  // Remove the dismissed notification from history so it no longer shows in the
+  // Notifications app or the launcher glance, matching the shipping behaviour.
+  const uint32_t idx = prv_current_index(&s_swap);
+  NotifEntry *e = &s_ring[idx % NOTIF_RING];
+  notification_storage_remove(&e->id);
+  extern void event_put(PebbleEvent * event);
+  PebbleEvent ev = {.type = PEBBLE_SYS_NOTIFICATION_EVENT};
+  ev.sys_notification.type = NotificationRemoved;
+  ev.sys_notification.notification_id = &e->id;
+  event_put(&ev);
 }
 
 static void prv_menu_did_close(ActionMenu *menu, const ActionMenuItem *performed, void *ctx) {
