@@ -102,6 +102,8 @@ static void prv_kernel_main(void *parameter) {
     do_not_disturb_init();
     // pin_db must be up before alarm_init: reloading persisted alarms re-adds
     // their timeline pins through alarm_pin_add -> pin_db.
+    extern void notification_storage_init(void);
+    notification_storage_init();
     extern void pin_db_init(void);
     pin_db_init();
     extern void alarm_init(void);

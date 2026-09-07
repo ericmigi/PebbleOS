@@ -270,6 +270,7 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/services/blob_db/timeline_item_storage.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/item.c"
   "${PEBBLEOS_ROOT}/src/fw/services/blob_db/pin_db.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/notifications/notification_storage.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/attributes_actions.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute_group.c"
   "${PEBBLEOS_ROOT}/src/fw/popups/alarm_popup.c"
@@ -697,6 +698,10 @@ set_source_files_properties(
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/services/alarms/alarm_pin.c"
   PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
+)
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/services/notifications/notification_storage.c"
+  PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-include;pbl/services/timeline/item.h"
 )
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/services/blob_db/pin_db.c"

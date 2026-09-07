@@ -87,21 +87,8 @@ bool bt_ctl_is_airplane_mode_on(void) { return false; }
 // do_not_disturb_is_active + alerts masks now come from the real
 // do_not_disturb.c and settings_system_glue.c.
 
-// ---------------------------------------------------------------------------
-// Notifications: empty store.
-// ---------------------------------------------------------------------------
-bool notification_storage_get(const Uuid *id, TimelineItem *item_out) {
-  (void)id;
-  (void)item_out;
-  return false;
-}
-
-void notification_storage_iterate(bool (*iter_callback)(void *data, SerializedTimelineItemHeader *
-                                                        header_id),
-                                  void *data) {
-  (void)iter_callback;
-  (void)data;
-}
+// Notifications: notification_storage_get/iterate now come from the real
+// services/notifications/notification_storage.c (blob_db brick 5).
 
 // ---------------------------------------------------------------------------
 // Weather / workout: no data.

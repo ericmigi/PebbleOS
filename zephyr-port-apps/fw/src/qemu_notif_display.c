@@ -25,6 +25,7 @@
 #include "kernel/pbl_malloc.h"
 #include "pbl/services/timeline/attribute.h"
 #include "pbl/services/timeline/item.h"
+#include "pbl/services/notifications/notification_storage.h"
 #include "pbl/services/timeline/layout_layer.h"
 #include "pbl/services/timeline/notification_layout.h"
 #include "pbl/services/timeline/swap_layer.h"
@@ -100,6 +101,24 @@ void fw_notification_show(const char *title, const char *subtitle, const char *b
   e->icon = icon;
   s_count++;
   s_pending = true;
+
+  // Persist to the real notification store (once per received notification) so
+  // the launcher Notifications glance shows the last one and it survives a
+  // reboot. notification_storage_store serializes a copy.
+  Attribute attrs[3];
+  uint8_t n = 0;
+  attrs[n++] = (Attribute){ .id = AttributeIdTitle, .cstring = e->title };
+  if (e->subtitle[0]) {
+    attrs[n++] = (Attribute){ .id = AttributeIdSubtitle, .cstring = e->subtitle };
+  }
+  attrs[n++] = (Attribute){ .id = AttributeIdBody, .cstring = e->body };
+  TimelineItem item = {0};
+  item.header.type = TimelineItemTypeNotification;
+  item.header.layout = LayoutIdNotification;
+  item.header.timestamp = rtc_get_time();
+  uuid_generate(&item.header.id);
+  item.attr_list = (AttributeList){ .num_attributes = n, .attributes = attrs };
+  notification_storage_store(&item);
 }
 
 // Absolute ring index of the swap_layer's current card (newest when none yet).
