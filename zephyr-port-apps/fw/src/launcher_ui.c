@@ -603,6 +603,54 @@ void fw_window_stack_push(Window *window) { prv_window_push(window); }
 
 void fw_window_stack_pop(void) { prv_window_pop(); }
 
+// Remove a window at any depth (shipping window_stack_remove). Removing the top
+// is a normal pop (runs disappear + unload). A buried window is only unlinked:
+// its owner (e.g. alarm_editor's prv_remove_windows, which removes the buried
+// type-menu / time-picker before manually freeing the shared AlarmEditorData)
+// frees the backing memory itself, so running the window's unload here would
+// double-free it. Leaving a buried window on the stack instead double-frees it
+// when it is later popped.
+// ponytail: unlinked buried windows do not run their unload, so a window that
+// owns heap via its unload (e.g. an option_menu's SettingsOptionMenuData) leaks
+// its internals. Real fix = shipping's deferred removed-window unload list.
+bool fw_window_stack_remove(Window *window) {
+  if (!window) {
+    return false;
+  }
+  int idx = -1;
+  for (int i = 0; i <= s_stack_top; i++) {
+    if (s_stack[i] == window) {
+      idx = i;
+      break;
+    }
+  }
+  if (idx < 0) {
+    return false;
+  }
+  if (idx == s_stack_top) {
+    prv_window_pop();
+    return true;
+  }
+  window->on_screen = false;
+  for (int i = idx; i < s_stack_top; i++) {
+    s_stack[i] = s_stack[i + 1];
+  }
+  s_stack[s_stack_top--] = NULL;
+  return true;
+}
+
+bool fw_window_stack_contains(Window *window) {
+  if (!window) {
+    return false;
+  }
+  for (int i = 0; i <= s_stack_top; i++) {
+    if (s_stack[i] == window) {
+      return true;
+    }
+  }
+  return false;
+}
+
 int fw_window_stack_depth(void) { return s_stack_top + 1; }
 
 Window *fw_window_stack_top(void) { return prv_top_window(); }

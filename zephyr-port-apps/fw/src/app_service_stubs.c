@@ -179,6 +179,7 @@ void app_window_stack_pop_all(const bool animated) { (void)animated; }
 // dismiss themselves through these).
 Window *fw_window_stack_top(void);
 void fw_window_stack_pop(void);
+bool fw_window_stack_remove(Window *window);
 
 Window *app_window_stack_pop(bool animated) {
   (void)animated;
@@ -189,11 +190,7 @@ Window *app_window_stack_pop(bool animated) {
 
 bool app_window_stack_remove(Window *window, bool animated) {
   (void)animated;
-  if (fw_window_stack_top() == window) {
-    fw_window_stack_pop();
-    return true;
-  }
-  return false;
+  return fw_window_stack_remove(window);
 }
 
 // ---------------------------------------------------------------------------
@@ -309,8 +306,11 @@ uint32_t app_launch_get_args(void) { return 0; }
 // Would push a "turn on tracking" dialog; no-op in the port (interaction path).
 void health_tracking_ui_feature_show_disabled(void) {}
 
-// The port tracks a single visible window (launcher_ui.c); good enough to answer
-// "is this window somewhere in the stack" for the alarm editor's insert logic.
+// "Is this window anywhere in the stack" — must scan the whole stack, not just
+// the top: alarm_editor's prv_remove_windows gates its buried type-menu /
+// time-picker removals on this, and a top-only answer left them on the stack to
+// be double-freed later (their unload frees the already-freed AlarmEditorData).
+bool fw_window_stack_contains(Window *window);
 bool app_window_stack_contains_window(Window *window) {
-  return window && window == app_window_stack_get_top_window();
+  return fw_window_stack_contains(window);
 }
