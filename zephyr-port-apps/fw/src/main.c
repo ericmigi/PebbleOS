@@ -102,6 +102,13 @@ static void prv_kernel_main(void *parameter) {
     do_not_disturb_init();
     extern void alarm_init(void);
     alarm_init();
+    // Shipping enables the alarm service via the services_normal registry, which
+    // the port does not compile; without this s_alarms_enabled stays false and a
+    // firing alarm never posts PEBBLE_ALARM_CLOCK_EVENT.
+    extern void alarm_service_enable_alarms(bool enable);
+    alarm_service_enable_alarms(true);
+    extern void fw_alarm_alert_init(void);
+    fw_alarm_alert_init();
     extern void fw_qemu_notif_rx_init(void);
     fw_qemu_notif_rx_init();
   }
