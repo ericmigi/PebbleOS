@@ -35,6 +35,26 @@ extern void fw_music_set_progress(uint32_t pos_ms, uint32_t len_ms);
 
 static uint32_t prv_rd32le(const uint8_t *p);
 
+// Live-refresh events: the music app + launcher glances subscribe to
+// PEBBLE_MEDIA_EVENT / PEBBLE_WEATHER_EVENT, so emitting them after an inject
+// makes an already-open screen update instead of only refreshing on re-render.
+extern void event_put(PebbleEvent *event);
+extern MusicPlayState music_get_playback_state(void);
+
+static void prv_emit_media(PebbleMediaEventType type) {
+  PebbleEvent e = {.type = PEBBLE_MEDIA_EVENT};
+  e.media.type = type;
+  if (type == PebbleMediaEventTypePlaybackStateChanged) {
+    e.media.playback_state = music_get_playback_state();
+  }
+  event_put(&e);
+}
+
+static void prv_emit_weather(void) {
+  PebbleEvent e = {.type = PEBBLE_WEATHER_EVENT};
+  event_put(&e);
+}
+
 // Port-custom weather endpoint (no phone on the qemu shell). Payload:
 // [loc_len:1][loc][temp:2 LE signed][type:1][phrase_len:1][phrase].
 #define WEATHER_ENDPOINT 0x0021
@@ -64,6 +84,7 @@ static void prv_handle_weather(const uint8_t *data, uint16_t pp_len) {
     return;
   }
   fw_weather_set(loc, loc_len, temp, type, (const char *)iter, phrase_len);
+  prv_emit_weather();
 }
 
 // Music now-playing on endpoint 0x0020: [cmd:1][artist][album][title], each
@@ -77,6 +98,7 @@ static void prv_handle_music(const uint8_t *data, uint16_t pp_len) {
     // play_state byte is used here.
     if (pp_len >= 2) {
       fw_music_set_play_state(data[1]);
+      prv_emit_media(PebbleMediaEventTypePlaybackStateChanged);
     }
     return;
   }
@@ -107,6 +129,8 @@ static void prv_handle_music(const uint8_t *data, uint16_t pp_len) {
   } else {
     fw_music_set_progress(0, 0);
   }
+  prv_emit_media(PebbleMediaEventTypeNowPlayingChanged);
+  prv_emit_media(PebbleMediaEventTypeTrackPosChanged);
 }
 #define BLOB_DB_CMD_INSERT 0x01
 #define BLOB_DB_CMD_INSERT_TS 0x0D
