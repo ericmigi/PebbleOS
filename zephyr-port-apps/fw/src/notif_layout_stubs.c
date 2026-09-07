@@ -42,9 +42,8 @@ ResAppNum app_install_get_app_icon_bank(const AppInstallEntry *entry) {
   return 0;
 }
 
-void timeline_item_free_allocated_buffer(TimelineItem *item) {
-  (void)item;
-}
+// timeline_item_free_allocated_buffer now comes from the real
+// services/timeline/item.c (compiled for the blob_db item store).
 
 // Lifted from lib/util/string.c (whole file needs ctype under the minimal libc;
 // this is the only symbol the timeline layout engine uses).

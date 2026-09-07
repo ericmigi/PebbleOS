@@ -26,6 +26,12 @@ size_t strftime(char *s, size_t max, const char *format, const struct tm *tm);
 // is timegm (fw/src/apps_port_glue.c).
 time_t mktime(struct tm *tm_val);
 
+// Local<->UTC conversions used by timeline item.c to normalize all-day /
+// floating pin timestamps. The port renders UTC, so both are identities
+// (fw/src/timeline_glue.c).
+time_t time_local_to_utc(time_t local_time);
+time_t time_utc_to_local(time_t utc_time);
+
 #define DAYS_PER_WEEK 7
 #define MONTHS_PER_YEAR 12
 #define MS_PER_SECOND (1000)

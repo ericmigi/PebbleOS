@@ -266,6 +266,10 @@ target_sources(app PRIVATE
   src/app_service_stubs.c
   src/alarm_glue.c
   src/alarm_alert_glue.c
+  src/blob_db_selftest.c
+  src/timeline_glue.c
+  "${PEBBLEOS_ROOT}/src/fw/services/blob_db/timeline_item_storage.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/item.c"
   "${PEBBLEOS_ROOT}/src/fw/popups/alarm_popup.c"
   "${PEBBLEOS_ROOT}/src/fw/services/alarms/alarm.c"
   src/app_ui_window_stubs.c
@@ -679,6 +683,10 @@ set_source_files_properties(
 # Alarms app trio: same sign_extend pre-include as music, with its launcher /
 # menu / dialog icon resource IDs defined to 0 (cosmetic; the port has no
 # generated resource IDs).
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/item.c"
+  PROPERTIES COMPILE_OPTIONS "-include;util/time/time.h"
+)
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/popups/alarm_popup.c"
   PROPERTIES
