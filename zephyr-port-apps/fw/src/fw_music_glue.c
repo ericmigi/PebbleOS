@@ -22,6 +22,8 @@ static char s_title[FW_MUSIC_LEN];
 static char s_artist[FW_MUSIC_LEN];
 static char s_album[FW_MUSIC_LEN];
 static MusicPlayState s_play_state = MusicPlayStatePlaying;
+static uint32_t s_pos_ms;
+static uint32_t s_len_ms;
 
 static void prv_copy(char *dst, const char *src, size_t src_len) {
   size_t n = src_len < FW_MUSIC_LEN - 1 ? src_len : FW_MUSIC_LEN - 1;
@@ -37,6 +39,15 @@ void fw_music_set_now_playing(const char *title, size_t title_len, const char *a
   prv_copy(s_album, album, album_len);
   s_has_now_playing = (s_title[0] || s_artist[0] || s_album[0]);
   s_play_state = MusicPlayStatePlaying;  // a fresh track defaults to playing
+  s_pos_ms = 0;
+  s_len_ms = 0;  // cleared until a progress update arrives
+}
+
+// Called by the music endpoint after a now-playing update (track position +
+// length, milliseconds). A non-zero length turns on progress reporting.
+void fw_music_set_progress(uint32_t pos_ms, uint32_t len_ms) {
+  s_pos_ms = pos_ms;
+  s_len_ms = len_ms;
 }
 
 // Called by the music endpoint on a PlayStateInfo message. `raw` is the wire
@@ -80,3 +91,16 @@ bool music_needs_user_to_start_playback_on_phone(void) { return !s_has_now_playi
 MusicPlayState music_get_playback_state(void) {
   return s_has_now_playing ? s_play_state : MusicPlayStateInvalid;
 }
+
+bool music_is_progress_reporting_supported(void) { return s_len_ms > 0; }
+
+void music_get_pos(uint32_t *track_pos_ms, uint32_t *track_length_ms) {
+  if (track_pos_ms) {
+    *track_pos_ms = s_pos_ms;
+  }
+  if (track_length_ms) {
+    *track_length_ms = s_len_ms;
+  }
+}
+
+uint32_t music_get_ms_since_pos_last_updated(void) { return 0; }

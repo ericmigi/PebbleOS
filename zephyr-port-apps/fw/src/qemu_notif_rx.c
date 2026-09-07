@@ -31,6 +31,9 @@
 extern void fw_music_set_now_playing(const char *title, size_t title_len, const char *artist,
                                      size_t artist_len, const char *album, size_t album_len);
 extern void fw_music_set_play_state(uint8_t raw);
+extern void fw_music_set_progress(uint32_t pos_ms, uint32_t len_ms);
+
+static uint32_t prv_rd32le(const uint8_t *p);
 
 // Port-custom weather endpoint (no phone on the qemu shell). Payload:
 // [loc_len:1][loc][temp:2 LE signed][type:1][phrase_len:1][phrase].
@@ -98,6 +101,12 @@ static void prv_handle_music(const uint8_t *data, uint16_t pp_len) {
   }
   // Wire order is artist, album, title.
   fw_music_set_now_playing(strs[2], lens[2], strs[0], lens[0], strs[1], lens[1]);
+  // Optional trailing progress: pos_ms(4 LE) + len_ms(4 LE).
+  if (iter + 8 <= end) {
+    fw_music_set_progress(prv_rd32le(iter), prv_rd32le(iter + 4));
+  } else {
+    fw_music_set_progress(0, 0);
+  }
 }
 #define BLOB_DB_CMD_INSERT 0x01
 #define BLOB_DB_CMD_INSERT_TS 0x0D

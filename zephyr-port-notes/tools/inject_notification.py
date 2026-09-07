@@ -101,9 +101,12 @@ def _mstr(text):
     return struct.pack('<B', len(b)) + b
 
 
-def music_now_playing(artist, album, title):
-    # Wire order (services/music/endpoint.c): cmd | artist | album | title
-    return struct.pack('<B', MUSIC_CMD_NOW_PLAYING) + _mstr(artist) + _mstr(album) + _mstr(title)
+def music_now_playing(artist, album, title, pos_ms=0, len_ms=0):
+    # cmd | artist | album | title | [pos_ms(4 LE) | len_ms(4 LE)] (port extension)
+    msg = struct.pack('<B', MUSIC_CMD_NOW_PLAYING) + _mstr(artist) + _mstr(album) + _mstr(title)
+    if len_ms:
+        msg += struct.pack('<II', pos_ms, len_ms)
+    return msg
 
 
 _MUSIC_STATE = {'paused': 0, 'playing': 1, 'rewinding': 2, 'forwarding': 3}
@@ -151,6 +154,8 @@ def main():
     ap.add_argument('--temp', type=int, default=68)
     ap.add_argument('--wtype', type=int, default=7, help='WeatherType numeric id (7=Sun)')
     ap.add_argument('--phrase', default='Sunny')
+    ap.add_argument('--pos', type=int, default=0, help='music track position ms')
+    ap.add_argument('--length', type=int, default=0, help='music track length ms (enables progress bar)')
     ap.add_argument('--ancs', action='store_true',
                     help='send a real ANCS attribute-response over PROTO_ANCS instead of a BlobDB insert')
     args = ap.parse_args()
@@ -164,7 +169,7 @@ def main():
         frame = qemu_frame(PROTO_SPP, pp)
         item_id = 'music-state:' + args.music_state
     elif args.music:
-        pp = pebble_protocol(EP_MUSIC, music_now_playing(args.artist, args.album, args.title))
+        pp = pebble_protocol(EP_MUSIC, music_now_playing(args.artist, args.album, args.title, args.pos, args.length))
         frame = qemu_frame(PROTO_SPP, pp)
         item_id = 'music:' + args.title
     elif args.ancs:

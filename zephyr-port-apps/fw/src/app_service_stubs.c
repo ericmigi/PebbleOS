@@ -99,24 +99,11 @@ bool music_get_player_name(char *player_name_out) {
   return false;
 }
 
-uint32_t music_get_ms_since_pos_last_updated(void) { return 0; }
-
-void music_get_pos(uint32_t *track_pos_ms, uint32_t *track_length_ms) {
-  if (track_pos_ms) {
-    *track_pos_ms = 0;
-  }
-  if (track_length_ms) {
-    *track_length_ms = 0;
-  }
-}
-
 int32_t music_get_playback_rate_percent(void) { return 0; }
 
 uint8_t music_get_volume_percent(void) { return 0; }
 
 bool music_is_playback_state_reporting_supported(void) { return false; }
-
-bool music_is_progress_reporting_supported(void) { return false; }
 
 bool music_is_volume_reporting_supported(void) { return false; }
 
