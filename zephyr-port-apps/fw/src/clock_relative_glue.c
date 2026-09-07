@@ -202,6 +202,11 @@ void clock_get_until_time(char *buffer, int buf_size, time_t timestamp, int max_
   prv_clock_get_relative_time_string(buffer, buf_size, timestamp, false, max_relative_hrs, true);
 }
 
+void clock_get_until_time_without_fulltime(char *buffer, int buf_size, time_t timestamp,
+                                           int max_relative_hrs) {
+  prv_clock_get_relative_time_string(buffer, buf_size, timestamp, true, max_relative_hrs, false);
+}
+
 size_t clock_get_time_number(char *number_buffer, size_t number_buffer_size, time_t timestamp) {
   const size_t written =
       prv_format_time(number_buffer, number_buffer_size,

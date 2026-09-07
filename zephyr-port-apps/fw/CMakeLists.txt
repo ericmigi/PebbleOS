@@ -273,6 +273,8 @@ target_sources(app PRIVATE
   src/timeline_glue.c
   "${PEBBLEOS_ROOT}/src/fw/services/blob_db/timeline_item_storage.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/item.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/alarm_layout.c"
   "${PEBBLEOS_ROOT}/src/fw/services/blob_db/pin_db.c"
   "${PEBBLEOS_ROOT}/src/fw/services/notifications/notification_storage.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/attributes_actions.c"
@@ -716,6 +718,11 @@ set_source_files_properties(
   PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-include;pbl/services/timeline/item.h"
 )
 set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_layer.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/timeline/alarm_layout.c"
+  PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
+)
+set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/services/blob_db/pin_db.c"
   PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
 )
@@ -931,7 +938,6 @@ target_sources(app PRIVATE
   src/action_menu_glue.c
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_node.c"
-  src/layout_layer_glue.c
   "${PEBBLEOS_ROOT}/src/fw/util/stringlist.c"
   src/notif_layout_stubs.c
   "${PEBBLEOS_ROOT}/lib/util/uuid.c"
@@ -1026,7 +1032,6 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/swap_layer.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/layout_node.c"
-  src/layout_layer_glue.c
   "${PEBBLEOS_ROOT}/src/fw/util/stringlist.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/notif_layout_stubs.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/crumbs_layer.c"

@@ -13,19 +13,6 @@ time_t time_local_to_utc(time_t local_time) { return local_time; }
 time_t time_utc_to_local(time_t utc_time) { return utc_time; }
 
 #include <stdbool.h>
-#include "pbl/services/timeline/layout_layer.h"
-
-// Layout attribute-verification gate. Shipping dispatches per LayoutId to the
-// per-layout verifiers (layout_layer.c), which pulls every layout module and
-// its closure. The port's item store only needs the gate to pass so items
-// round-trip; accept all until the render-side layouts are ported.
-// ponytail: returns true unconditionally. Port layout_layer.c + the per-layout
-// verifiers when timeline rendering (pin cards) lands.
-bool layout_verify(bool existing_attributes[], LayoutId id) {
-  (void)existing_attributes;
-  (void)id;
-  return true;
-}
 
 // --- pin_db insert-path closure (brick 2) ----------------------------------
 // pin_db_insert_item pulls app-cache / app-fetch / blob-db-sync decisions and a
@@ -85,3 +72,14 @@ status_t reminder_db_delete_with_parent(const TimelineItemId *parent_id) {
   (void)parent_id;
   return S_SUCCESS;
 }
+
+// layout_layer.c's verifier table references every layout family; the port only
+// compiles alarm_layout (+ notification_layout). The other families have no pins
+// in the port, so their verifiers are permissive stubs (accept). alarm and
+// notification use their real verifiers.
+#include <stdbool.h>
+bool calendar_layout_verify(bool existing_attributes[]) { (void)existing_attributes; return true; }
+bool generic_layout_verify(bool existing_attributes[]) { (void)existing_attributes; return true; }
+bool health_layout_verify(bool existing_attributes[]) { (void)existing_attributes; return true; }
+bool sports_layout_verify(bool existing_attributes[]) { (void)existing_attributes; return true; }
+bool weather_layout_verify(bool existing_attributes[]) { (void)existing_attributes; return true; }

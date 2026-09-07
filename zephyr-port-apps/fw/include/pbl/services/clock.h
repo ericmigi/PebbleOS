@@ -11,6 +11,7 @@ bool clock_is_24h_style(void);
 // Buffer lengths for formatted time strings, from shipping clock.h.
 #define TIME_STRING_REQUIRED_LENGTH 20
 #define TIME_STRING_TIME_LENGTH 10
+#define TIME_STRING_DAY_DATE_LENGTH 3
 
 #include <time.h>
 
@@ -50,5 +51,6 @@ void clock_hour_and_minute_add(int *hour, int *minute, int delta_minutes);
 // (lifted from shipping clock/service.c).
 void clock_get_since_time(char *buffer, int buf_size, time_t timestamp);
 void clock_get_until_time(char *buffer, int buf_size, time_t timestamp, int max_relative_hrs);
+void clock_get_until_time_without_fulltime(char *buffer, int buf_size, time_t timestamp, int max_relative_hrs);
 size_t clock_get_time_number(char *buffer, size_t buffer_size, time_t timestamp);
 size_t clock_get_time_word(char *buffer, size_t buffer_size, time_t timestamp);
