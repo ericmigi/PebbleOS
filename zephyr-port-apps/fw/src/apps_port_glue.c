@@ -607,7 +607,8 @@ void clock_get_time_tm(struct tm *time_tm) {
   gmtime_r(&now, time_tm);
 }
 
-void clock_set_24h_style(bool is_24h) { (void)is_24h; }
+void shell_prefs_set_clock_24h_style(bool is24h);
+void clock_set_24h_style(bool is_24h) { shell_prefs_set_clock_24h_style(is_24h); }
 
 // Minimal-libc gap; the port's wall clock is UTC, so mktime == timegm.
 time_t mktime(struct tm *tm_val) { return timeutil_timegm(tm_val); }

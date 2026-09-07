@@ -45,10 +45,11 @@ struct tm *sys_localtime_r(const time_t *timep, struct tm *result) {
   return gmtime_r(timep, result);
 }
 
+// Delegate to the real settings_file-backed pref (mirrors clock/service.c) so
+// the Date & Time time-format toggle takes effect and survives a reboot.
+bool shell_prefs_get_clock_24h_style(void);
 bool clock_is_24h_style(void) {
-  // The FreeRTOS reference under QEMU runs with the 12h default (Settings ->
-  // Date & Time -> Time Format shows "12h").
-  return false;
+  return shell_prefs_get_clock_24h_style();
 }
 
 bool sys_app_is_watchface(void) {
