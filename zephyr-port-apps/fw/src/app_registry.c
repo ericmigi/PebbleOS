@@ -29,10 +29,10 @@ typedef const PebbleProcessMd *(*FwSystemAppMdFn)(void);
 #ifdef FW_REAL_SHELL
 #include "resource/resource_ids.auto.h"
 
-// Real-launcher row placeholder: the shipping UUID/name/icon key the
-// notifications launcher glance; the app itself is not ported, so launching it
-// returns straight to the launcher.
-static void prv_notifications_main(void) {}
+// Launcher "Notifications" entry: show the stored notification history via the
+// port's minimal notifications app (reads the real notification_storage).
+extern void fw_notifications_app_main(void);
+static void prv_notifications_main(void) { fw_notifications_app_main(); }
 
 static const PebbleProcessMd *prv_notifications_md(void) {
   static const PebbleProcessMdSystem s_notifications_md = {
