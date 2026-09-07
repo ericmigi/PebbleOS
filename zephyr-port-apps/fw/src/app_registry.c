@@ -47,6 +47,29 @@ static const PebbleProcessMd *prv_notifications_md(void) {
   };
   return (const PebbleProcessMd *)&s_notifications_md;
 }
+
+extern void fw_timeline_future_app_main(void);
+extern void fw_timeline_past_app_main(void);
+
+static const PebbleProcessMd *prv_timeline_future_md(void) {
+  static const PebbleProcessMdSystem s_md = {
+    .common = { .main_func = fw_timeline_future_app_main,
+                .uuid = {0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f, 0x70, 0x81,
+                         0x92, 0xa3, 0xb4, 0xc5, 0xd6, 0xe7, 0xf8, 0x10} },
+    .name = "Timeline Future",
+  };
+  return (const PebbleProcessMd *)&s_md;
+}
+
+static const PebbleProcessMd *prv_timeline_past_md(void) {
+  static const PebbleProcessMdSystem s_md = {
+    .common = { .main_func = fw_timeline_past_app_main,
+                .uuid = {0x2a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f, 0x70, 0x81,
+                         0x92, 0xa3, 0xb4, 0xc5, 0xd6, 0xe7, 0xf8, 0x20} },
+    .name = "Timeline Past",
+  };
+  return (const PebbleProcessMd *)&s_md;
+}
 #endif
 
 typedef struct {
@@ -73,8 +96,13 @@ static const FwSystemApp s_system_apps[] = {
   { -5, "Alarms", alarms_app_get_info },
   { -6, "Watchfaces", watchfaces_get_app_info },
   { -9, "Quick Launch" },
+#ifdef FW_REAL_SHELL
+  { -10, "Timeline Future", prv_timeline_future_md },
+  { -96, "Timeline Past", prv_timeline_past_md },
+#else
   { -10, "Timeline Future" },
   { -96, "Timeline Past" },
+#endif
   { -54, "Launcher" },
   { -59, "Weather" },
   { -95, "Workout" },

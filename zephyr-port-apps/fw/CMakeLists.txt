@@ -267,6 +267,7 @@ target_sources(app PRIVATE
   src/alarm_glue.c
   src/alarm_alert_glue.c
   src/notifications_app.c
+  src/timeline_app.c
   src/timeline_glue.c
   "${PEBBLEOS_ROOT}/src/fw/services/blob_db/timeline_item_storage.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/item.c"
@@ -691,6 +692,10 @@ set_source_files_properties(
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/item.c"
   PROPERTIES COMPILE_OPTIONS "-include;util/time/time.h"
+)
+set_source_files_properties(
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/timeline_app.c"
+  PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
 )
 set_source_files_properties(
   "${CMAKE_CURRENT_SOURCE_DIR}/src/notifications_app.c"
