@@ -266,7 +266,6 @@ target_sources(app PRIVATE
   src/app_service_stubs.c
   src/alarm_glue.c
   src/alarm_alert_glue.c
-  src/blob_db_selftest.c
   src/timeline_glue.c
   "${PEBBLEOS_ROOT}/src/fw/services/blob_db/timeline_item_storage.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/item.c"
@@ -275,6 +274,7 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/attribute_group.c"
   "${PEBBLEOS_ROOT}/src/fw/popups/alarm_popup.c"
   "${PEBBLEOS_ROOT}/src/fw/services/alarms/alarm.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/alarms/alarm_pin.c"
   src/app_ui_window_stubs.c
   src/button_zephyr.c
   src/input_service.c
@@ -692,7 +692,10 @@ set_source_files_properties(
 )
 set_source_files_properties(
   "${CMAKE_CURRENT_SOURCE_DIR}/src/timeline_glue.c"
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/blob_db_selftest.c"
+  PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
+)
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/services/alarms/alarm_pin.c"
   PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
 )
 set_source_files_properties(

@@ -100,6 +100,10 @@ static void prv_kernel_main(void *parameter) {
     alerts_preferences_init();
     extern void do_not_disturb_init(void);
     do_not_disturb_init();
+    // pin_db must be up before alarm_init: reloading persisted alarms re-adds
+    // their timeline pins through alarm_pin_add -> pin_db.
+    extern void pin_db_init(void);
+    pin_db_init();
     extern void alarm_init(void);
     alarm_init();
     // Shipping enables the alarm service via the services_normal registry, which
@@ -111,8 +115,6 @@ static void prv_kernel_main(void *parameter) {
     fw_alarm_alert_init();
     extern void fw_qemu_notif_rx_init(void);
     fw_qemu_notif_rx_init();
-    extern void fw_blob_db_selftest(void);
-    fw_blob_db_selftest();
   }
 
   // Board drivers / watchdog / analytics: real Zephyr-backed bring-up, after PFS.

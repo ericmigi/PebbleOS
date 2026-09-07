@@ -76,3 +76,12 @@ status_t blob_db_sync_record(BlobDBId db_id, const void *key, int key_len, time_
   (void)last_updated;
   return S_SUCCESS;
 }
+
+// pin_db_delete cascades to child reminders; the port has no reminder_db, so
+// there is nothing to delete.
+// ponytail: stub until reminder_db is ported.
+#include "pbl/services/blob_db/reminder_db.h"
+status_t reminder_db_delete_with_parent(const TimelineItemId *parent_id) {
+  (void)parent_id;
+  return S_SUCCESS;
+}

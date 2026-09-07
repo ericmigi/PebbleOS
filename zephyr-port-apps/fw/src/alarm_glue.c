@@ -103,17 +103,8 @@ bool cron_job_unschedule(CronJob *job) {
   return true;
 }
 
-// --- alarm timeline pins (milestone 2) --------------------------------------
-
-void alarm_pin_add(time_t alarm_time, AlarmId id, AlarmType type, AlarmKind kind, Uuid *uuid_out) {
-  (void)alarm_time;
-  (void)id;
-  (void)type;
-  (void)kind;
-  (void)uuid_out;
-}
-
-void alarm_pin_remove(Uuid *alarm_id) { (void)alarm_id; }
+// alarm_pin_add / alarm_pin_remove now come from the real
+// services/alarms/alarm_pin.c (compiled on pin_db, blob_db brick 3).
 
 // --- activity (smart alarm) + timeline refresh stubs ------------------------
 // No activity tracking in the port -> smart alarms behave as basic; no sleep
