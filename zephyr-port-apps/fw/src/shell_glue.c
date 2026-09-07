@@ -236,9 +236,17 @@ int health_util_format_hours_minutes_seconds(char *buffer, size_t buffer_size, i
 
 void *_applib_type_zalloc_GBitmapSequence(void) { return task_zalloc(sizeof(GBitmapSequence)); }
 
+// Map each WeatherType to its timeline icon (mirrors weather_types.c's table),
+// so the launcher Weather glance icon matches the conditions.
 TimelineResourceId weather_type_get_timeline_resource_id(WeatherType weather_type) {
-  (void)weather_type;
-  return TIMELINE_RESOURCE_TIMELINE_WEATHER;
+  switch (weather_type) {
+#define WEATHER_TYPE_TUPLE(id, numeric_id, bg_color, text_color, timeline_resource_id) \
+  case WeatherType_##id:                                                               \
+    return timeline_resource_id;
+#include "pbl/services/weather/weather_type_tuples.def"
+    default:
+      return TIMELINE_RESOURCE_TIMELINE_WEATHER;
+  }
 }
 
 bool workout_utils_find_ongoing_activity_session(ActivitySession *session_out) {
