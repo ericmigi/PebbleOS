@@ -13,6 +13,7 @@
 
 #include "applib/fonts/fonts.h"
 #include "applib/ui/layer.h"
+#include "applib/ui/click.h"
 #include "applib/ui/menu_layer.h"
 #include "applib/ui/menu_cell_layer.h"
 #include "applib/ui/scroll_layer.h"
@@ -25,6 +26,8 @@
 
 extern Window *window_create(void);
 extern void app_window_stack_push(struct Window *window, bool animated);
+extern Window *app_window_stack_pop(bool animated);
+extern void window_single_click_subscribe(ButtonId button_id, ClickHandler handler);
 extern void app_event_loop(void);
 
 #define MAX_LISTED 24
@@ -34,6 +37,7 @@ static int s_count;
 static char s_title[MAX_LISTED][64];
 static char s_subtitle[MAX_LISTED][96];
 static char s_body[MAX_LISTED][256];
+static Uuid s_row_uuid[MAX_LISTED];
 
 static MenuLayer s_menu;
 static ScrollLayer s_detail_scroll;
@@ -67,6 +71,7 @@ static void prv_load(void) {
             sizeof(s_subtitle[0]) - 1);
     strncpy(s_body[out], attribute_get_string(&item.attr_list, AttributeIdBody, empty),
             sizeof(s_body[0]) - 1);
+    s_row_uuid[out] = tmp[i];
     timeline_item_free_allocated_buffer(&item);
     out++;
   }
@@ -90,13 +95,34 @@ static void prv_draw_row(GContext *gctx, const Layer *cell, MenuIndex *idx, void
   menu_cell_basic_draw(gctx, cell, s_title[r], s_subtitle[r][0] ? s_subtitle[r] : NULL, NULL);
 }
 
+static int s_sel_row;  // row whose detail is currently open
+
+// SELECT inside the detail view dismisses that notification: remove it from the
+// store, pop back to the list, reload the menu. UP/DOWN still scroll the body;
+// BACK returns without dismissing. (Long-SELECT on the list row is not usable —
+// a held key is not injectable in qemu — so dismiss lives on the detail SELECT.)
+static void prv_detail_dismiss(ClickRecognizerRef recognizer, void *context) {
+  (void)recognizer;
+  (void)context;
+  notification_storage_remove(&s_row_uuid[s_sel_row]);
+  app_window_stack_pop(true);
+  prv_load();
+  menu_layer_reload_data(&s_menu);
+}
+
+static void prv_detail_click_config(void *context) {
+  (void)context;
+  window_single_click_subscribe(BUTTON_ID_SELECT, prv_detail_dismiss);
+}
+
 static void prv_select(MenuLayer *ml, MenuIndex *idx, void *ctx) {
   (void)ml;
   (void)ctx;
   if (s_count == 0) {
     return;
   }
-  const int r = idx->row;
+  s_sel_row = idx->row;
+  const int r = s_sel_row;
 
   Window *window = window_create();
   Layer *root = window_get_root_layer(window);
@@ -114,6 +140,8 @@ static void prv_select(MenuLayer *ml, MenuIndex *idx, void *ctx) {
   text_layer_set_size(&s_detail_text, GSize(bounds.size.w - 8, h));
   scroll_layer_add_child(&s_detail_scroll, text_layer_get_layer(&s_detail_text));
   scroll_layer_set_content_size(&s_detail_scroll, GSize(bounds.size.w, h));
+  const ScrollLayerCallbacks scb = { .click_config_provider = prv_detail_click_config };
+  scroll_layer_set_callbacks(&s_detail_scroll, scb);
   scroll_layer_set_click_config_onto_window(&s_detail_scroll, window);
   layer_add_child(root, scroll_layer_get_layer(&s_detail_scroll));
   app_window_stack_push(window, true);
