@@ -21,6 +21,7 @@ static bool s_has_now_playing;
 static char s_title[FW_MUSIC_LEN];
 static char s_artist[FW_MUSIC_LEN];
 static char s_album[FW_MUSIC_LEN];
+static MusicPlayState s_play_state = MusicPlayStatePlaying;
 
 static void prv_copy(char *dst, const char *src, size_t src_len) {
   size_t n = src_len < FW_MUSIC_LEN - 1 ? src_len : FW_MUSIC_LEN - 1;
@@ -35,6 +36,29 @@ void fw_music_set_now_playing(const char *title, size_t title_len, const char *a
   prv_copy(s_artist, artist, artist_len);
   prv_copy(s_album, album, album_len);
   s_has_now_playing = (s_title[0] || s_artist[0] || s_album[0]);
+  s_play_state = MusicPlayStatePlaying;  // a fresh track defaults to playing
+}
+
+// Called by the music endpoint on a PlayStateInfo message. `raw` is the wire
+// MusicEndpointPlaybackState (0=paused,1=playing,2=rewinding,3=forwarding).
+void fw_music_set_play_state(uint8_t raw) {
+  switch (raw) {
+    case 0:
+      s_play_state = MusicPlayStatePaused;
+      break;
+    case 1:
+      s_play_state = MusicPlayStatePlaying;
+      break;
+    case 2:
+      s_play_state = MusicPlayStateRewinding;
+      break;
+    case 3:
+      s_play_state = MusicPlayStateForwarding;
+      break;
+    default:
+      s_play_state = MusicPlayStateUnknown;
+      break;
+  }
 }
 
 void music_get_now_playing(char *title, char *artist, char *album) {
@@ -54,5 +78,5 @@ bool music_has_now_playing(void) { return s_has_now_playing; }
 bool music_needs_user_to_start_playback_on_phone(void) { return !s_has_now_playing; }
 
 MusicPlayState music_get_playback_state(void) {
-  return s_has_now_playing ? MusicPlayStatePlaying : MusicPlayStateInvalid;
+  return s_has_now_playing ? s_play_state : MusicPlayStateInvalid;
 }

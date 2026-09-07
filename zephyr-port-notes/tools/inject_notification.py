@@ -92,6 +92,7 @@ def ancs_notif_attr_response(title, subtitle, body, uid=1,
 
 EP_MUSIC = 0x0020
 MUSIC_CMD_NOW_PLAYING = 0x10
+MUSIC_CMD_PLAY_STATE = 0x11
 
 
 def _mstr(text):
@@ -102,6 +103,16 @@ def _mstr(text):
 def music_now_playing(artist, album, title):
     # Wire order (services/music/endpoint.c): cmd | artist | album | title
     return struct.pack('<B', MUSIC_CMD_NOW_PLAYING) + _mstr(artist) + _mstr(album) + _mstr(title)
+
+
+_MUSIC_STATE = {'paused': 0, 'playing': 1, 'rewinding': 2, 'forwarding': 3}
+
+
+def music_play_state(state):
+    # PlayStateInfo: cmd | play_state(1) | track_pos_ms(4 LE) | play_rate(4 LE) |
+    # shuffle(1) | repeat(1)
+    return struct.pack('<BBiiBB', MUSIC_CMD_PLAY_STATE, _MUSIC_STATE.get(state, 1),
+                       -1, 100, 0, 0)
 
 
 def pebble_protocol(endpoint, payload):
@@ -124,12 +135,17 @@ def main():
     ap.add_argument('--music', action='store_true',
                     help='send a now-playing update on the music endpoint (0x0020)')
     ap.add_argument('--artist', default='Some Artist')
+    ap.add_argument('--music-state', dest='music_state', choices=['playing','paused','rewinding','forwarding'], default=None, help='send a music play-state update (endpoint 0x0020 cmd 0x11)')
     ap.add_argument('--album', default='Some Album')
     ap.add_argument('--ancs', action='store_true',
                     help='send a real ANCS attribute-response over PROTO_ANCS instead of a BlobDB insert')
     args = ap.parse_args()
 
-    if args.music:
+    if args.music_state:
+        pp = pebble_protocol(EP_MUSIC, music_play_state(args.music_state))
+        frame = qemu_frame(PROTO_SPP, pp)
+        item_id = 'music-state:' + args.music_state
+    elif args.music:
         pp = pebble_protocol(EP_MUSIC, music_now_playing(args.artist, args.album, args.title))
         frame = qemu_frame(PROTO_SPP, pp)
         item_id = 'music:' + args.title

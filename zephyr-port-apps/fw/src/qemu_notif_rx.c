@@ -26,14 +26,27 @@
 #define BLOB_DB_ENDPOINT 0xb1db
 #define MUSIC_ENDPOINT 0x0020
 #define MUSIC_CMD_NOW_PLAYING 0x10
+#define MUSIC_CMD_PLAY_STATE 0x11
 
 extern void fw_music_set_now_playing(const char *title, size_t title_len, const char *artist,
                                      size_t artist_len, const char *album, size_t album_len);
+extern void fw_music_set_play_state(uint8_t raw);
 
 // Music now-playing on endpoint 0x0020: [cmd:1][artist][album][title], each
 // string a 1-byte length prefix + bytes (mirrors services/music/endpoint.c).
 static void prv_handle_music(const uint8_t *data, uint16_t pp_len) {
-  if (pp_len < 1 || data[0] != MUSIC_CMD_NOW_PLAYING) {
+  if (pp_len < 1) {
+    return;
+  }
+  if (data[0] == MUSIC_CMD_PLAY_STATE) {
+    // PlayStateInfo: [cmd][play_state:1][track_pos:4][rate:4]...; only the
+    // play_state byte is used here.
+    if (pp_len >= 2) {
+      fw_music_set_play_state(data[1]);
+    }
+    return;
+  }
+  if (data[0] != MUSIC_CMD_NOW_PLAYING) {
     return;
   }
   const uint8_t *iter = data + 1;
