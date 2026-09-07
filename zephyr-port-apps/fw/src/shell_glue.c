@@ -61,17 +61,8 @@ void *task_zalloc_check(size_t bytes) {
   return ptr;
 }
 
-// ---------------------------------------------------------------------------
-// Battery: qemu has no battery model wired; mirror the reference emulator's
-// steady state (full, unplugged).
-// ---------------------------------------------------------------------------
-BatteryChargeState battery_state_service_peek(void) {
-  return (BatteryChargeState) {
-    .charge_percent = 100,
-    .is_charging = false,
-    .is_plugged = false,
-  };
-}
+// Battery: battery_state_service_peek now lives in fw_battery_glue.c, backed by
+// the port battery state set over the qemu-serial battery endpoint.
 
 // ---------------------------------------------------------------------------
 // Connectivity / alerts state: nothing connected, nothing muted.

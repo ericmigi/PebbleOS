@@ -270,6 +270,7 @@ target_sources(app PRIVATE
   src/timeline_app.c
   src/fw_music_glue.c
   src/fw_weather_glue.c
+  src/fw_battery_glue.c
   src/timeline_glue.c
   "${PEBBLEOS_ROOT}/src/fw/services/blob_db/timeline_item_storage.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/item.c"

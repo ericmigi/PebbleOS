@@ -55,6 +55,21 @@ static void prv_emit_weather(void) {
   event_put(&e);
 }
 
+// Port-custom battery endpoint. Payload: [percent:1][flags:1] where flags bit0
+// = charging, bit1 = plugged. The Settings glance re-peeks on the change event.
+#define BATTERY_ENDPOINT 0x0022
+extern void fw_battery_set(uint8_t percent, bool charging, bool plugged);
+
+static void prv_handle_battery(const uint8_t *data, uint16_t pp_len) {
+  if (pp_len < 2) {
+    return;
+  }
+  const uint8_t flags = data[1];
+  fw_battery_set(data[0], flags & 0x01, flags & 0x02);
+  PebbleEvent e = {.type = PEBBLE_BATTERY_STATE_CHANGE_EVENT};
+  event_put(&e);
+}
+
 // Port-custom weather endpoint (no phone on the qemu shell). Payload:
 // [loc_len:1][loc][temp:2 LE signed][type:1][phrase_len:1][phrase].
 #define WEATHER_ENDPOINT 0x0021
@@ -188,6 +203,10 @@ static void prv_handle_pp(const uint8_t *msg, uint16_t len) {
   }
   if (endpoint == WEATHER_ENDPOINT) {
     prv_handle_weather(data, pp_len);
+    return;
+  }
+  if (endpoint == BATTERY_ENDPOINT) {
+    prv_handle_battery(data, pp_len);
     return;
   }
   if (endpoint != BLOB_DB_ENDPOINT) {

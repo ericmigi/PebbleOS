@@ -119,6 +119,7 @@ def ancs_notif_attr_response(title, subtitle, body, uid=1,
 
 EP_MUSIC = 0x0020
 EP_WEATHER = 0x0021
+EP_BATTERY = 0x0022
 MUSIC_CMD_NOW_PLAYING = 0x10
 MUSIC_CMD_PLAY_STATE = 0x11
 
@@ -154,6 +155,12 @@ def weather_now(location, temp, wtype, phrase):
             struct.pack('<B', len(ph)) + ph)
 
 
+def battery_state(percent, charging, plugged):
+    # [percent:1][flags:1] flags bit0=charging, bit1=plugged
+    flags = (0x01 if charging else 0) | (0x02 if plugged else 0)
+    return struct.pack('<BB', max(0, min(100, percent)), flags)
+
+
 def pebble_protocol(endpoint, payload):
     return struct.pack('>HH', len(payload), endpoint) + payload
 
@@ -185,13 +192,22 @@ def main():
     ap.add_argument('--length', type=int, default=0, help='music track length ms (enables progress bar)')
     ap.add_argument('--ancs', action='store_true',
                     help='send a real ANCS attribute-response over PROTO_ANCS instead of a BlobDB insert')
+    ap.add_argument('--battery', action='store_true',
+                    help='set battery state on endpoint 0x0022')
+    ap.add_argument('--percent', type=int, default=100, help='battery charge percent')
+    ap.add_argument('--charging', action='store_true', help='battery is charging')
+    ap.add_argument('--plugged', action='store_true', help='battery is plugged in')
     ap.add_argument('--pin', action='store_true',
                     help='insert an alarm timeline pin into the Pins DB (endpoint 0xb1db, db 0x01)')
     ap.add_argument('--when', type=int, default=3600,
                     help='pin time as seconds from now (default +3600; use a future value so it lands in Timeline Future)')
     args = ap.parse_args()
 
-    if args.pin:
+    if args.battery:
+        pp = pebble_protocol(EP_BATTERY, battery_state(args.percent, args.charging, args.plugged))
+        frame = qemu_frame(PROTO_SPP, pp)
+        item_id = 'battery:%d%%' % args.percent
+    elif args.pin:
         item_id, value = pin_item(args.title, args.subtitle or 'ONCE', int(time.time()) + args.when)
         pp = pebble_protocol(EP_BLOBDB, blobdb_insert(item_id, value, db_id=DB_PINS))
         frame = qemu_frame(PROTO_SPP, pp)
