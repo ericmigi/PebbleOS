@@ -31,11 +31,7 @@ bool notification_image_is_pending(const Uuid *item_id) {
   return false;
 }
 
-status_t pin_db_get(const TimelineItemId *id, TimelineItem *pin) {
-  (void)id;
-  (void)pin;
-  return E_DOES_NOT_EXIST;
-}
+// pin_db_get now comes from the real services/blob_db/pin_db.c.
 
 ResAppNum app_install_get_app_icon_bank(const AppInstallEntry *entry) {
   (void)entry;

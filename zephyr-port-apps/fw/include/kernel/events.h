@@ -44,6 +44,9 @@ typedef enum {
   // changes; never fired in the port (prefs are set locally), just needs a
   // distinct enum slot for event_service.
   PEBBLE_PREF_CHANGE_EVENT = 68,
+  // pin_db fires this to fetch a pin's owning app; only for non-system apps, so
+  // never actually fired in the port (alarm/system pins skip it). Distinct slot.
+  PEBBLE_APP_FETCH_REQUEST_EVENT = 69,
   PEBBLE_NUM_EVENTS = 80,
 } PebbleEventType;
 
@@ -200,8 +203,15 @@ typedef struct {
 } PebbleAlarmClockEvent;
 
 typedef struct {
+  int32_t id;  // AppInstallId
+  bool with_ui;
+  void *fetch_args;  // AppFetchUIArgs*, always NULL in the port
+} PebbleAppFetchRequestEvent;
+
+typedef struct {
   union {
     PebbleAlarmClockEvent alarm_clock;
+    PebbleAppFetchRequestEvent app_fetch_request;
     PebbleTickEvent clock_tick;
     PebbleDoNotDisturbEvent do_not_disturb;
     PebbleBlobDBEvent blob_db;

@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-// Smoke test for the timeline_item_storage foundation (the PFS/settings_file
-// keyed store that pin_db / notif_db / reminder_db sit on). Inserts a minimal
-// valid serialized timeline item, reads it back, and deletes it. Runs once at
-// boot and logs PASS/FAIL. First brick of the blob_db port.
-// ponytail: remove once pin_db + a real pin round-trip is wired.
+// Smoke test for the blob_db pin store (pin_db on timeline_item_storage, both
+// PFS/settings_file backed). Builds a real TimelineItem pin, inserts it via
+// pin_db_insert_item, reads it back via pin_db_get, checks the id round-trips.
+// Runs once at boot, logs PASS/FAIL. Brick 2 of the blob_db port.
+// ponytail: remove once a real producer (alarm_pin) drives pin_db.
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -12,51 +12,44 @@
 
 #include <zephyr/sys/printk.h>
 
-#include "pbl/services/blob_db/timeline_item_storage.h"
+#include "pbl/services/blob_db/pin_db.h"
 #include "pbl/services/timeline/item.h"
+#include "pbl/services/timeline/attribute.h"
 #include "pbl/util/uuid.h"
 
 time_t rtc_get_time(void);
 
 void fw_blob_db_selftest(void) {
-  static TimelineItemStorage s_storage;
-  char name[] = "tis_test";
-  timeline_item_storage_init(&s_storage, name, 4096, 0 /* no max age */);
+  pin_db_init();
 
-  const Uuid key = (Uuid){.byte0 = 0x11, .byte1 = 0x22, .byte15 = 0xAB};
+  AttributeList attr_list = {0};
+  attribute_list_add_cstring(&attr_list, AttributeIdTitle, "Test Pin");
+  TimelineItemActionGroup action_group = {0};
+  TimelineItem *pin = timeline_item_create_with_attributes(
+      rtc_get_time(), 1 /* duration */, TimelineItemTypePin, LayoutIdGeneric, &attr_list,
+      &action_group);
+  if (!pin) {
+    printk("BLOBDB_SELFTEST create=NULL => FAIL\n");
+    return;
+  }
+  const Uuid id = pin->header.id;
 
-  // Minimal valid serialized item: header only, no attributes/actions/payload.
-  SerializedTimelineItemHeader hdr = {0};
-  hdr.common.id = key;
-  hdr.common.timestamp = rtc_get_time();
-  hdr.common.duration = 1;
-  hdr.common.layout = 1;  // any valid id; the port's layout_verify accepts all
-  hdr.payload_length = 0;
-  hdr.num_attributes = 0;
-  hdr.num_actions = 0;
+  status_t ins = pin_db_insert_item(pin);
 
-  const int val_len = sizeof(hdr);
-  status_t rv = timeline_item_storage_insert(&s_storage, (const uint8_t *)&key, sizeof(key),
-                                             (const uint8_t *)&hdr, val_len, false);
-  int len = timeline_item_storage_get_len(&s_storage, (const uint8_t *)&key, sizeof(key));
-  bool nonempty = !timeline_item_storage_is_empty(&s_storage);
+  int glen = pin_db_get_len((const uint8_t *)&id, sizeof(Uuid));
+  printk("BLOBDB_DBG ins=%d glen=%d id0=%d id1=%d layout=%d\n", (int)ins, glen, id.byte0, id.byte1, pin->header.layout);
 
-  SerializedTimelineItemHeader out = {0};
-  status_t rr = timeline_item_storage_read(&s_storage, (const uint8_t *)&key, sizeof(key),
-                                           (uint8_t *)&out, val_len);
-  // flags/status are stored inverted; compare the id + timestamp which are not.
-  bool id_ok = (memcmp(&out.common.id, &key, sizeof(Uuid)) == 0);
-  bool ts_ok = (out.common.timestamp == hdr.common.timestamp);
+  TimelineItem read = {0};
+  status_t got = pin_db_get(&id, &read);
+  bool id_ok = (got == S_SUCCESS) && (memcmp(&read.header.id, &id, sizeof(Uuid)) == 0);
 
-  status_t rd = timeline_item_storage_delete(&s_storage, (const uint8_t *)&key, sizeof(key));
-  bool empty_after = timeline_item_storage_is_empty(&s_storage);
-
-  bool pass = (rv == S_SUCCESS && len == val_len && nonempty && rr == S_SUCCESS && id_ok &&
-               ts_ok && rd == S_SUCCESS && empty_after);
-  printk("BLOBDB_SELFTEST insert=%d len=%d nonempty=%d read=%d id_ok=%d ts_ok=%d del=%d "
-         "empty_after=%d => %s\n",
-         (int)rv, len, nonempty, (int)rr, id_ok, ts_ok, (int)rd, empty_after,
+  bool pass = (ins == S_SUCCESS && id_ok);
+  printk("BLOBDB_SELFTEST(pin_db) insert=%d get=%d id_ok=%d => %s\n", (int)ins, (int)got, id_ok,
          pass ? "PASS" : "FAIL");
 
-  timeline_item_storage_deinit(&s_storage);
+  if (got == S_SUCCESS) {
+    timeline_item_free_allocated_buffer(&read);
+  }
+  attribute_list_destroy_list(&attr_list);
+  timeline_item_destroy(pin);
 }
