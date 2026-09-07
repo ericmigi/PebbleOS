@@ -93,10 +93,8 @@ bool bt_ctl_is_airplane_mode_on(void) { return false; }
 // ---------------------------------------------------------------------------
 // Weather / workout: no data.
 // ---------------------------------------------------------------------------
-WeatherLocationForecast *weather_service_create_default_forecast(void) { return NULL; }
-void weather_service_destroy_default_forecast(WeatherLocationForecast *forecast) {
-  (void)forecast;
-}
+// weather_service_create/destroy_default_forecast now live in fw_weather_glue.c
+// (backed by the port weather state set over the qemu-serial weather endpoint).
 
 bool workout_service_is_workout_ongoing(void) { return false; }
 bool workout_service_get_current_workout_type(ActivitySessionType *type_out) {

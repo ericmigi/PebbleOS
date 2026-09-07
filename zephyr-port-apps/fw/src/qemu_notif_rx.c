@@ -32,6 +32,37 @@ extern void fw_music_set_now_playing(const char *title, size_t title_len, const 
                                      size_t artist_len, const char *album, size_t album_len);
 extern void fw_music_set_play_state(uint8_t raw);
 
+// Port-custom weather endpoint (no phone on the qemu shell). Payload:
+// [loc_len:1][loc][temp:2 LE signed][type:1][phrase_len:1][phrase].
+#define WEATHER_ENDPOINT 0x0021
+extern void fw_weather_set(const char *location, size_t loc_len, int temp, int type,
+                           const char *phrase, size_t phrase_len);
+
+static void prv_handle_weather(const uint8_t *data, uint16_t pp_len) {
+  const uint8_t *iter = data;
+  const uint8_t *end = data + pp_len;
+  if (iter >= end) {
+    return;
+  }
+  uint8_t loc_len = *iter++;
+  if (iter + loc_len + 3 > end) {
+    return;
+  }
+  const char *loc = (const char *)iter;
+  iter += loc_len;
+  int16_t temp = (int16_t)(iter[0] | (iter[1] << 8));
+  iter += 2;
+  uint8_t type = *iter++;
+  if (iter >= end) {
+    return;
+  }
+  uint8_t phrase_len = *iter++;
+  if (iter + phrase_len > end) {
+    return;
+  }
+  fw_weather_set(loc, loc_len, temp, type, (const char *)iter, phrase_len);
+}
+
 // Music now-playing on endpoint 0x0020: [cmd:1][artist][album][title], each
 // string a 1-byte length prefix + bytes (mirrors services/music/endpoint.c).
 static void prv_handle_music(const uint8_t *data, uint16_t pp_len) {
@@ -115,6 +146,10 @@ static void prv_handle_pp(const uint8_t *msg, uint16_t len) {
   }
   if (endpoint == MUSIC_ENDPOINT) {
     prv_handle_music(data, pp_len);
+    return;
+  }
+  if (endpoint == WEATHER_ENDPOINT) {
+    prv_handle_weather(data, pp_len);
     return;
   }
   if (endpoint != BLOB_DB_ENDPOINT) {

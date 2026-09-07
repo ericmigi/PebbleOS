@@ -91,6 +91,7 @@ def ancs_notif_attr_response(title, subtitle, body, uid=1,
 
 
 EP_MUSIC = 0x0020
+EP_WEATHER = 0x0021
 MUSIC_CMD_NOW_PLAYING = 0x10
 MUSIC_CMD_PLAY_STATE = 0x11
 
@@ -115,6 +116,14 @@ def music_play_state(state):
                        -1, 100, 0, 0)
 
 
+def weather_now(location, temp, wtype, phrase):
+    # [loc_len][loc][temp:2 LE signed][type:1][phrase_len][phrase]
+    loc = location.encode('utf-8')[:255]
+    ph = phrase.encode('utf-8')[:255]
+    return (struct.pack('<B', len(loc)) + loc + struct.pack('<hB', temp, wtype) +
+            struct.pack('<B', len(ph)) + ph)
+
+
 def pebble_protocol(endpoint, payload):
     return struct.pack('>HH', len(payload), endpoint) + payload
 
@@ -137,11 +146,20 @@ def main():
     ap.add_argument('--artist', default='Some Artist')
     ap.add_argument('--music-state', dest='music_state', choices=['playing','paused','rewinding','forwarding'], default=None, help='send a music play-state update (endpoint 0x0020 cmd 0x11)')
     ap.add_argument('--album', default='Some Album')
+    ap.add_argument('--weather', action='store_true', help='send a weather forecast on endpoint 0x0021')
+    ap.add_argument('--location', default='San Francisco')
+    ap.add_argument('--temp', type=int, default=68)
+    ap.add_argument('--wtype', type=int, default=7, help='WeatherType numeric id (7=Sun)')
+    ap.add_argument('--phrase', default='Sunny')
     ap.add_argument('--ancs', action='store_true',
                     help='send a real ANCS attribute-response over PROTO_ANCS instead of a BlobDB insert')
     args = ap.parse_args()
 
-    if args.music_state:
+    if args.weather:
+        pp = pebble_protocol(EP_WEATHER, weather_now(args.location, args.temp, args.wtype, args.phrase))
+        frame = qemu_frame(PROTO_SPP, pp)
+        item_id = 'weather:' + args.location
+    elif args.music_state:
         pp = pebble_protocol(EP_MUSIC, music_play_state(args.music_state))
         frame = qemu_frame(PROTO_SPP, pp)
         item_id = 'music-state:' + args.music_state

@@ -70,6 +70,20 @@ static const PebbleProcessMd *prv_timeline_past_md(void) {
   };
   return (const PebbleProcessMd *)&s_md;
 }
+
+// Launcher Weather glance: no weather app to launch, but enrolling the entry
+// with the weather-glance UUID makes the launcher render app_glance_weather
+// (which reads the port weather state) as its row.
+static void prv_weather_main(void) {}
+static const PebbleProcessMd *prv_weather_md(void) {
+  static const PebbleProcessMdSystem s_md = {
+    .common = { .main_func = prv_weather_main,
+                .uuid = {0x61, 0xb2, 0x2b, 0xc8, 0x1e, 0x29, 0x46, 0x0d,
+                         0xa2, 0x36, 0x3f, 0xe4, 0x09, 0xa4, 0x39, 0xff} },
+    .name = "Weather",
+  };
+  return (const PebbleProcessMd *)&s_md;
+}
 #endif
 
 typedef struct {
@@ -104,7 +118,11 @@ static const FwSystemApp s_system_apps[] = {
   { -96, "Timeline Past" },
 #endif
   { -54, "Launcher" },
+#ifdef FW_REAL_SHELL
+  { -59, "Weather", prv_weather_md },
+#else
   { -59, "Weather" },
+#endif
   { -95, "Workout" },
   { -62, "Battery Critical" },
   { -82, "Health" },
