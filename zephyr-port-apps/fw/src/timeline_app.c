@@ -3,9 +3,8 @@
 // Timeline Future/Past apps for the launcher. Lists pins from pin_db as a
 // MenuLayer (title + time), split into future (timestamp >= now) and past;
 // SELECT opens the pin as its real layout card (layout_create, e.g.
-// alarm_layout) — the same card the shipping timeline shows.
-// ponytail: MenuLayer list + single card on SELECT, not the shipping
-// swap_layer of swipeable cards; add swap_layer for pin-to-pin swipe.
+// alarm_layout) in a SwapLayer, so UP/DOWN swipe between the pins without
+// leaving the card view — the same interaction the shipping timeline shows.
 
 #include <stdio.h>
 #include <string.h>
@@ -22,6 +21,7 @@
 #include "pbl/services/timeline/attribute.h"
 #include "pbl/services/timeline/item.h"
 #include "pbl/services/timeline/layout_layer.h"
+#include "pbl/services/timeline/swap_layer.h"
 #include "pbl/services/timeline/timeline_layout.h"
 
 extern Window *window_create(void);
@@ -84,10 +84,64 @@ static void prv_draw_row(GContext *gctx, const Layer *cell, MenuIndex *idx, void
 }
 
 // SELECT opens the pin as a real layout card (alarm_layout via layout_create),
-// the same card the shipping timeline shows, instead of a text detail.
-static TimelineItem s_card_item;
-static TimelineLayoutInfo s_card_info;
-static LayoutLayer *s_card;
+// the same card the shipping timeline shows. The card view is a SwapLayer:
+// UP/DOWN swipe between the listed pins without leaving the card, like the
+// shipping timeline. Cards for every listed pin are built up front on open.
+// ponytail: precreate all cards (<=MAX_LISTED); a lazy/windowed vend would only
+// matter for very long pin lists, which the watch does not have.
+static TimelineItem s_items[MAX_LISTED];
+static TimelineLayoutInfo s_infos[MAX_LISTED];
+static LayoutLayer *s_layouts[MAX_LISTED];
+static int s_card_count;
+static SwapLayer s_swap;
+static int s_idx;
+
+static void prv_free_cards(void) {
+  for (int i = 0; i < s_card_count; i++) {
+    if (s_layouts[i]) {
+      layout_destroy(s_layouts[i]);
+      s_layouts[i] = NULL;
+    }
+    timeline_item_free_allocated_buffer(&s_items[i]);
+  }
+  s_card_count = 0;
+}
+
+static LayoutLayer *prv_get_layout(SwapLayer *sl, int8_t rel, void *ctx) {
+  (void)sl;
+  (void)ctx;
+  const int i = s_idx + rel;
+  if (i < 0 || i >= s_card_count || !s_layouts[i]) {
+    return NULL;
+  }
+  return s_layouts[i];
+}
+
+static void prv_layout_did_appear(SwapLayer *sl, LayoutLayer *l, int8_t rel, void *ctx) {
+  (void)sl;
+  (void)l;
+  (void)ctx;
+  s_idx += rel;
+}
+
+static void prv_card_window_load(Window *window) {
+  Layer *root = window_get_root_layer(window);
+  GRect bounds;
+  layer_get_bounds(root, &bounds);
+  swap_layer_init(&s_swap, &bounds);
+  swap_layer_set_callbacks(&s_swap, NULL, (SwapLayerCallbacks) {
+    .get_layout_handler = prv_get_layout,
+    .layout_did_appear_handler = prv_layout_did_appear,
+  });
+  layer_add_child(root, swap_layer_get_layer(&s_swap));
+  swap_layer_set_click_config_onto_window(&s_swap, window);
+}
+
+static void prv_card_window_unload(Window *window) {
+  (void)window;
+  swap_layer_deinit(&s_swap);
+  prv_free_cards();
+}
 
 static void prv_select(MenuLayer *ml, MenuIndex *idx, void *ctx) {
   (void)ml;
@@ -95,35 +149,34 @@ static void prv_select(MenuLayer *ml, MenuIndex *idx, void *ctx) {
   if (s_count == 0) {
     return;
   }
-  const int r = idx->row;
-
-  // Free a previously-opened card (one detail open at a time).
-  if (s_card) {
-    layout_destroy(s_card);
-    s_card = NULL;
-    timeline_item_free_allocated_buffer(&s_card_item);
-  }
-  if (pin_db_get(&s_uuid[r], &s_card_item) != S_SUCCESS) {
-    return;
-  }
-  timeline_layout_init_info(&s_card_info, &s_card_item, time_util_get_midnight_of(rtc_get_time()));
+  prv_free_cards();
 
   Window *window = window_create();
   Layer *root = window_get_root_layer(window);
   GRect bounds;
   layer_get_bounds(root, &bounds);
-  const LayoutLayerConfig config = {
-    .frame = &bounds,
-    .attributes = &s_card_item.attr_list,
-    .mode = LayoutLayerModeCard,
-    .app_id = &s_card_info.app_id,
-    .context = &s_card_info,
-  };
-  s_card = layout_create(s_card_item.header.layout, &config);
-  if (!s_card) {
-    return;
+  const time_t midnight = time_util_get_midnight_of(rtc_get_time());
+  for (int i = 0; i < s_count; i++) {
+    if (pin_db_get(&s_uuid[i], &s_items[i]) != S_SUCCESS) {
+      continue;
+    }
+    timeline_layout_init_info(&s_infos[i], &s_items[i], midnight);
+    const LayoutLayerConfig config = {
+      .frame = &bounds,
+      .attributes = &s_items[i].attr_list,
+      .mode = LayoutLayerModeCard,
+      .app_id = &s_infos[i].app_id,
+      .context = &s_infos[i],
+    };
+    s_layouts[i] = layout_create(s_items[i].header.layout, &config);
   }
-  layer_add_child(root, (Layer *)s_card);
+  s_card_count = s_count;
+  s_idx = idx->row;
+
+  window_set_window_handlers(window, &(WindowHandlers) {
+    .load = prv_card_window_load,
+    .unload = prv_card_window_unload,
+  });
   app_window_stack_push(window, true);
 }
 
