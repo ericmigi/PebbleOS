@@ -32,35 +32,5 @@
 
 // action_menu_window.c is now compiled; its real functions are used.
 
-// On qemu the real option_menu_window.c + settings/option_menu.c are compiled
-// (the Display submenu pushes real option menus); pt2 keeps the inert stubs.
-#if !defined(CONFIG_BOARD_QEMU_EMERY)
-void option_menu_set_highlight_colors(OptionMenu *option_menu, GColor background,
-                                      GColor foreground) {
-  (void)option_menu;
-  (void)background;
-  (void)foreground;
-}
-
-OptionMenu *settings_option_menu_create(const char *i18n_title_key,
-                                        OptionMenuContentType content_type, int choice,
-                                        const OptionMenuCallbacks *callbacks, uint16_t num_rows,
-                                        bool icons_enabled, const char **rows, void *context) {
-  (void)i18n_title_key;
-  (void)content_type;
-  (void)choice;
-  (void)callbacks;
-  (void)num_rows;
-  (void)icons_enabled;
-  (void)rows;
-  (void)context;
-  return NULL;
-}
-
-void *settings_option_menu_get_context(SettingsOptionMenuData *data) {
-  (void)data;
-  return NULL;
-}
-#endif  // !CONFIG_BOARD_QEMU_EMERY
 // Real dialogs (simple/expandable) are compiled now; stubs removed.
 

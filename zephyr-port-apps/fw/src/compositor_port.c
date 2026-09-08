@@ -54,6 +54,9 @@ static struct {
   const CompositorTransition *impl;
 } s_animation_state;
 
+static bool s_skip_focus_dup;  // launcher->app open: no trailing focus dup
+void fw_compositor_skip_focus_dup(void) { s_skip_focus_dup = true; }
+
 #if defined(CONFIG_BOARD_QEMU_EMERY)
 // QEMU determinism aid (frame_walk icount harness): the reference's transition
 // frames sample the animation clock at latency-driven instants; under icount
@@ -76,9 +79,6 @@ static uint8_t s_snap_num_targets = sizeof(s_shutter_targets) / sizeof(uint16_t)
 #define SNAP_NUM_TARGETS s_snap_num_targets
 static int64_t s_snap_t0 = -1;   // raw ms at animation_schedule; -1 = inactive
 static bool s_snap_shutter = true;  // shutter: fixed table; moook: duration-derived
-static bool s_skip_focus_dup;       // launcher->app open: no trailing focus dup
-
-void fw_compositor_skip_focus_dup(void) { s_skip_focus_dup = true; }
 static bool s_snap_armed;        // false while scheduling (clock frozen at t0)
 static bool s_snap_first_taken;  // first armed sample always maps to t0+0
 

@@ -30,6 +30,14 @@ else()
   set(FW_BOARD_PT2 FALSE)
 endif()
 
+# Generated resource IDs / tables come from the FreeRTOS reference build of the
+# same tree for the same platform: ./build (qemu_emery) or ./build-obelix (pt2).
+if(FW_BOARD_PT2)
+  set(FW_GEN_DIR "${PEBBLEOS_ROOT}/build-obelix")
+else()
+  set(FW_GEN_DIR "${PEBBLEOS_ROOT}/build")
+endif()
+
 if(FW_BOARD_PT2)
 # Keep the generated NimBLE syscfg and its Zephyr compatibility shim ahead of
 # PebbleOS's general include roots.
@@ -253,17 +261,55 @@ target_sources(app PRIVATE
 # FW_REAL_SHELL: boot into TicToc + the REAL launcher app (fw_shell.c) instead
 # of the custom launcher menu; needs the real system resource pack, which qemu
 # has in its FreeRTOS-layout SPI flash image (resource_pack.c).
-target_compile_definitions(app PRIVATE CONFIG_FLASH_QEMU=1 FW_REAL_SHELL=1)
+target_compile_definitions(app PRIVATE CONFIG_FLASH_QEMU=1)
 # Generated resource IDs (resource/resource_ids.auto.h + the timeline resource
 # table) come from the FreeRTOS reference build of the same tree. BEFORE so the
 # real generated IDs beat the gfx app's minimal resource-id shadow.
-target_include_directories(app BEFORE PRIVATE "${PEBBLEOS_ROOT}/build/src/fw")
 endif()
 
 target_sources(app PRIVATE
   src/app_registry.c
   src/app_registry_stubs.c
   src/app_service_stubs.c
+# The real shell (fw_shell.c: boot into the watchface + the REAL launcher app and
+# system apps) on every board; the generated resource IDs must beat the gfx
+# app's minimal resource-id shadow, hence BEFORE.
+target_compile_definitions(app PRIVATE FW_REAL_SHELL=1)
+
+# git_version.auto.h describes THIS tree (the FW_GEN_DIR copy is whatever the
+# reference build last saw); same fields as tools/waf/gitinfo.py.
+# ponytail: regenerated on reconfigure (any commit/index change); a dirty-flag
+# flip alone does not retrigger.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${PEBBLEOS_ROOT}/.git/HEAD" "${PEBBLEOS_ROOT}/.git/index")
+execute_process(COMMAND git describe --dirty WORKING_DIRECTORY "${PEBBLEOS_ROOT}"
+  OUTPUT_VARIABLE FW_GIT_TAG OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+execute_process(COMMAND git rev-parse --short=7 HEAD WORKING_DIRECTORY "${PEBBLEOS_ROOT}"
+  OUTPUT_VARIABLE FW_GIT_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+execute_process(COMMAND git log -1 --format=%ct HEAD WORKING_DIRECTORY "${PEBBLEOS_ROOT}"
+  OUTPUT_VARIABLE FW_GIT_TIMESTAMP OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT FW_GIT_TAG MATCHES "^v([0-9]+)\\.([0-9]+)\\.([0-9]+)(.*)$")
+  set(FW_GIT_TAG "v9.9.9-dev")
+  string(REGEX MATCH "^v([0-9]+)\\.([0-9]+)\\.([0-9]+)(.*)$" _ "${FW_GIT_TAG}")
+endif()
+if(NOT FW_GIT_TIMESTAMP)
+  set(FW_GIT_TIMESTAMP 0)
+endif()
+file(WRITE "${CMAKE_BINARY_DIR}/fw_gen/git_version.auto.h"
+"#pragma once
+
+#define GIT_TIMESTAMP ${FW_GIT_TIMESTAMP}
+#define GIT_TAG \"${FW_GIT_TAG}\"
+#define GIT_MAJOR_VERSION ${CMAKE_MATCH_1}
+#define GIT_MINOR_VERSION ${CMAKE_MATCH_2}
+#define GIT_PATCH_VERSION ${CMAKE_MATCH_3}
+#define GIT_MAJOR_MINOR_PATCH_STRING \"${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${CMAKE_MATCH_3}\"
+#define GIT_PATCH_VERBOSE_STRING \"${CMAKE_MATCH_3}${CMAKE_MATCH_4}\"
+#define GIT_REVISION \"${FW_GIT_COMMIT}\"
+")
+target_include_directories(app BEFORE PRIVATE "${FW_GEN_DIR}/src/fw")
+target_include_directories(app BEFORE PRIVATE "${CMAKE_BINARY_DIR}/fw_gen")
+
   src/alarm_glue.c
   src/alarm_alert_glue.c
   src/notifications_app.c
@@ -271,6 +317,7 @@ target_sources(app PRIVATE
   src/digital_face.c
   src/fw_music_glue.c
   src/fw_weather_glue.c
+  src/fw_pp_dispatch.c
   src/fw_battery_glue.c
   src/timeline_glue.c
   "${PEBBLEOS_ROOT}/src/fw/services/blob_db/timeline_item_storage.c"
@@ -616,37 +663,19 @@ set_source_files_properties(
   PROPERTIES COMPILE_OPTIONS "-include;zephyr/kernel.h;-include;system/reset.h"
 )
 
-# tictoc.c references RESOURCE_ID_MENU_ICON_TICTOC_WATCH only for its md's
-# launcher icon; the port has no generated resource IDs, so define it to 0 (the
-# launcher menu draws names, not icons). fw_zephyr_pre.h resolves the Zephyr vs
-# Pebble sign_extend() collision (both pulled by real app sources).
-# On pt2 (no real resource pack) the generated resource IDs don't exist, so the
-# md-icon / app-icon IDs are defined to 0; qemu uses the real generated IDs.
-if(FW_BOARD_PT2)
-  set(FW_TICTOC_RES_DEFS "RESOURCE_ID_MENU_ICON_TICTOC_WATCH=0")
-  set(FW_MUSIC_RES_DEFS "RESOURCE_ID_AUDIO_CASSETTE_TINY=0;RESOURCE_ID_MUSIC_ICON_ELLIPSIS=278;RESOURCE_ID_MUSIC_ICON_FAST_FORWARD=272;RESOURCE_ID_MUSIC_ICON_PAUSE=271;RESOURCE_ID_MUSIC_ICON_PLAY=270;RESOURCE_ID_MUSIC_ICON_PLAY_PAUSE=0;RESOURCE_ID_MUSIC_ICON_REWIND=273;RESOURCE_ID_MUSIC_ICON_SKIP_BACKWARD=275;RESOURCE_ID_MUSIC_ICON_SKIP_FORWARD=274;RESOURCE_ID_MUSIC_ICON_VOLUME_DOWN=277;RESOURCE_ID_MUSIC_ICON_VOLUME_UP=276;RESOURCE_ID_MUSIC_IMAGE_NO_MUSIC=0;RESOURCE_ID_MUSIC_LARGE_CASSETTE=0;RESOURCE_ID_MUSIC_LARGE_PAUSED=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_DOWN=0;RESOURCE_ID_MUSIC_LARGE_VOLUME_UP=0;RESOURCE_ID_VIBE_SCORE_HAPTIC_FEEDBACK=0;")
-  set(FW_ALARMS_RES_DEFS "RESOURCE_ID_ACTION_BAR_ICON_CHECK=0;RESOURCE_ID_ALARM_CLOCK_TINY=0;RESOURCE_ID_GENERIC_CONFIRMATION_LARGE=0;RESOURCE_ID_PLUS_ICON_BLACK=0;RESOURCE_ID_PLUS_ICON_DOTTED=0;RESOURCE_ID_RESULT_SHREDDED_LARGE=0;RESOURCE_ID_SMART_ALARM_ICON_BLACK=0;RESOURCE_ID_SMART_ALARM_TINY=0")
-  set(FW_WATCHFACES_RES_DEFS "RESOURCE_ID_WATCHFACES_APP_GLANCE=0;RESOURCE_ID_MENU_LAYER_GENERIC_WATCHFACE_ICON=0")
-  set(FW_SETTINGS_RES_DEFS "RESOURCE_ID_SETTINGS_TINY=0")
-else()
-  set(FW_TICTOC_RES_DEFS "")
-  set(FW_MUSIC_RES_DEFS "")
-  set(FW_ALARMS_RES_DEFS "")
-  set(FW_WATCHFACES_RES_DEFS "")
-  set(FW_SETTINGS_RES_DEFS "")
-endif()
-
+# fw_zephyr_pre.h resolves the Zephyr vs Pebble sign_extend() collision (both
+# pulled by real app sources). Resource IDs come from the generated headers on
+# every board now (FW_GEN_DIR), so no per-board RESOURCE_ID stubs.
 set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/apps/watch/tictoc/tictoc.c"
-  PROPERTIES
-    COMPILE_DEFINITIONS "${FW_TICTOC_RES_DEFS}"
-    COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
+  PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
 )
 
 # app_service_stubs.c pulls Pebble applib headers (fonts/window) that trip the
 # Zephyr vs Pebble sign_extend collision; fw_zephyr_pre.h resolves it and keeps
 # fw/include's font_resource_keys.auto.h shadow ahead of the sandbox copy.
 set_source_files_properties(
+
   "${CMAKE_CURRENT_SOURCE_DIR}/src/app_service_stubs.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/animation_stubs.c"
   "${PEBBLEOS_ROOT}/src/fw/services/alarms/alarm.c"
@@ -792,7 +821,8 @@ set_source_files_properties(
 # glance service, kino reel PDC icons, and the real system resource pack read
 # from the XIP-mapped SPI flash image.
 # ---------------------------------------------------------------------------
-if(NOT FW_BOARD_PT2)
+# Real shell + system apps: common to every board (qemu serial RX / ANCS and the
+# qemu mfg backend are the only qemu-only pieces, gated below).
 set(LAUNCHER "${PEBBLEOS_ROOT}/src/fw/apps/system/launcher/default")
 set(KINO "${PEBBLEOS_ROOT}/src/fw/applib/ui/kino")
 
@@ -847,7 +877,6 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/simple_dialog.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/number_window.c"
   "${PEBBLEOS_ROOT}/src/fw/system/version.c"
-  "${PEBBLEOS_ROOT}/src/fw/mfg/qemu/mfg_info.c"
   src/settings_system_glue.c
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/dialog.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/dialog_private.c"
@@ -856,7 +885,6 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/dialogs/simple_dialog.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/number_window.c"
   "${PEBBLEOS_ROOT}/src/fw/system/version.c"
-  "${PEBBLEOS_ROOT}/src/fw/mfg/qemu/mfg_info.c"
   src/settings_system_glue.c
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/system.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/notifications.c"
@@ -929,7 +957,7 @@ target_sources(app PRIVATE
 
   "${PEBBLEOS_ROOT}/src/fw/apps/system/timeline/text_node.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_resources.c"
-  "${PEBBLEOS_ROOT}/build/src/fw/resource/timeline_resource_table.auto.c"
+  "${FW_GEN_DIR}/src/fw/resource/timeline_resource_table.auto.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/timeline_layout.c"
   "${PEBBLEOS_ROOT}/src/fw/services/timeline/notification_layout.c"
   "${PEBBLEOS_ROOT}/src/fw/apps/system/timeline/peek_layer.c"
@@ -950,9 +978,7 @@ target_sources(app PRIVATE
   # compositor core (src/compositor_port.c).
   src/compositor_port.c
   src/fonts_pack.c
-  src/qemu_notif_rx.c
   src/qemu_notif_display.c
-  src/qemu_ancs.c
   src/clock_relative_glue.c
   "${PEBBLEOS_ROOT}/src/fw/comm/ble/kernel_le_client/ancs/ancs_util.c"
   "${PEBBLEOS_ROOT}/build/src/fw/builtin_resources.auto.c"
@@ -965,6 +991,16 @@ set_source_files_properties(
   "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/bluetooth.c"
   PROPERTIES
     COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-include;pbl/services/bluetooth/bluetooth_ctl.h;-iquote;${FW_APP_IQUOTE}"
+if(FW_BOARD_PT2)
+target_sources(app PRIVATE "${PEBBLEOS_ROOT}/src/fw/mfg/obelix/mfg_info.c")
+else()
+target_sources(app PRIVATE
+  "${PEBBLEOS_ROOT}/src/fw/mfg/qemu/mfg_info.c"
+  src/qemu_notif_rx.c
+  src/qemu_ancs.c
+)
+endif()
+
     COMPILE_DEFINITIONS "sniprintf=snprintf"
 )
 # display.c row set must match the reference build's (touch + app-scaling rows).
@@ -1168,4 +1204,3 @@ set_property(SOURCE "${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/src/p
   applib_resource_munmap_or_free=port_applib_resource_munmap_or_free
   applib_resource_get_handle=port_applib_resource_get_handle
 )
-endif()

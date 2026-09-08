@@ -19,6 +19,7 @@
 #include <kernel/pbl_malloc.h>
 
 #include "putbytes_min.h"
+#include "system/version.h"
 
 #define PPOG_TYPE_DATA 0x0
 #define PPOG_TYPE_ACK 0x1
@@ -129,6 +130,12 @@ bool ppog_min_send_pp(uint16_t endpoint, const uint8_t *payload,
   return true;
 }
 
+// Transport hook for fw_pp_dispatch.c (BlobDB acks etc.): over BLE, a PP
+// notify on the live PPoGATT connection.
+bool fw_pp_send(uint16_t endpoint, const uint8_t *payload, uint16_t len) {
+  return ppog_min_send_pp(endpoint, payload, len);
+}
+
 static void prv_session_opened(void) {
   static const uint8_t version_request = 0x00;
 
@@ -147,9 +154,10 @@ static void prv_send_system_version(void) {
 
   memset(&message, 0, sizeof(message));
   message.command = 0x01;
-  strncpy(message.running_fw_metadata.version_tag, "v4.0.0-zephyr",
+  message.running_fw_metadata.version_timestamp = TINTIN_METADATA.version_timestamp;
+  strncpy(message.running_fw_metadata.version_tag, TINTIN_METADATA.version_tag,
           sizeof(message.running_fw_metadata.version_tag) - 1);
-  strncpy(message.running_fw_metadata.version_short, "v4.0.0",
+  strncpy(message.running_fw_metadata.version_short, TINTIN_METADATA.version_short,
           sizeof(message.running_fw_metadata.version_short) - 1);
   message.running_fw_metadata.flags = 0x02;
   message.running_fw_metadata.hw_platform = 18;
@@ -189,8 +197,14 @@ static void prv_dispatch_pp(uint16_t endpoint, const uint8_t *payload,
     memset(run_response + 1, 0x5a, sizeof(run_response) - 1);
     (void)ppog_min_send_pp(PP_ENDPOINT_APP_RUN_STATE, run_response,
                            sizeof(run_response));
-  } else if (endpoint == PP_ENDPOINT_BLOB_DB) {
-    printk("FW_BLE_BLOB_STUB len=%u\n", payload_len);
+  } else if (endpoint == PP_ENDPOINT_BLOB_DB || endpoint == 0x0020 ||
+             endpoint == 0x0021 || endpoint == 0x0022) {
+    // BlobDB (notifications / timeline pins) and the port's music / weather /
+    // battery endpoints share the transport-agnostic dispatcher with the qemu
+    // serial path; it acks BlobDB commands back through fw_pp_send below.
+    extern void fw_pp_handle_endpoint(uint16_t endpoint, const uint8_t *data, uint16_t len);
+    printk("FW_BLE_PP_RX endpoint=0x%04x len=%u\n", endpoint, payload_len);
+    fw_pp_handle_endpoint(endpoint, payload, payload_len);
   } else if (endpoint == PP_ENDPOINT_SYSTEM_MESSAGE) {
     putbytes_min_handle_system_message(payload, payload_len);
   } else if (endpoint == PP_ENDPOINT_PUT_BYTES) {

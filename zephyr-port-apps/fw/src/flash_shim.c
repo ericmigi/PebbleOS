@@ -59,9 +59,16 @@ int pfs_flash_shim_init(void) {
 }
 
 void flash_read_bytes(uint8_t *buffer, uint32_t start_addr, uint32_t buffer_size) {
-  if (!prv_range_is_within(start_addr, buffer_size,
-                           FLASH_REGION_SHARED_PRF_STORAGE_BEGIN,
-                           FLASH_REGION_SHARED_PRF_STORAGE_END)) {
+  // Read-only regions the fw app serves from flash: shared-PRF (bond), the
+  // system resource pack banks, MFG info.
+  const bool read_only_region =
+      prv_range_is_within(start_addr, buffer_size, FLASH_REGION_SHARED_PRF_STORAGE_BEGIN,
+                          FLASH_REGION_SHARED_PRF_STORAGE_END) ||
+      prv_range_is_within(start_addr, buffer_size, FLASH_REGION_SYSTEM_RESOURCES_BANK_0_BEGIN,
+                          FLASH_REGION_SYSTEM_RESOURCES_BANK_1_END) ||
+      prv_range_is_within(start_addr, buffer_size, FLASH_REGION_MFG_INFO_BEGIN,
+                          FLASH_REGION_MFG_INFO_END);
+  if (!read_only_region) {
     prv_check_range(start_addr, buffer_size, "flash_read");
   }
   status_t status = flash_impl_read_sync(buffer, start_addr, buffer_size);

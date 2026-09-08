@@ -367,36 +367,6 @@ GBitmap *app_menu_data_source_get_node_icon(AppMenuDataSource *source, AppMenuNo
     return &md;                                                                             \
   }
 
-#if !defined(CONFIG_BOARD_QEMU_EMERY)
-STUB_SUBMODULE(settings_bluetooth_get_info, "Bluetooth", SettingsMenuItemBluetooth)
-#endif
-#if !defined(CONFIG_BOARD_QEMU_EMERY)
-STUB_SUBMODULE(settings_notifications_get_info, "Notifications", SettingsMenuItemNotifications)
-#endif
-#if !defined(CONFIG_BOARD_QEMU_EMERY)
-STUB_SUBMODULE(settings_vibe_patterns_get_info, "Sounds & Haptics", SettingsMenuItemVibrations)
-#endif
-#if !defined(CONFIG_BOARD_QEMU_EMERY)
-STUB_SUBMODULE(settings_quiet_time_get_info, "Quiet Time", SettingsMenuItemQuietTime)
-#endif
-#if !defined(CONFIG_BOARD_QEMU_EMERY)
-STUB_SUBMODULE(settings_timeline_get_info, "Timeline", SettingsMenuItemTimeline)
-#endif
-#if !defined(CONFIG_BOARD_QEMU_EMERY)
-STUB_SUBMODULE(settings_activity_tracker_get_info, "Background App", SettingsMenuItemActivity)
-#endif
-#if !defined(CONFIG_BOARD_QEMU_EMERY)
-STUB_SUBMODULE(settings_quick_launch_get_info, "Quick Launch", SettingsMenuItemQuickLaunch)
-#endif
-#if !defined(CONFIG_BOARD_QEMU_EMERY)
-STUB_SUBMODULE(settings_time_get_info, "Date & Time", SettingsMenuItemDateTime)
-#endif
-#if !defined(CONFIG_BOARD_QEMU_EMERY)
-STUB_SUBMODULE(settings_display_get_info, "Display", SettingsMenuItemDisplay)
-#endif
-#if !defined(CONFIG_BOARD_QEMU_EMERY)
-STUB_SUBMODULE(settings_system_get_info, "System", SettingsMenuItemSystem)
-#endif
 
 // ---------------------------------------------------------------------------
 // Bluetooth submodule backends (qemu shell): the real settings/bluetooth.c is
@@ -406,7 +376,6 @@ STUB_SUBMODULE(settings_system_get_info, "System", SettingsMenuItemSystem)
 // fixed AA:AA:AA:AA:AA:AA identity address (see src/bluetooth-fw/qemu/id.c +
 // services/bluetooth/local_id.c).
 // ---------------------------------------------------------------------------
-#if defined(CONFIG_BOARD_QEMU_EMERY)
 #include <stdio.h>
 
 #include <bluetooth/bluetooth_types.h>
@@ -522,7 +491,6 @@ void settings_remote_menu_push(struct SettingsBluetoothData *bt_data, StoredRemo
   (void)bt_data;
   (void)stored_remote;
 }
-#endif  // CONFIG_BOARD_QEMU_EMERY
 
 // ---------------------------------------------------------------------------
 // Display submodule backends (qemu shell): RAM-backed backlight/touch/language
@@ -531,7 +499,6 @@ void settings_remote_menu_push(struct SettingsBluetoothData *bt_data, StoredRemo
 // English). ponytail: values are seeded, not read from the prefs DB; wire
 // shell/normal/prefs.c + settings_file to track the flash image instead.
 // ---------------------------------------------------------------------------
-#if defined(CONFIG_BOARD_QEMU_EMERY)
 static bool s_backlight_enabled = true;
 static uint8_t s_backlight_preset = BacklightPreset_Advanced;
 static bool s_ambient_sensor_enabled = true;
@@ -558,12 +525,10 @@ char *i18n_get_lang_name(void) { return "English"; }
 
 uint8_t shell_prefs_get_legacy_app_render_mode(void) { return s_legacy_app_render_mode; }
 void shell_prefs_set_legacy_app_render_mode(uint8_t mode) { s_legacy_app_render_mode = mode; }
-#endif  // CONFIG_BOARD_QEMU_EMERY
 
 // option_menu_window.c is compiled against the generated applib_malloc header
 // on qemu (its TU resolves build/src/fw first for the real resource IDs), so
 // its typed allocator resolves here, onto the same applib heap.
-#if defined(CONFIG_BOARD_QEMU_EMERY)
 #include "applib/ui/option_menu_window.h"
 #include "applib/ui/kino/kino_layer.h"
 #include "applib/ui/action_menu_window_private.h"
@@ -575,7 +540,6 @@ void *_applib_type_malloc_AnimationContext(void) { return applib_malloc(sizeof(A
 void *_applib_type_zalloc_ActionMenuData(void) { return task_zalloc(sizeof(ActionMenuData)); }
 size_t _applib_type_size_ActionMenuLevel(void) { return sizeof(ActionMenuLevel); }
 size_t _applib_type_size_ActionMenuItem(void) { return sizeof(ActionMenuItem); }
-#endif
 
 // ---------------------------------------------------------------------------
 // Date & Time submodule backends (qemu shell): the reference under QEMU runs
@@ -584,7 +548,6 @@ size_t _applib_type_size_ActionMenuItem(void) { return sizeof(ActionMenuItem); }
 // ponytail: toggles flip RAM state only; clock_set_time and the phone time
 // request are inert (no clock service / phone in the port).
 // ---------------------------------------------------------------------------
-#if defined(CONFIG_BOARD_QEMU_EMERY)
 #include <time.h>
 
 #include <zephyr/sys/timeutil.h>
@@ -638,4 +601,3 @@ void clock_set_24h_style(bool is_24h) { shell_prefs_set_clock_24h_style(is_24h);
 // Minimal-libc gap; the port's wall clock is UTC, so mktime == timegm.
 time_t mktime(struct tm *tm_val) { return timeutil_timegm(tm_val); }
 
-#endif  // CONFIG_BOARD_QEMU_EMERY

@@ -138,12 +138,11 @@ const uint8_t *sys_resource_read_only_bytes(ResAppNum app_num, uint32_t resource
 }
 
 bool sys_resource_bytes_are_readonly(void *bytes) {
+  // Only heap copies live in SRAM; the XIP pack, the builtin table in the code
+  // image (0x08.. on qemu, 0x12.. on the SF32) and port.c's embedded data are
+  // all flash. Writing to any of them stalls the SF32's AHB with no fault.
   const uintptr_t address = (uintptr_t)bytes;
-  if (address >= (uintptr_t)PACK_BASE && address < (uintptr_t)(PACK_BASE + PACK_MAX_SIZE)) {
-    return true;
-  }
-  // Builtin table lives in the code image (read-only XIP flash below SRAM).
-  if (address < 0x10000000u) {
+  if (address < 0x20000000u || address >= 0x30000000u) {
     return true;
   }
   return port_sys_resource_bytes_are_readonly(bytes);

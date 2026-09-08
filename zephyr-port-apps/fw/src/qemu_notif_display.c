@@ -117,6 +117,7 @@ void fw_notification_show(const char *title, const char *subtitle, const char *b
   e->icon = icon;
   s_count++;
   s_pending = true;
+  printk("NOTIF_QUEUED \"%s\"\n", e->title);
 
   // Persist to the real notification store (once per received notification) so
   // the launcher Notifications glance shows the last one and it survives a
@@ -460,6 +461,7 @@ void fw_notification_poll(void) {
   // and the glance was refreshed (fw_notification_show); suppress only the popup.
   extern bool do_not_disturb_is_active(void);
   if (do_not_disturb_is_active()) {
+    printk("NOTIF_DND_SUPPRESSED\n");
     return;
   }
 

@@ -68,6 +68,19 @@
 #define FLASH_REGION_SAFE_FIRMWARE_BEGIN 0x12a20000u
 #define FLASH_REGION_SAFE_FIRMWARE_END 0x12ab0000u
 
+// System resource pack banks, MFG info and the pblboot in-image header offset
+// (flash_region_gd25q256e.h). resource_pack.c reads the pbpack through the XIP
+// window at bank 0; version.c / settings reach the PRF metadata via FIRMWARE_OFFSET.
+#define FLASH_REGION_SYSTEM_RESOURCES_BANK_0_BEGIN 0x12620000u
+#define FLASH_REGION_SYSTEM_RESOURCES_BANK_0_END 0x12820000u
+#define FLASH_REGION_SYSTEM_RESOURCES_BANK_1_BEGIN 0x12820000u
+#define FLASH_REGION_SYSTEM_RESOURCES_BANK_1_END 0x12a20000u
+#define FLASH_REGION_MFG_INFO_BEGIN 0x13ffe000u
+#define FLASH_REGION_MFG_INFO_END 0x13fff000u
+#define FIRMWARE_OFFSET 0x1000u
+#define FLASH_REGION_FIRMWARE_DEST_BEGIN FLASH_REGION_FIRMWARE_SLOT_0_BEGIN
+#define FLASH_REGION_FIRMWARE_DEST_END FLASH_REGION_FIRMWARE_SLOT_0_END
+
 // Dedicated OTA staging scratch for the flash-path self-test. Deliberately NOT
 // a bootable pblboot slot and clear of the PFS window (0x13e00000), so a
 // committed non-executable test image never bricks boot. 256K, chip-resident.
