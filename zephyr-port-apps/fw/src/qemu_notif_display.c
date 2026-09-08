@@ -19,10 +19,11 @@
 // The card stays until BACK, the action-menu Dismiss, or the shipping
 // notification-window timeout (alerts_preferences_get_notification_window_timeout_ms,
 // 3 min default) — a per-session new_timer pops it back to the watchface.
+// The timeout is refreshed on any interaction (UP/DOWN swap or SELECT), like
+// shipping, so an actively-read notification does not vanish mid-read.
 // ponytail: on dismiss the app returns without freeing the live swap layouts /
 // window (a per-session leak); wire swap_layer_deinit + window free when the app
-// gains a real teardown. The timeout is not refreshed on button activity yet
-// (shipping resets it on each press); add that if the fixed window feels short.
+// gains a real teardown.
 
 #include "applib/graphics/gtypes.h"
 #include "applib/ui/layer.h"
@@ -67,6 +68,8 @@ extern int fw_window_stack_depth(void);
 extern int fw_system_app_base_depth(void);
 extern uint32_t alerts_preferences_get_notification_window_timeout_ms(void);
 extern void event_put(PebbleEvent *event);
+
+static void prv_refresh_notif_timeout(void);  // restarts the auto-dismiss timer
 
 #define NOTIF_RING 8
 
@@ -244,8 +247,16 @@ static void prv_menu_did_close(ActionMenu *menu, const ActionMenuItem *performed
   }
 }
 
+// Any interaction (UP/DOWN swap via the swap_layer, or SELECT) pushes the
+// auto-dismiss deadline out, like shipping's notification_window.
+static void prv_on_interaction(SwapLayer *sl, void *ctx) {
+  (void)sl; (void)ctx;
+  prv_refresh_notif_timeout();
+}
+
 static void prv_select_click(ClickRecognizerRef recognizer, void *context) {
   (void)recognizer; (void)context;
+  prv_refresh_notif_timeout();
   ActionMenuLevel *root = action_menu_level_create(1);
   if (!root) {
     return;
@@ -357,6 +368,13 @@ static void prv_pop_timer_fired(void *data) {
   event_put(&e);
 }
 
+static void prv_refresh_notif_timeout(void) {
+  if (s_notif_up && s_pop_timer != TIMER_INVALID_ID) {
+    new_timer_start(s_pop_timer, alerts_preferences_get_notification_window_timeout_ms(),
+                    prv_pop_timer_fired, NULL, 0);
+  }
+}
+
 // main_func for the notification system-app: builds the swap_layer-hosted card
 // and pumps app_event_loop until BACK pops it (or the timeout fires).
 static void prv_notif_app_main(void) {
@@ -379,6 +397,7 @@ static void prv_notif_app_main(void) {
     .get_layout_handler = prv_get_layout,
     .layout_removed_handler = prv_layout_removed,
     .update_colors_handler = prv_update_colors,
+    .interaction_handler = prv_on_interaction,
     .click_config_provider = prv_notif_click_config,
   });
   swap_layer_set_click_config_onto_window(&s_swap, window);
