@@ -335,9 +335,12 @@ void app_install_enumerate_entries(AppInstallEnumerateCb cb, void *data) {
 }
 
 // --- bt mac string (qemu BT driver fixed AA identity address)
-void bt_local_id_copy_address_mac_string(char *dest, size_t dest_size) {
-  strncpy(dest, "AA:AA:AA:AA:AA:AA", dest_size);
-  if (dest_size) {
-    dest[dest_size - 1] = '\0';
-  }
+// Must match the shipping prototype exactly (single fixed-size buffer): the
+// caller passes one argument, so a (dest, size) signature here reads garbage
+// for the size and strncpy zero-fills RAM until it wedges (Settings ->
+// System -> Information hang).
+#include "pbl/services/bluetooth/local_id.h"
+void bt_local_id_copy_address_mac_string(char addr_mac_str_out[BT_DEVICE_ADDRESS_FMT_BUFFER_SIZE]) {
+  strncpy(addr_mac_str_out, "AA:AA:AA:AA:AA:AA", BT_DEVICE_ADDRESS_FMT_BUFFER_SIZE);
+  addr_mac_str_out[BT_DEVICE_ADDRESS_FMT_BUFFER_SIZE - 1] = '\0';
 }

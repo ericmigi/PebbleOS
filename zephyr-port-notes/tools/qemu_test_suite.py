@@ -502,6 +502,22 @@ def t_wf_persist(q, sh):
     return "rebooted on same flash -> SYS_APP_LAUNCH Digital"
 
 
+@test("settings_system_information", "Settings -> System -> Information opens and the UI stays responsive")
+def t_sys_information(q, sh):
+    open_app("Settings")
+    keys(*(["down"] * 11), settle=0.35)  # System is the last row
+    time.sleep(0.5)
+    key("right", 1.3)                    # System submenu (Information is row 0)
+    pushes = console_count("WINDOW_PUSH")
+    key("right", 3.0)                    # Information
+    assert console_count("WINDOW_PUSH") == pushes + 1, "Information window not pushed"
+    # A wedged pump stops logging button events: poke a key and require it to land.
+    btns = console_count("BTN ")
+    key("down", 1.2)
+    sh.take("settings_system_information")
+    assert console_count("BTN ") > btns, "UI unresponsive after opening Information (pump wedged)"
+    return "Information window pushed; UI responsive"
+
 @test("no_fatal_overall", "No FATAL / PASSERT across the whole run")
 def t_fatal(q, sh):
     n = fatal()
