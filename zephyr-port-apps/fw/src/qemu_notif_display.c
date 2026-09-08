@@ -239,6 +239,20 @@ static void prv_dismiss_action(ActionMenu *menu, const ActionMenuItem *action, v
   event_put(&ev);
 }
 
+// Clear All: wipe the whole notification history (and the popup ring) and pop
+// the card. Mirrors the shipping "Dismiss all" / Clear Notification History.
+static void prv_clear_all_action(ActionMenu *menu, const ActionMenuItem *action, void *ctx) {
+  (void)menu; (void)action; (void)ctx;
+  extern void notification_storage_reset_and_init(void);
+  s_dismiss_pending = true;
+  notification_storage_reset_and_init();
+  s_count = 0;  // drop the popup ring so a later swap shows nothing stale
+  extern void event_put(PebbleEvent * event);
+  PebbleEvent ev = {.type = PEBBLE_SYS_NOTIFICATION_EVENT};
+  ev.sys_notification.type = NotificationRemoved;
+  event_put(&ev);
+}
+
 static void prv_menu_did_close(ActionMenu *menu, const ActionMenuItem *performed, void *ctx) {
   (void)menu; (void)performed; (void)ctx;
   if (s_dismiss_pending) {
@@ -257,11 +271,12 @@ static void prv_on_interaction(SwapLayer *sl, void *ctx) {
 static void prv_select_click(ClickRecognizerRef recognizer, void *context) {
   (void)recognizer; (void)context;
   prv_refresh_notif_timeout();
-  ActionMenuLevel *root = action_menu_level_create(1);
+  ActionMenuLevel *root = action_menu_level_create(2);
   if (!root) {
     return;
   }
   action_menu_level_add_action(root, "Dismiss", prv_dismiss_action, NULL);
+  action_menu_level_add_action(root, "Clear All", prv_clear_all_action, NULL);
   ActionMenuConfig config = {
     .root_level = root,
     .colors = { .background = GColorDarkGray, .foreground = GColorWhite },
