@@ -134,15 +134,12 @@ void fw_notification_show(const char *title, const char *subtitle, const char *b
   item.header.timestamp = rtc_get_time();
   uuid_generate(&item.header.id);
   item.attr_list = (AttributeList){ .num_attributes = n, .attributes = attrs };
-  notification_storage_store(&item);
   e->id = item.header.id;  // remember it so Dismiss can remove it from history
-
-  // Live-refresh the launcher Notifications glance (subscribed to
-  // PEBBLE_SYS_NOTIFICATION_EVENT) so it shows the new notification immediately.
-  extern void event_put(PebbleEvent * event);
-  PebbleEvent ev = {.type = PEBBLE_SYS_NOTIFICATION_EVENT};
-  ev.sys_notification.type = NotificationAdded;
-  event_put(&ev);
+  // Route through the real notification service: it stores the item and emits
+  // PEBBLE_SYS_NOTIFICATION_EVENT(NotificationAdded) (which the launcher glance
+  // is subscribed to), same as shipping.
+  extern void notifications_add_notification(TimelineItem * notification);
+  notifications_add_notification(&item);
 }
 
 // Absolute ring index of the swap_layer's current card (newest when none yet).
