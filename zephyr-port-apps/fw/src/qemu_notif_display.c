@@ -444,6 +444,13 @@ void fw_notification_poll(void) {
   }
   s_pending = false;
 
+  // Quiet Time / Do Not Disturb: the notification is already stored to history
+  // and the glance was refreshed (fw_notification_show); suppress only the popup.
+  extern bool do_not_disturb_is_active(void);
+  if (do_not_disturb_is_active()) {
+    return;
+  }
+
   if (s_app_running) {
     // A new notification arrived while the card is up: refetch so the newest
     // becomes current (reload nulls current -> get_layout(0) returns newest).
