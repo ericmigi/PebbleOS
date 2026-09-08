@@ -18,6 +18,7 @@
 #include "apps/system/music.h"
 #include "apps/watch/tictoc/tictoc.h"
 #include "apps/system/watchfaces.h"
+const PebbleProcessMd *digital_face_get_app_info(void);  // port digital watchface
 #include "apps/system/settings/settings.h"
 
 // A 20 KiB AppDB holds roughly 150 metadata records in production.
@@ -98,6 +99,7 @@ typedef struct {
 // Names mirror the PebbleProcessMdSystem metadata (Golf is a resource app).
 static const FwSystemApp s_system_apps[] = {
   { -1, "TicToc", tictoc_get_app_info },
+  { -110, "Digital", digital_face_get_app_info },
   { -98, "Kickstart" },
   { -2, "Watch Only" },
   { -7, "Settings", settings_get_app_info },

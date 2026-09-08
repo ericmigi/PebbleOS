@@ -109,11 +109,25 @@ static MenuScrollVibeBehavior s_scroll_vibe = MenuScrollNoVibe;
 static AppInstallId s_default_watchface_id = -1;
 
 
-// Selecting a watchface row: record it as the active face. Shipping relaunches
-// the shell with the chosen face; the port just persists the choice + logs it so
-// the picker's "Active" subtitle tracks the selection.
-// ponytail: does not switch the running watchface. Route through the shell's
-// launch path once the shell/watchface service is ported.
+extern int fw_window_stack_depth(void);
+extern void fw_window_stack_pop(void);
+extern const PebbleProcessMd *tictoc_get_app_info(void);
+extern void fw_request_watchface_switch(void);
+
+// The shell root loop (fw_shell.c) launches this as the running watchface; it
+// tracks the picker's selection, defaulting to TicToc.
+const PebbleProcessMd *fw_selected_watchface_md(void) {
+  const FwAppRegistryEntry *entry = fw_app_registry_find_by_id(s_default_watchface_id);
+  if (entry && entry->md && entry->md->process_type == ProcessTypeWatchface) {
+    return entry->md;
+  }
+  return tictoc_get_app_info();
+}
+
+// Selecting a watchface row records it as the active face and unwinds the
+// launcher/picker + current face so the shell root loop relaunches the choice.
+// ponytail: selection is RAM-only (resets to TicToc on reboot); persist it
+// through shell prefs when that path is wired.
 struct CompositorTransition;
 void fw_compositor_request_transition(const struct CompositorTransition *impl,
                                       uint16_t first_sample_ms);
@@ -142,7 +156,10 @@ void app_manager_put_launch_app_event(const AppLaunchEventConfig *config) {
   }
 
   s_default_watchface_id = config->id;
+  extern void watchface_set_default_install_id(AppInstallId app_id);
+  watchface_set_default_install_id(config->id);  // updates the picker Active marker + persists
   printk("WATCHFACE_SET %" PRId32 "\n", config->id);
+  fw_request_watchface_switch();
 }
 
 // ---------------------------------------------------------------------------

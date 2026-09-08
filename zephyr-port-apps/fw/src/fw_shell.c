@@ -169,9 +169,11 @@ void fw_shell_before_pop_render(Window *window, int new_depth) {
 bool fw_shell_back_should_pop(void) { return s_launcher_active; }
 
 void fw_shell_on_app_exit(const PebbleProcessMd *md) {
+  extern bool fw_watchface_switch_pending(void);
   if (md == launcher_menu_app_get_app_info() ||
       md->process_type == ProcessTypeWatchface ||
-      fw_shell_launch_pending()) {
+      fw_shell_launch_pending() ||
+      fw_watchface_switch_pending()) {  // switching faces: don't chain the launcher
     return;
   }
   // Shipping: app -> launcher reverses the launcher-app moook slide.
@@ -220,7 +222,9 @@ void fw_launcher_ui_run(void) {
   while (true) {
     // The watchface is the shell's root app; its app_event_loop pumps the UI
     // and processes launcher/app launches. It only returns if its window is
-    // somehow popped — relaunch it.
-    fw_system_app_launch(tictoc_get_app_info());
+    // popped (BACK-to-root, or a watchface-picker selection unwinds the stack) —
+    // relaunch the currently-selected face.
+    extern const PebbleProcessMd *fw_selected_watchface_md(void);
+    fw_system_app_launch(fw_selected_watchface_md());
   }
 }

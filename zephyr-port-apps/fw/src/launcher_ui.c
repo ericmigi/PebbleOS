@@ -804,6 +804,11 @@ static void prv_start_selftest(void) {}
 // service / deferred callbacks, dispatch to event-service clients, and render the
 // top window. Shared by the launcher loop and system_app.c's app_event_loop so a
 // launched app runs on exactly the same loop the launcher does.
+static bool s_wf_switch_pending;
+
+void fw_request_watchface_switch(void) { s_wf_switch_pending = true; }
+bool fw_watchface_switch_pending(void) { return s_wf_switch_pending; }
+
 void fw_ui_pump_once(void) {
   // KernelMain is in the task-watchdog mask; kick its bit every pump so the HW
   // WDT stays fed while this loop runs. event_take_timeout blocks at most 1s, so
@@ -889,6 +894,17 @@ void fw_ui_pump_once(void) {
     fw_system_app_launch(md);
     fw_shell_on_app_exit(md);
     prv_render_top();
+  }
+
+  // Watchface switch: unwind the whole stack (picker, launcher, running face)
+  // one window per pump iteration so each app_event_loop returns cleanly; when
+  // the root face is popped the shell loop relaunches the newly-selected face.
+  if (s_wf_switch_pending) {
+    if (s_stack_top >= 0) {
+      prv_window_pop();
+    } else {
+      s_wf_switch_pending = false;
+    }
   }
 }
 
