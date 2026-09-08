@@ -1,0 +1,162 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Zephyr port QEMU test report — 8539c6934</title>
+<style>
+ body{font:14px/1.4 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;margin:24px;color:#222}
+ h1{margin:0 0 4px} .meta{color:#555;margin-bottom:16px} code{background:#f3f3f3;padding:1px 4px}
+ table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px;vertical-align:top;text-align:left}
+ th{background:#f7f7f7} tr.pass td.status{color:#0a7d2c;font-weight:700} tr.fail td.status{color:#b00020;font-weight:700}
+ tr.fail{background:#fff5f5} .desc{color:#666;font-size:12px} .name{white-space:nowrap}
+ img{image-rendering:pixelated;width:200px;border:1px solid #ccc;background:#000}
+ .summary{font-size:18px;margin:8px 0 16px} .ok{color:#0a7d2c} .bad{color:#b00020}
+</style></head><body>
+<h1>Zephyr port — QEMU end-to-end test report</h1>
+<div class="meta">
+  Firmware: <code>8539c6934</code> (<code>8539c6934d9a8725fabed63eb6b046fb784279d2</code>) on <code>zephyr/obelix</code> — zephyr-port: route received notifications through the real notification service<br>
+  <b>Uncommitted changes in tree:</b> <code>?? zephyr-port-notes/qemu-test-report/
+?? zephyr-port-notes/tools/qemu_test_suite.py</code><br>
+  ELF built: 2026-09-08T09:58:56 &nbsp;·&nbsp; Board: qemu_emery &nbsp;·&nbsp; Run: 2026-09-08T10:20:05 → 2026-09-08T10:24:18<br>
+  Reproduce: <code>git checkout 8539c6934 && bash ~/dev/pblboot-ws/fwbuild.sh && python3 zephyr-port-notes/tools/qemu_test_suite.py</code>
+</div>
+<div class="summary"><span class="ok">23 / 23 passed</span></div>
+<table><thead><tr><th>Test</th><th>Result</th><th>Reason / evidence</th><th>Screenshot</th></tr></thead>
+<tbody>
+      <tr class="pass">
+        <td class="name">boot_launcher<div class="desc">Firmware boots, PFS mounts, launcher app renders, no fatal</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">PFS up, launcher launched, 28 apps registered</td>
+        <td class="shot"><img src="screenshots/boot_launcher.png" alt="boot_launcher"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">watchface_tictoc<div class="desc">BACK from the boot launcher reveals the running TicToc watchface</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">SYS_APP_LAUNCH TicToc</td>
+        <td class="shot"><img src="screenshots/watchface_tictoc.png" alt="watchface_tictoc"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">clock_ticks<div class="desc">Per-second tick pump: the watchface minute hand moves across a minute boundary</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">924 px changed after minute rollover</td>
+        <td class="shot"><img src="screenshots/clock_ticks.png" alt="clock_ticks"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">notif_popup<div class="desc">Injected notification pops the real notification_layout card</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">NOTIF_SHOWN &quot;Alice&quot;</td>
+        <td class="shot"><img src="screenshots/notif_popup.png" alt="notif_popup"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">notif_stays<div class="desc">Popup persists (no auto-exit) 6s after arrival</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">still up after 6s (3-min window timeout)</td>
+        <td class="shot"><img src="screenshots/notif_stays.png" alt="notif_stays"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">notif_action_menu<div class="desc">SELECT on the card opens the action menu with Dismiss + Clear All</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">action menu pushed</td>
+        <td class="shot"><img src="screenshots/notif_action_menu.png" alt="notif_action_menu"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">notif_dismiss_removes<div class="desc">Dismiss pops the card and removes it from history (glance empties)</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">card popped; see glance (Notifications row should have no subtitle)</td>
+        <td class="shot"><img src="screenshots/notif_dismiss_removes.png" alt="notif_dismiss_removes"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">notif_clear_all<div class="desc">Clear All wipes history and pops the card</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">history cleared, card popped</td>
+        <td class="shot"><img src="screenshots/notif_clear_all.png" alt="notif_clear_all"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">notif_history_app<div class="desc">Notifications history app opens</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">SYS_APP_LAUNCH Notifications</td>
+        <td class="shot"><img src="screenshots/notif_history_app.png" alt="notif_history_app"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">music_now_playing<div class="desc">Music inject shows artist/title in the Music app</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">SYS_APP_LAUNCH Music with now-playing</td>
+        <td class="shot"><img src="screenshots/music_now_playing.png" alt="music_now_playing"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">music_progress_ticks<div class="desc">Progress bar/position advance while playing (8s)</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">89 px changed in progress region over 8s</td>
+        <td class="shot"><img src="screenshots/music_progress_ticks.png" alt="music_progress_ticks"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">music_pause_freezes<div class="desc">Pausing freezes the position</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">progress region stable while paused (0 px)</td>
+        <td class="shot"><img src="screenshots/music_pause_freezes.png" alt="music_pause_freezes"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">weather_glance<div class="desc">Weather inject updates the launcher Weather glance</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">glance changed (9415 px): Boston 60 Cloudy</td>
+        <td class="shot"><img src="screenshots/weather_glance.png" alt="weather_glance"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">battery_glance<div class="desc">Battery inject updates the Settings glance level</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">glance changed (7104 px): 42% charging</td>
+        <td class="shot"><img src="screenshots/battery_glance.png" alt="battery_glance"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">settings_app<div class="desc">Settings app opens its real submenu tree</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">SYS_APP_LAUNCH Settings</td>
+        <td class="shot"><img src="screenshots/settings_app.png" alt="settings_app"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">alarms_app<div class="desc">Alarms app opens (first-run Smart Alarm intro or list)</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">SYS_APP_LAUNCH Alarms</td>
+        <td class="shot"><img src="screenshots/alarms_app.png" alt="alarms_app"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">timeline_pins_list<div class="desc">Two injected pins list in Timeline Future</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">SYS_APP_LAUNCH Timeline Future with 2 pins</td>
+        <td class="shot"><img src="screenshots/timeline_pins_list.png" alt="timeline_pins_list"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">timeline_card<div class="desc">SELECT opens the pin as a real alarm_layout card</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">card window pushed</td>
+        <td class="shot"><img src="screenshots/timeline_card.png" alt="timeline_card"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">timeline_swipe<div class="desc">DOWN swipes to the next pin card (SwapLayer)</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">card changed on DOWN (349 px)</td>
+        <td class="shot"><img src="screenshots/timeline_swipe.png" alt="timeline_swipe"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">quiet_time_suppresses<div class="desc">Quiet Time (manual DND) suppresses the popup but keeps history</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">no popup under Quiet Time; notification still stored</td>
+        <td class="shot"><img src="screenshots/quiet_time_suppresses.png" alt="quiet_time_suppresses"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">watchface_switch<div class="desc">Watchfaces picker switches the running face to Digital</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">WATCHFACE_SET -110 -&gt; SYS_APP_LAUNCH Digital</td>
+        <td class="shot"><img src="screenshots/watchface_switch.png" alt="watchface_switch"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">watchface_persists_reboot<div class="desc">Selected watchface survives a reboot on the same flash</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">rebooted on same flash -&gt; SYS_APP_LAUNCH Digital</td>
+        <td class="shot"><img src="screenshots/watchface_persists_reboot.png" alt="watchface_persists_reboot"></td>
+      </tr>
+      <tr class="pass">
+        <td class="name">no_fatal_overall<div class="desc">No FATAL / PASSERT across the whole run</div></td>
+        <td class="status">PASS</td>
+        <td class="reason">0 FATAL/PASSERT</td>
+        <td class="shot"><img src="screenshots/no_fatal_overall.png" alt="no_fatal_overall"></td>
+      </tr>
+</tbody></table>
+</body></html>
