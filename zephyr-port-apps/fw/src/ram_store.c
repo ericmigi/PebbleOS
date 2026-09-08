@@ -113,6 +113,10 @@ static int prv_write(int obj_type, const union ble_store_value *value) {
   } else {
     s_peer_sec_n++;
   }
+  // ponytail: single-bond store (slot 0), like the shared-PRF page it mirrors.
+  if (s_peer_sec_n > 0) {
+    sprf_bond_save(s_our_sec_n > 0 ? &s_our_sec[0] : NULL, &s_peer_sec[0]);
+  }
   return 0;
 }
 
@@ -138,6 +142,9 @@ static int prv_delete(int obj_type, const union ble_store_key *key) {
         values[i] = values[--s_our_sec_n];
       } else {
         values[i] = values[--s_peer_sec_n];
+      }
+      if (s_our_sec_n == 0 && s_peer_sec_n == 0) {
+        sprf_bond_erase();
       }
       return 0;
     }

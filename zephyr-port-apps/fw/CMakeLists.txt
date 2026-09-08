@@ -176,6 +176,7 @@ set_source_files_properties(
   src/ppog_min.c
   src/ram_store.c
   src/sprf_bond.c
+  "${PEBBLEOS_ROOT}/src/fw/services/shared_prf_storage/shared_prf_storage.c"
   "${NIMBLE}/port/src/npl_os_zephyr.c"
   "${PEBBLEOS_ROOT}/src/bluetooth-fw/nimble/pebble_pairing_service.c"
   "${PEBBLEOS_ROOT}/src/bluetooth-fw/nimble/ppog_reversed_service.c"
@@ -187,6 +188,7 @@ set_source_files_properties(
 set_property(SOURCE
   src/ram_store.c
   src/sprf_bond.c
+  "${PEBBLEOS_ROOT}/src/fw/services/shared_prf_storage/shared_prf_storage.c"
   APPEND PROPERTY COMPILE_OPTIONS -fshort-enums
 )
 
@@ -207,6 +209,8 @@ target_sources(app PRIVATE
   src/putbytes_min.c
   src/ram_store.c
   src/sprf_bond.c
+  "${PEBBLEOS_ROOT}/src/fw/services/shared_prf_storage/shared_prf_storage.c"
+  "${PEBBLEOS_ROOT}/lib/btutil/sm_util.c"
   src/sifli_lrc_glue.c
 
   "${PEBBLEOS_ROOT}/src/fw/board/boards/board_obelix_zephyr.c"
@@ -267,10 +271,6 @@ target_compile_definitions(app PRIVATE CONFIG_FLASH_QEMU=1)
 # real generated IDs beat the gfx app's minimal resource-id shadow.
 endif()
 
-target_sources(app PRIVATE
-  src/app_registry.c
-  src/app_registry_stubs.c
-  src/app_service_stubs.c
 # The real shell (fw_shell.c: boot into the watchface + the REAL launcher app and
 # system apps) on every board; the generated resource IDs must beat the gfx
 # app's minimal resource-id shadow, hence BEFORE.
@@ -310,14 +310,18 @@ file(WRITE "${CMAKE_BINARY_DIR}/fw_gen/git_version.auto.h"
 target_include_directories(app BEFORE PRIVATE "${FW_GEN_DIR}/src/fw")
 target_include_directories(app BEFORE PRIVATE "${CMAKE_BINARY_DIR}/fw_gen")
 
+target_sources(app PRIVATE
+  src/app_registry.c
+  src/app_registry_stubs.c
+  src/app_service_stubs.c
   src/alarm_glue.c
   src/alarm_alert_glue.c
   src/notifications_app.c
+  src/fw_pp_dispatch.c
   src/timeline_app.c
   src/digital_face.c
   src/fw_music_glue.c
   src/fw_weather_glue.c
-  src/fw_pp_dispatch.c
   src/fw_battery_glue.c
   src/timeline_glue.c
   "${PEBBLEOS_ROOT}/src/fw/services/blob_db/timeline_item_storage.c"
@@ -671,11 +675,11 @@ set_source_files_properties(
   PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h"
 )
 
+
 # app_service_stubs.c pulls Pebble applib headers (fonts/window) that trip the
 # Zephyr vs Pebble sign_extend collision; fw_zephyr_pre.h resolves it and keeps
 # fw/include's font_resource_keys.auto.h shadow ahead of the sandbox copy.
 set_source_files_properties(
-
   "${CMAKE_CURRENT_SOURCE_DIR}/src/app_service_stubs.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/animation_stubs.c"
   "${PEBBLEOS_ROOT}/src/fw/services/alarms/alarm.c"
@@ -987,10 +991,6 @@ target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/services/compositor/default/compositor_launcher_app_transitions.c"
 )
 
-set_source_files_properties(
-  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/bluetooth.c"
-  PROPERTIES
-    COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-include;pbl/services/bluetooth/bluetooth_ctl.h;-iquote;${FW_APP_IQUOTE}"
 if(FW_BOARD_PT2)
 target_sources(app PRIVATE "${PEBBLEOS_ROOT}/src/fw/mfg/obelix/mfg_info.c")
 else()
@@ -1001,6 +1001,10 @@ target_sources(app PRIVATE
 )
 endif()
 
+set_source_files_properties(
+  "${PEBBLEOS_ROOT}/src/fw/apps/system/settings/bluetooth.c"
+  PROPERTIES
+    COMPILE_OPTIONS "-include;fw_zephyr_pre.h;-include;pbl/services/bluetooth/bluetooth_ctl.h;-iquote;${FW_APP_IQUOTE}"
     COMPILE_DEFINITIONS "sniprintf=snprintf"
 )
 # display.c row set must match the reference build's (touch + app-scaling rows).
