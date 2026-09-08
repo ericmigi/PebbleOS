@@ -50,13 +50,13 @@ static void prv_window_load(Window *window) {
   GRect bounds = root->bounds;
 
   // Vertically-centered band for the time text.
-  const int16_t h = 40;
+  const int16_t h = 50;
   const GRect frame = GRect(0, (bounds.size.h - h) / 2, bounds.size.w, h);
   text_layer_init(&data->time_layer, &frame);
   text_layer_set_background_color(&data->time_layer, GColorClear);
   text_layer_set_text_color(&data->time_layer, GColorWhite);
   text_layer_set_text_alignment(&data->time_layer, GTextAlignmentCenter);
-  text_layer_set_font(&data->time_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_font(&data->time_layer, fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD));
   layer_add_child(root, &data->time_layer.layer);
 }
 
