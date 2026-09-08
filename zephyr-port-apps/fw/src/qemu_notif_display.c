@@ -16,11 +16,13 @@
 //
 // SELECT opens a 1-item action menu ("Dismiss") that removes the notification
 // from history; an arrival peek intro plays before the card.
-// ponytail: on dismiss (BACK) the app returns without freeing the live swap
-// layouts / window (a per-session leak); wire swap_layer_deinit + window free
-// when the app gains a real teardown. The popup is launched inline from the
-// pump, so app_event_loop returns on the pump's idle timeout and the card
-// auto-dismisses after a couple seconds unless the user acts first.
+// The card stays until BACK, the action-menu Dismiss, or the shipping
+// notification-window timeout (alerts_preferences_get_notification_window_timeout_ms,
+// 3 min default) — a per-session new_timer pops it back to the watchface.
+// ponytail: on dismiss the app returns without freeing the live swap layouts /
+// window (a per-session leak); wire swap_layer_deinit + window free when the app
+// gains a real teardown. The timeout is not refreshed on button activity yet
+// (shipping resets it on each press); add that if the fixed window feels short.
 
 #include "applib/graphics/gtypes.h"
 #include "applib/ui/layer.h"
@@ -41,6 +43,7 @@
 #include "applib/ui/property_animation.h"
 #include "apps/system/timeline/peek_layer.h"
 #include "pbl/services/evented_timer.h"
+#include "pbl/services/new_timer/new_timer.h"
 #include "pbl/services/timeline/timeline_resources.h"
 #include "process_management/pebble_process_md.h"
 #include "util/uuid.h"
@@ -60,6 +63,10 @@ extern void fw_window_stack_pop(void);
 extern void window_single_click_subscribe(ButtonId button_id, ClickHandler handler);
 extern const LayoutColors *layout_get_notification_colors(const LayoutLayer *layout);
 extern TimelineResourceId notification_layout_get_fallback_icon_id(uint8_t type);
+extern int fw_window_stack_depth(void);
+extern int fw_system_app_base_depth(void);
+extern uint32_t alerts_preferences_get_notification_window_timeout_ms(void);
+extern void event_put(PebbleEvent *event);
 
 #define NOTIF_RING 8
 
@@ -321,8 +328,37 @@ static void prv_start_peek(Layer *root, LayoutLayer *current) {
   evented_timer_register(100, false, prv_play_peek, NULL);
 }
 
+// Auto-dismiss timeout: like shipping's notification_window, the card retires to
+// whatever is underneath after a few minutes with no interaction. Uses new_timer
+// (the port pumps it); its callback runs on a timer thread, so it posts a
+// KernelMain callback that pops the notification app's windows.
+static TimerID s_pop_timer = TIMER_INVALID_ID;
+static int s_notif_base_depth;
+static bool s_notif_up;
+
+static void prv_pop_notif_cb(void *data) {
+  (void)data;
+  if (!s_notif_up) {
+    return;
+  }
+  // Pop the notif app's window(s) — the card and any action menu on top of it —
+  // back down to its launch base, so app_event_loop returns and the app exits.
+  while (fw_window_stack_depth() > s_notif_base_depth) {
+    fw_window_stack_pop();
+  }
+}
+
+static void prv_pop_timer_fired(void *data) {
+  (void)data;
+  PebbleEvent e = {
+    .type = PEBBLE_CALLBACK_EVENT,
+    .callback = { .callback = prv_pop_notif_cb },
+  };
+  event_put(&e);
+}
+
 // main_func for the notification system-app: builds the swap_layer-hosted card
-// and pumps app_event_loop until BACK pops it.
+// and pumps app_event_loop until BACK pops it (or the timeout fires).
 static void prv_notif_app_main(void) {
   Window *window = window_create();
   if (!window) {
@@ -354,7 +390,20 @@ static void prv_notif_app_main(void) {
 
   app_window_stack_push(window, false /* animated */);
   printk("NOTIF_SHOWN \"%s\"\n", s_ring[(s_count ? s_count - 1 : 0) % NOTIF_RING].title);
+
+  // Arm the auto-dismiss timeout for this popup session.
+  s_notif_base_depth = fw_system_app_base_depth();
+  s_notif_up = true;
+  if (s_pop_timer == TIMER_INVALID_ID) {
+    s_pop_timer = new_timer_create();
+  }
+  new_timer_start(s_pop_timer, alerts_preferences_get_notification_window_timeout_ms(),
+                  prv_pop_timer_fired, NULL, 0);
+
   app_event_loop();
+
+  s_notif_up = false;
+  new_timer_stop(s_pop_timer);
 }
 
 static const PebbleProcessMdSystem s_notif_md = {
