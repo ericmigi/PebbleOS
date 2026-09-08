@@ -114,10 +114,13 @@ extern void fw_window_stack_pop(void);
 extern const PebbleProcessMd *tictoc_get_app_info(void);
 extern void fw_request_watchface_switch(void);
 
-// The shell root loop (fw_shell.c) launches this as the running watchface; it
-// tracks the picker's selection, defaulting to TicToc.
+// The shell root loop (fw_shell.c) launches this as the running watchface. Read
+// the persisted selection (watchface_get_default_install_id, backed by prefs) so
+// the chosen face survives a reboot; fall back to TicToc.
+extern AppInstallId watchface_get_default_install_id(void);
 const PebbleProcessMd *fw_selected_watchface_md(void) {
-  const FwAppRegistryEntry *entry = fw_app_registry_find_by_id(s_default_watchface_id);
+  const AppInstallId id = watchface_get_default_install_id();
+  const FwAppRegistryEntry *entry = fw_app_registry_find_by_id(id);
   if (entry && entry->md && entry->md->process_type == ProcessTypeWatchface) {
     return entry->md;
   }
