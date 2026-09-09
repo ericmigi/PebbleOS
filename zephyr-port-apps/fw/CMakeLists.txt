@@ -992,7 +992,12 @@ target_sources(app PRIVATE
 )
 
 if(FW_BOARD_PT2)
-target_sources(app PRIVATE "${PEBBLEOS_ROOT}/src/fw/mfg/obelix/mfg_info.c")
+target_sources(app PRIVATE
+  "${PEBBLEOS_ROOT}/src/fw/mfg/obelix/mfg_info.c"
+  "${PEBBLEOS_ROOT}/src/fw/mfg/mfg_info.c"
+  "${PEBBLEOS_ROOT}/src/fw/mfg/mfg_serials.c"
+  "${PEBBLEOS_ROOT}/src/fw/drivers/otp/otp_flash.c"
+)
 else()
 target_sources(app PRIVATE
   "${PEBBLEOS_ROOT}/src/fw/mfg/qemu/mfg_info.c"

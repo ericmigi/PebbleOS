@@ -55,6 +55,9 @@ int pfs_flash_shim_init(void) {
   // flash_impl_init() -> HAL_FLASH_Init(): re-initializing the live XIP
   // controller corrupts fetch from this flash. See qspi_board_flash_init().
   qspi_board_flash_init();
+  // Controller is marked initialised, so this only records the flash part
+  // (security-register / OTP layout) without touching the HAL.
+  flash_impl_init(false);
   return 0;
 }
 
@@ -119,4 +122,29 @@ void flash_erase_sector_blocking(uint32_t sector_addr) {
   PBL_ASSERTN((sector_addr & (SECTOR_SIZE_BYTES - 1u)) == 0);
   prv_check_range(sector_addr, SECTOR_SIZE_BYTES, "flash_erase_64k");
   prv_erase_blocking(sector_addr, false /* !is_subsector */, "flash_erase_64k");
+}
+
+// OTP (mfg serial / HW version) lives in the flash security registers;
+// otp_flash.c reaches them through these flash_api entry points. The
+// alternate "cd" flash path is not present on this board.
+status_t flash_read_security_register(uint32_t addr, uint8_t *val) {
+  return flash_impl_read_security_register(addr, val);
+}
+
+status_t flash_security_register_is_locked(uint32_t address, bool *locked) {
+  return flash_impl_security_register_is_locked(address, locked);
+}
+
+const FlashSecurityRegisters *flash_security_registers_info(void) {
+  return flash_impl_security_registers_info();
+}
+
+bool cd_flash_active(void) { return false; }
+status_t cd_flash_read_security_register(uint32_t addr, uint8_t *val) {
+  (void)addr; (void)val;
+  return E_INVALID_OPERATION;
+}
+status_t cd_flash_security_register_is_locked(uint32_t addr, bool *locked) {
+  (void)addr; (void)locked;
+  return E_INVALID_OPERATION;
 }

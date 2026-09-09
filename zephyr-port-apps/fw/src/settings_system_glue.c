@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <zephyr/sys/printk.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "mfg/mfg_info.h"
@@ -18,6 +19,7 @@
 
 // --- mfg serials: QEMU has no OTP driver; the reference falls back to the
 // dummy strings in mfg_serials.c.
+#if defined(CONFIG_BOARD_QEMU_EMERY)
 void mfg_info_get_serialnumber(char *serial_number, size_t serial_number_size) {
   strncpy(serial_number, "XXXXXXXXXXXX", serial_number_size);
   if (serial_number_size > MFG_SERIAL_NUMBER_SIZE) {
@@ -31,6 +33,7 @@ void mfg_info_get_hw_version(char *hw_version, size_t hw_version_size) {
     hw_version[MFG_HW_VERSION_SIZE] = '\0';
   }
 }
+#endif
 
 // --- version / boot (version.c provides the metadata + recovery readers)
 uint32_t boot_version_read(void) { return 0; }
@@ -341,6 +344,16 @@ void app_install_enumerate_entries(AppInstallEnumerateCb cb, void *data) {
 // System -> Information hang).
 #include "pbl/services/bluetooth/local_id.h"
 void bt_local_id_copy_address_mac_string(char addr_mac_str_out[BT_DEVICE_ADDRESS_FMT_BUFFER_SIZE]) {
+#if !defined(CONFIG_BOARD_QEMU_EMERY)
+  extern bool fw_ble_get_own_address(uint8_t out[6]);
+  uint8_t a[6];
+  if (fw_ble_get_own_address(a)) {
+    snprintf(addr_mac_str_out, BT_DEVICE_ADDRESS_FMT_BUFFER_SIZE, "%02X:%02X:%02X:%02X:%02X:%02X",
+             a[5], a[4], a[3], a[2], a[1], a[0]);
+    return;
+  }
+#endif
+  // qemu: the reference's fixed AA:AA:AA:AA:AA:AA identity address.
   strncpy(addr_mac_str_out, "AA:AA:AA:AA:AA:AA", BT_DEVICE_ADDRESS_FMT_BUFFER_SIZE);
   addr_mac_str_out[BT_DEVICE_ADDRESS_FMT_BUFFER_SIZE - 1] = '\0';
 }

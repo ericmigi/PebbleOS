@@ -24,6 +24,17 @@
 
 #include "putbytes_min.h"
 
+static uint8_t s_own_address[6];
+
+bool fw_ble_get_own_address(uint8_t out[6]) {
+  static const uint8_t zero[6];
+  if (memcmp(s_own_address, zero, sizeof(zero)) == 0) {
+    return false;
+  }
+  memcpy(out, s_own_address, sizeof(s_own_address));
+  return true;
+}
+
 #define BLE_INIT_STACK_SIZE 8192
 #define BLE_HOST_STACK_SIZE 6144
 #define BLE_INIT_PRIORITY 6
@@ -241,6 +252,7 @@ static void prv_sync_cb(void) {
     return;
   }
   rc = ble_hs_id_copy_addr(own_addr_type, address, NULL);
+  memcpy(s_own_address, address, sizeof(s_own_address));
   if (rc != 0) {
     prv_fail("copy_addr", rc);
     return;
