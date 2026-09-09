@@ -188,6 +188,8 @@ status_t qspi_flash_unlock_all(QSPIFlash *dev) { return S_SUCCESS; }
 void qspi_flash_init(QSPIFlash *dev, QSPIFlashPart *part, bool coredump_mode) {
   HAL_StatusTypeDef res;
 
+  dev->state->part = part;
+
   if (dev->qspi->state->initialized) {
     if (coredump_mode) {
       dev->qspi->state->ctx.handle.dma = NULL;
@@ -198,7 +200,6 @@ void qspi_flash_init(QSPIFlash *dev, QSPIFlashPart *part, bool coredump_mode) {
     return;
   }
 
-  dev->state->part = part;
   dev->qspi->state->ctx.dual_mode = 1;
 
   res = HAL_FLASH_Init(&dev->qspi->state->ctx, &dev->qspi->state->cfg,
