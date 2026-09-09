@@ -132,6 +132,17 @@ void k_sys_fatal_error_handler(unsigned int reason,
          (cfsr & SCB_CFSR_MMARVALID_Msk) != 0U, SCB->BFAR,
          (cfsr & SCB_CFSR_BFARVALID_Msk) != 0U, pc, lr, xpsr);
   prv_mpu_dump();
+  // Faulting thread's stack: return addresses in the code image give a
+  // backtrace via addr2line without a debugger on the rig.
+  {
+    const uint32_t *sp = (const uint32_t *)__get_PSP();
+    for (int row = 0; row < 12; ++row) {
+      printk("SANDBOX_STACK %08x: %08x %08x %08x %08x %08x %08x %08x %08x\n",
+             (unsigned)(uintptr_t)(sp + row * 8), (unsigned)sp[row * 8], (unsigned)sp[row * 8 + 1],
+             (unsigned)sp[row * 8 + 2], (unsigned)sp[row * 8 + 3], (unsigned)sp[row * 8 + 4],
+             (unsigned)sp[row * 8 + 5], (unsigned)sp[row * 8 + 6], (unsigned)sp[row * 8 + 7]);
+    }
+  }
 
   if (reason == K_ERR_KERNEL_PANIC || k_current_get() != s_app_thread) {
     k_fatal_halt(reason);

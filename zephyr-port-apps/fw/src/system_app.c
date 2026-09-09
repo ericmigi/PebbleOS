@@ -203,6 +203,69 @@ void fw_system_app_request_exit(void) {
   }
 }
 
+// Shipping tears an exiting app's animations and app timers down with its
+// task. Every system app here runs on KernelMain, sharing the kernel animation
+// state and the evented-timer pool, so unschedule/cancel only what the app
+// created since it launched (animation handles are monotonic; app_timer IDs
+// are recorded by input_service's app_timer_register).
+#include "applib/ui/animation_private.h"
+#include "pbl/services/evented_timer.h"
+#define APP_TIMER_TRACK_MAX 32
+static EventedTimerID s_app_timers[APP_TIMER_TRACK_MAX];
+static uint8_t s_app_timer_n;
+
+// Marks per launch nesting level (launcher, app, notification popup on top).
+#define APP_NEST_MAX 4
+static uint8_t s_timer_marks[APP_NEST_MAX];
+static uintptr_t s_anim_marks[APP_NEST_MAX];
+static int s_base_depths[APP_NEST_MAX];
+
+static void prv_cancel_app_timers_since(uint8_t mark);
+static void prv_unschedule_animations_since(uintptr_t first_handle);
+
+// Called by the window stack when a pop takes the stack back to the running
+// app's base depth: the app is exiting, so nothing it scheduled may fire into
+// the layers its unload is about to free.
+void fw_system_app_will_exit(int depth_after_pop) {
+  const int level = s_launch_nesting - 1;
+  if (level < 0 || level >= APP_NEST_MAX || depth_after_pop != s_base_depths[level]) {
+    return;
+  }
+  prv_unschedule_animations_since(s_anim_marks[level]);
+  prv_cancel_app_timers_since(s_timer_marks[level]);
+}
+
+void fw_app_timer_track(EventedTimerID id) {
+  if (s_launch_nesting > 0 && s_app_timer_n < APP_TIMER_TRACK_MAX) {
+    s_app_timers[s_app_timer_n++] = id;
+  }
+}
+
+static void prv_cancel_app_timers_since(uint8_t mark) {
+  for (uint8_t i = mark; i < s_app_timer_n; ++i) {
+    if (evented_timer_exists(s_app_timers[i])) {
+      evented_timer_cancel(s_app_timers[i]);
+    }
+  }
+  s_app_timer_n = mark;
+}
+
+static void prv_unschedule_animations_since(uintptr_t first_handle) {
+  AnimationState *state = kernel_applib_get_animation_state();
+  bool again = true;
+  while (again) {
+    again = false;
+    for (ListNode *n = state->scheduled_head; n; n = list_get_next(n)) {
+      AnimationPrivate *a = (AnimationPrivate *)n;
+      if (!a->parent && (uintptr_t)a->handle >= first_handle) {
+        animation_unschedule(a->handle);  // unlinks; restart the walk
+        again = true;
+        break;
+      }
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The launch entry point (called by the launcher on SELECT).
 // ---------------------------------------------------------------------------
@@ -237,10 +300,19 @@ void fw_system_app_launch(const PebbleProcessMd *md) {
   s_app_user_data = NULL;
   s_app_base_depth = fw_window_stack_depth();
   g_fw_privileged_window = true;
+  const uint8_t timer_mark = s_app_timer_n;
+  const uintptr_t anim_mark = kernel_applib_get_animation_state()->aux->next_handle;
+  if (s_launch_nesting < APP_NEST_MAX) {
+    s_timer_marks[s_launch_nesting] = timer_mark;
+    s_anim_marks[s_launch_nesting] = anim_mark;
+    s_base_depths[s_launch_nesting] = s_app_base_depth;
+  }
   ++s_launch_nesting;
   md->main_func();  // push window (load runs) -> app_event_loop -> deinit
   fw_compositor_launch_frame_exited(s_launch_nesting);
   --s_launch_nesting;
+  prv_unschedule_animations_since(anim_mark);
+  prv_cancel_app_timers_since(timer_mark);
 
   s_app_user_data = prev_user_data;
   s_app_base_depth = prev_base_depth;

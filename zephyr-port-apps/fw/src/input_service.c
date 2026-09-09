@@ -23,8 +23,12 @@
 // wrapper pulling in app_logging/syscall glue we don't need here. click.c only
 // uses register/cancel, and everything runs on KernelMain, so wrap
 // evented_timer directly (identical behaviour in privileged/kernel context).
+void fw_app_timer_track(EventedTimerID id);  // system_app.c: cancelled at app exit
+
 AppTimer *app_timer_register(uint32_t timeout_ms, AppTimerCallback cb, void *data) {
-  return (AppTimer *)(uintptr_t)evented_timer_register(timeout_ms, false, cb, data);
+  const EventedTimerID id = evented_timer_register(timeout_ms, false, cb, data);
+  fw_app_timer_track(id);
+  return (AppTimer *)(uintptr_t)id;
 }
 
 void app_timer_cancel(AppTimer *timer) {

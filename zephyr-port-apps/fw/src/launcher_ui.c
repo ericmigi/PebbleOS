@@ -568,6 +568,8 @@ static void prv_window_pop(void) {
   Window *window = s_stack[s_stack_top--];
   window->on_screen = false;
   printk("WINDOW_POP %p depth=%d\n", (void *)window, s_stack_top + 1);
+  extern void fw_system_app_will_exit(int depth_after_pop);
+  fw_system_app_will_exit(s_stack_top + 1);
   fw_shell_before_pop_render(window, s_stack_top + 1);
 
   // Run the real window's disappear + unload handlers (mirrors shipping window
