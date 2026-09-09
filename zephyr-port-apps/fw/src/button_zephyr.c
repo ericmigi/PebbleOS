@@ -11,6 +11,8 @@
 #include "button_input.h"
 
 #include <zephyr/kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/uart.h>
 
 #include "kernel/events.h"
 #include "pbl/logging/logging.h"
@@ -49,9 +51,70 @@ uint32_t button_debounce_step(ButtonDebouncer *d, uint32_t raw_state) {
 
 // k_timer expiry runs in ISR/sysclock context, matching the shipping GPT ISR;
 // event_put_isr() targets the kernel event queue without needing a PebbleTask.
+// Console-RX click injection (hardware only; qemu has sendkey): b/u/s/d press
+// a button for 120 ms, B/U/S/D for 800 ms. The virtual press is OR'd into the
+// sampler so it takes the same debounce + event path as a physical press,
+// like the shipping `click` console command.
+#if !defined(CONFIG_BOARD_QEMU_EMERY)
+static volatile uint32_t s_inject_mask;
+static volatile uint16_t s_inject_samples;
+static K_THREAD_STACK_DEFINE(s_inject_stack, 1024);
+static struct k_thread s_inject_thread;
+
+static void prv_inject_thread(void *a, void *b, void *c) {
+  ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
+  const struct device *console = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+  while (true) {
+    unsigned char ch;
+    if (uart_poll_in(console, &ch) != 0) {
+      k_sleep(K_MSEC(20));
+      continue;
+    }
+    int id = -1;
+    switch (ch | 0x20) {
+      case 'b': id = BUTTON_ID_BACK; break;
+      case 'u': id = BUTTON_ID_UP; break;
+      case 's': id = BUTTON_ID_SELECT; break;
+      case 'd': id = BUTTON_ID_DOWN; break;
+      default: break;
+    }
+    if (id < 0) {
+      continue;
+    }
+    const bool is_long = (ch & 0x20) == 0;
+    // Wait for any earlier press to release so keys sent back-to-back stay distinct.
+    while (s_inject_samples) {
+      k_sleep(K_MSEC(2));
+    }
+    k_sleep(K_MSEC(100));
+    s_inject_mask = 1u << id;
+    s_inject_samples = is_long ? 400 : 60;
+  }
+}
+
+static uint32_t prv_inject_apply(uint32_t raw) {
+  if (s_inject_samples) {
+    raw |= s_inject_mask;
+    if (--s_inject_samples == 0) {
+      s_inject_mask = 0;
+    }
+  }
+  return raw;
+}
+
+static void prv_inject_init(void) {
+  k_thread_create(&s_inject_thread, s_inject_stack, K_THREAD_STACK_SIZEOF(s_inject_stack),
+                  prv_inject_thread, NULL, NULL, NULL, 10, 0, K_NO_WAIT);
+  k_thread_name_set(&s_inject_thread, "btn_inject");
+}
+#else
+static uint32_t prv_inject_apply(uint32_t raw) { return raw; }
+static void prv_inject_init(void) {}
+#endif
+
 static void prv_sample_timer(struct k_timer *timer) {
   ARG_UNUSED(timer);
-  const uint32_t raw = button_raw_read();
+  const uint32_t raw = prv_inject_apply(button_raw_read());
   const uint32_t changed = button_debounce_step(&s_debouncer, raw);
 
   for (int i = 0; i < NUM_BUTTONS; ++i) {
@@ -77,6 +140,7 @@ void button_zephyr_init(void) {
   // EXTI/idle-stop gating when button standby current matters.
   k_timer_init(&s_sample_timer, prv_sample_timer, NULL);
   k_timer_start(&s_sample_timer, BUTTON_SAMPLE_PERIOD, BUTTON_SAMPLE_PERIOD);
+  prv_inject_init();
   PBL_LOG_ALWAYS("BTN_INIT_OK");
 }
 
