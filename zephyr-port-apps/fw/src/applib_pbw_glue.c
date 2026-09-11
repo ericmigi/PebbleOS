@@ -10,6 +10,7 @@
 #include <time.h>
 
 #include <zephyr/kernel.h>
+#include <zephyr/sys/printk.h>
 
 extern size_t strftime(char *s, size_t max, const char *fmt, const struct tm *tm);
 extern time_t mktime(struct tm *tb);
@@ -183,4 +184,22 @@ status_t persist_delete(const uint32_t key) {
   }
   prv_unstore(store);
   return rc;
+}
+
+// app_log / app_get_system_locale: exported-table entries a PBW calls at
+// startup. A weak stub returning 0 (NULL locale) makes locale-reading faces
+// bail, so provide real ones.
+#include <stdarg.h>
+char *i18n_get_locale(void);
+const char *app_get_system_locale(void) { return i18n_get_locale(); }
+
+void app_log(uint8_t log_level, const char *src_filename, int src_line_number,
+             const char *fmt, ...) {
+  (void)log_level; (void)src_filename; (void)src_line_number;
+  char buf[128];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
+  printk("APP_LOG %s\n", buf);
 }
