@@ -771,7 +771,8 @@ bool sys_resource_bytes_are_readonly(void *bytes) {
 }
 
 ResAppNum sys_get_current_resource_num(void) {
-  return SYSTEM_APP;
+  extern ResAppNum fw_pbw_current_resource_num(void) __attribute__((weak));
+  return fw_pbw_current_resource_num ? fw_pbw_current_resource_num() : SYSTEM_APP;
 }
 
 ResourceCallbackHandle resource_watch(ResAppNum app_num, uint32_t resource_id,

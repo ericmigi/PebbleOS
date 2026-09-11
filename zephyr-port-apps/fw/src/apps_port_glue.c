@@ -124,6 +124,19 @@ const PebbleProcessMd *fw_selected_watchface_md(void) {
   if (entry && entry->md && entry->md->process_type == ProcessTypeWatchface) {
     return entry->md;
   }
+  if (entry && entry->installed && (entry->info_flags & PROCESS_INFO_WATCH_FACE)) {
+    extern const PebbleProcessMd *fw_pbw_md_for(AppInstallId id);
+    extern bool fw_pbw_present(AppInstallId id);
+    extern void fw_pbw_launch(AppInstallId id);
+    if (fw_pbw_present(id)) {
+      const PebbleProcessMd *md = fw_pbw_md_for(id);
+      if (md) {
+        return md;
+      }
+    } else {
+      fw_pbw_launch(id);  // asks the phone for it; TicToc meanwhile
+    }
+  }
   return tictoc_get_app_info();
 }
 

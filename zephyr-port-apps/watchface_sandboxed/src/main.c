@@ -128,7 +128,7 @@ static bool prv_load_pbw(PebbleProcessInfo *info_out) {
     return false;
   }
 
-  const uint32_t jump_table = (uint32_t)(uintptr_t)g_pbl_system_tbl;
+  const uint32_t jump_table = (uint32_t)(uintptr_t)g_sandbox_system_tbl;
   memcpy(s_app_segment + info.sym_table_addr, &jump_table, sizeof(jump_table));
 
   (void)sys_cache_data_flush_range(s_app_segment, info.virtual_size);

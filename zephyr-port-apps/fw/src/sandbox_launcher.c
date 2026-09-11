@@ -22,6 +22,10 @@
 #include "sliding_text_emery_bin.h"
 #include "util/legacy_checksum.h"
 #include "watchface_port.h"
+#include "pbl/services/filesystem/pfs.h"
+
+extern const void *const g_pbl_system_tbl[];  // generated pebble.auto.c (full exported table)
+void fw_pbw_file_name(char *buf, size_t buf_len, int32_t id, const char *suffix);
 
 #define APP_STACK_SIZE 8192U
 #define APP_PRIORITY 6
@@ -135,7 +139,7 @@ static bool prv_load_pbw(PebbleProcessInfo *info_out) {
     return false;
   }
 
-  const uint32_t jump_table = (uint32_t)(uintptr_t)g_pbl_system_tbl;
+  const uint32_t jump_table = (uint32_t)(uintptr_t)g_sandbox_system_tbl;
   memcpy(s_app_segment + info.sym_table_addr, &jump_table, sizeof(jump_table));
   (void)sys_cache_data_flush_range(s_app_segment, info.virtual_size);
   (void)sys_cache_instr_invd_range(s_app_segment, info.virtual_size);
@@ -143,6 +147,57 @@ static bool prv_load_pbw(PebbleProcessInfo *info_out) {
   *info_out = info;
   printk("FW_LOADED entry=0x%08" PRIx32 " reloc=%" PRIu32 "\n",
          info.offset, info.num_reloc_entries);
+  return true;
+}
+
+// Load "@<id>/app" from PFS into the app segment: header/CRC checks,
+// relocation, and the FULL exported symbol table (the app runs privileged on
+// KernelMain through fw_pbw_runner.c, not the syscall-bridged sandbox).
+bool fw_pbw_load_file(int32_t id, PebbleProcessInfo *info_out, void **entry_out) {
+  char name[32];
+  fw_pbw_file_name(name, sizeof(name), id, "app");
+  const int fd = pfs_open(name, OP_FLAG_READ, FILE_TYPE_STATIC, 0);
+  if (fd < 0) {
+    printk("PBW_LOAD_FAIL open %s rc=%d\n", name, fd);
+    return false;
+  }
+  const size_t size = pfs_get_file_size(fd);
+  if (size < sizeof(PebbleProcessInfo) || size > sizeof(s_app_segment)) {
+    printk("PBW_LOAD_FAIL size=%u cap=%u\n", (unsigned)size, (unsigned)sizeof(s_app_segment));
+    pfs_close(fd);
+    return false;
+  }
+  memset(s_app_segment, 0, sizeof(s_app_segment));
+  const int got = pfs_read(fd, s_app_segment, size);
+  pfs_close(fd);
+  if (got != (int)size) {
+    printk("PBW_LOAD_FAIL read=%d\n", got);
+    return false;
+  }
+  PebbleProcessInfo info;
+  size_t stored_size;
+  memcpy(&info, s_app_segment, sizeof(info));
+  if (!prv_validate_header(&info, size, &stored_size)) {
+    return false;
+  }
+  const uint32_t crc = legacy_defective_checksum_memory(s_app_segment + sizeof(info),
+                                                        info.load_size - sizeof(info));
+  if (crc != info.crc) {
+    printk("PBW_LOAD_FAIL crc=0x%08" PRIx32 " expected=0x%08" PRIx32 "\n", crc, info.crc);
+    return false;
+  }
+  if (!prv_apply_relocations(&info)) {
+    return false;
+  }
+  const uint32_t jump_table = (uint32_t)(uintptr_t)g_pbl_system_tbl;
+  memcpy(s_app_segment + info.sym_table_addr, &jump_table, sizeof(jump_table));
+  (void)sys_cache_data_flush_range(s_app_segment, info.virtual_size);
+  (void)sys_cache_instr_invd_range(s_app_segment, info.virtual_size);
+  *info_out = info;
+  *entry_out = (void *)((uintptr_t)(s_app_segment + info.offset) | 1U);
+  printk("PBW_LOADED %s \"%s\" load=%u virt=%u reloc=%" PRIu32 " flags=0x%08" PRIx32 "\n", name,
+         info.name, (unsigned)info.load_size, (unsigned)info.virtual_size, info.num_reloc_entries,
+         info.flags);
   return true;
 }
 

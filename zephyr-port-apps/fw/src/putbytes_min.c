@@ -149,6 +149,8 @@ static void prv_reboot_work(struct k_work *work) {
   sys_reboot(SYS_REBOOT_COLD);
 }
 
+bool putbytes_min_transfer_active(void) { return s_putbytes.have_transfer; }
+
 void putbytes_min_init(void) {
   memset(&s_putbytes, 0, sizeof(s_putbytes));
   s_putbytes.app_fd = -1;

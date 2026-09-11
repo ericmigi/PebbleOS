@@ -319,7 +319,7 @@ DEFINE_SYSCALL(void, sandbox_unobstructed_area_service_unsubscribe, void) {
   app_unobstructed_area_service_unsubscribe();
 }
 
-const void *const g_pbl_system_tbl[626] = {
+const void *const g_sandbox_system_tbl[626] = {
     [31] = sandbox_app_event_loop,
     [96] = sandbox_fonts_get_system_font,
     [97] = sandbox_fonts_load_custom_font,

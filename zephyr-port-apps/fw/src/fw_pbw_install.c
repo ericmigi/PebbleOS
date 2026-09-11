@@ -100,6 +100,11 @@ static void prv_launch_cb(void *data) {
 
 static void prv_install_done_work(struct k_work *work) {
   (void)work;
+  extern bool putbytes_min_transfer_active(void) __attribute__((weak));
+  if (putbytes_min_transfer_active && putbytes_min_transfer_active()) {
+    (void)k_work_reschedule(&s_install_done_work, K_MSEC(700));  // resources still streaming
+    return;
+  }
   const AppInstallId id = s_installed;
   printk("PBW_INSTALLED %d\n", (int)id);
   if (id == s_fetching) {
@@ -130,7 +135,13 @@ static void prv_registry_changed(void) {
 
 bool fw_pbw_appdb_insert(const uint8_t *key, int key_len, const uint8_t *val, int val_len) {
   const status_t rv = app_db_insert(key, key_len, val, val_len);
-  printk("APPDB_INSERT rv=%d\n", (int)rv);
+  if (val_len >= (int)sizeof(AppDBEntry)) {
+    const AppDBEntry *e = (const AppDBEntry *)val;
+    printk("APPDB_INSERT rv=%d \"%.*s\" flags=0x%08x icon=%u\n", (int)rv, APP_NAME_SIZE_BYTES,
+           e->name, (unsigned)e->info_flags, (unsigned)e->icon_resource_id);
+  } else {
+    printk("APPDB_INSERT rv=%d len=%d\n", (int)rv, val_len);
+  }
   if (rv == S_SUCCESS) {
     prv_registry_changed();
   }
@@ -168,10 +179,22 @@ bool fw_pbw_appdb_clear(void) {
 
 // APP_RUN_STATE run command from the phone (CoreApp "launch on watch").
 static void prv_launch_uuid_cb(void *data) {
-  const AppInstallId id = app_db_get_install_id_for_uuid((const Uuid *)data);
+  AppInstallId id = app_db_get_install_id_for_uuid((const Uuid *)data);
+  if (id == INSTALL_ID_INVALID) {
+    // Not in AppDB (the phone's locker sync predates this firmware): create
+    // a provisional entry so the fetch has an install id; the header
+    // refresh after install fills in the real name and flags.
+    AppDBEntry entry = { .uuid = *(const Uuid *)data };
+    strncpy(entry.name, "Installing...", sizeof(entry.name) - 1);
+    if (app_db_insert((const uint8_t *)data, UUID_SIZE, (const uint8_t *)&entry,
+                      sizeof(entry)) == S_SUCCESS) {
+      id = app_db_get_install_id_for_uuid((const Uuid *)data);
+      fw_app_registry_reload();
+    }
+    printk("PBW_RUN_UUID provisional id=%d\n", (int)id);
+  }
   kernel_free(data);
   if (id == INSTALL_ID_INVALID) {
-    printk("PBW_RUN_UUID unknown\n");
     return;
   }
   const FwAppRegistryEntry *reg = fw_app_registry_find_by_id(id);
@@ -197,6 +220,28 @@ void fw_pbw_launch_uuid(const uint8_t uuid[16]) {
 // Until the PFS loader lands, running an installed PBW only reports.
 __attribute__((weak)) void fw_pbw_run(AppInstallId id) {
   printk("PBW_RUN %d (loader not wired)\n", (int)id);
+}
+
+// After a load: make the AppDB entry match the PBW header (provisional
+// entries, or a stale name/flags).
+void fw_pbw_appdb_refresh_from_header(AppInstallId id, const char *name, uint32_t flags) {
+  AppDBEntry entry;
+  if (app_db_get_app_entry_for_install_id(id, &entry) != S_SUCCESS) {
+    return;
+  }
+  const uint32_t new_flags = flags & (PROCESS_INFO_WATCH_FACE | PROCESS_INFO_VISIBILITY_HIDDEN |
+                                      PROCESS_INFO_VISIBILITY_SHOWN_ON_COMMUNICATION);
+  if (strncmp(entry.name, name, PROCESS_NAME_BYTES) == 0 && entry.info_flags == new_flags) {
+    return;
+  }
+  strncpy(entry.name, name, PROCESS_NAME_BYTES);
+  entry.name[PROCESS_NAME_BYTES] = '\0';
+  entry.info_flags = new_flags;
+  if (app_db_insert((const uint8_t *)&entry.uuid, UUID_SIZE, (const uint8_t *)&entry,
+                    sizeof(entry)) == S_SUCCESS) {
+    printk("APPDB_REFRESH %d \"%s\" flags=0x%x\n", (int)id, entry.name, (unsigned)new_flags);
+    fw_app_registry_reload();
+  }
 }
 
 void fw_pbw_install_init(void) {

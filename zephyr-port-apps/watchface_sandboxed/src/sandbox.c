@@ -249,7 +249,54 @@ static void __attribute__((naked, used)) prv_drop_privilege(void) {
       "bx r12\n");
 }
 
+// Privileged PBW execution (fw_pbw_runner.c): the app segment lives in SRAM,
+// which Zephyr maps execute-never. ARMv8-M faults on overlapping regions, so
+// (like the sandbox's app-thread branch) the SRAM region that covers the
+// arena is narrowed to the arena with XN clear; privileged accesses to the
+// rest of SRAM fall back to the default map (PRIVDEFENA). Zephyr rewrites
+// the dynamic regions on every switch, hence the re-arm from the restore hook.
+static bool s_arena_exec;
+static uint8_t s_arena_exec_region;
+
+static void prv_write_arena_exec_region(void) {
+  const uintptr_t arena_start = (uintptr_t)&g_sandbox_app_arena;
+  const size_t arena_size = sizeof(g_sandbox_app_arena);
+  const uint32_t rbar = arena_start & MPU_RBAR_BASE_Msk;  // AP=0: privileged RW, XN clear
+  const uint32_t rlar = ((arena_start + arena_size - 1U) & MPU_RLAR_LIMIT_Msk) |
+                        (MPU_MAIR_INDEX_SRAM << MPU_RLAR_AttrIndx_Pos) | MPU_RLAR_EN_Msk;
+  const uint32_t ctrl = prv_mpu_batch_begin();
+  prv_mpu_region_write_raw(s_arena_exec_region, rbar, rlar);
+  prv_mpu_batch_end(ctrl);
+}
+
+bool sandbox_arena_exec_enable(void) {
+  if (s_arena_exec) {
+    return true;
+  }
+  const uintptr_t arena_start = (uintptr_t)&g_sandbox_app_arena;
+  const uint8_t regions = (uint8_t)((MPU->TYPE & MPU_TYPE_DREGION_Msk) >> MPU_TYPE_DREGION_Pos);
+  for (uint8_t i = 0U; i < regions; ++i) {
+    uint32_t rbar, rlar;
+    prv_mpu_region_read(i, &rbar, &rlar);
+    if (prv_region_contains(rbar, rlar, arena_start, sizeof(g_sandbox_app_arena))) {
+      s_arena_exec_region = i;
+      s_arena_exec = true;
+      prv_write_arena_exec_region();
+      __ISB();
+      printk("SANDBOX_ARENA_EXEC region=%u base=%p size=%u\n", i, (void *)arena_start,
+             (unsigned)sizeof(g_sandbox_app_arena));
+      return true;
+    }
+  }
+  printk("SANDBOX_ARENA_EXEC_FAIL no region covers the arena\n");
+  return false;
+}
+
 void z_arm_custom_thread_restore_hook(struct k_thread *incoming) {
+  if (s_arena_exec) {
+    prv_write_arena_exec_region();
+    __ISB();
+  }
   if (!atomic_get(&s_sandbox_ready)) {
     return;
   }

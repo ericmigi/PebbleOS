@@ -15,6 +15,12 @@
 #include "applib/applib_resource.h"
 #include "flash_region/flash_region.h"
 #include "resource/resource.h"
+#include "pbl/services/filesystem/pfs.h"
+
+void *applib_malloc(size_t size);
+void applib_free(void *ptr);
+
+void fw_pbw_file_name(char *buf, size_t buf_len, int32_t id, const char *suffix);
 
 #define PACK_BASE ((const uint8_t *)FLASH_REGION_SYSTEM_RESOURCES_BANK_0_BEGIN)
 #define PACK_MAX_SIZE \
@@ -85,6 +91,55 @@ static const uint8_t *prv_builtin_resource(uint32_t resource_id, size_t *size_ou
   return NULL;
 }
 
+// Phone-installed app packs live in PFS ("@<id>/res", pbpack layout: 12-byte
+// manifest, 256 x 16-byte table, content). Not mappable: callers get copies.
+#define APP_PACK_MAX_ENTRIES 256U
+#define APP_PACK_CONTENT_OFFSET (PACK_MANIFEST_SIZE + PACK_TABLE_ENTRY_SIZE * APP_PACK_MAX_ENTRIES)
+
+static int prv_app_pack_open(ResAppNum app_num) {
+  char name[32];
+  fw_pbw_file_name(name, sizeof(name), (int32_t)app_num, "res");
+  return pfs_open(name, OP_FLAG_READ, FILE_TYPE_STATIC, 0);
+}
+
+// Content offset + size of resource_id in app_num's pack, or false.
+static bool prv_app_pack_locate(ResAppNum app_num, uint32_t resource_id, uint32_t *offset_out,
+                                size_t *size_out) {
+  if (resource_id == 0U || resource_id > APP_PACK_MAX_ENTRIES) {
+    return false;
+  }
+  const int fd = prv_app_pack_open(app_num);
+  if (fd < 0) {
+    return false;
+  }
+  uint8_t hdr[4], entry[PACK_TABLE_ENTRY_SIZE];
+  bool ok = pfs_read(fd, hdr, sizeof(hdr)) == (int)sizeof(hdr) &&
+            resource_id <= prv_read_u32(hdr) &&
+            pfs_seek(fd, PACK_MANIFEST_SIZE + (resource_id - 1U) * PACK_TABLE_ENTRY_SIZE, FSeekSet) >= 0 &&
+            pfs_read(fd, entry, sizeof(entry)) == (int)sizeof(entry) &&
+            prv_read_u32(entry) == resource_id;
+  pfs_close(fd);
+  if (!ok) {
+    return false;
+  }
+  *offset_out = APP_PACK_CONTENT_OFFSET + prv_read_u32(entry + 4U);
+  *size_out = prv_read_u32(entry + 8U);
+  return true;
+}
+
+static size_t prv_app_pack_read(ResAppNum app_num, uint32_t offset, uint8_t *buf, size_t n) {
+  const int fd = prv_app_pack_open(app_num);
+  if (fd < 0) {
+    return 0;
+  }
+  int got = 0;
+  if (pfs_seek(fd, (int)offset, FSeekSet) >= 0) {
+    got = pfs_read(fd, buf, n);
+  }
+  pfs_close(fd);
+  return got > 0 ? (size_t)got : 0;
+}
+
 static const uint8_t *prv_lookup(ResAppNum app_num, uint32_t resource_id, size_t *size_out) {
   if (app_num != SYSTEM_APP) {
     return NULL;
@@ -107,10 +162,18 @@ static const uint8_t *prv_lookup(ResAppNum app_num, uint32_t resource_id, size_t
 }
 
 bool sys_resource_is_valid(ResAppNum app_num, uint32_t resource_id) {
+  if (app_num != SYSTEM_APP) {
+    uint32_t off; size_t size;
+    return prv_app_pack_locate(app_num, resource_id, &off, &size);
+  }
   return prv_lookup(app_num, resource_id, NULL) != NULL;
 }
 
 size_t sys_resource_size(ResAppNum app_num, uint32_t resource_id) {
+  if (app_num != SYSTEM_APP) {
+    uint32_t off; size_t size;
+    return prv_app_pack_locate(app_num, resource_id, &off, &size) ? size : 0;
+  }
   size_t size = 0;
   (void)prv_lookup(app_num, resource_id, &size);
   return size;
@@ -118,6 +181,14 @@ size_t sys_resource_size(ResAppNum app_num, uint32_t resource_id) {
 
 size_t sys_resource_load_range(ResAppNum app_num, uint32_t resource_id, uint32_t start_bytes,
                                uint8_t *buffer, size_t num_bytes) {
+  if (app_num != SYSTEM_APP) {
+    uint32_t off; size_t size;
+    if (!prv_app_pack_locate(app_num, resource_id, &off, &size) || start_bytes >= size) {
+      return 0;
+    }
+    const size_t n = (num_bytes < size - start_bytes) ? num_bytes : (size - start_bytes);
+    return prv_app_pack_read(app_num, off + start_bytes, buffer, n);
+  }
   size_t size = 0;
   const uint8_t *data = prv_lookup(app_num, resource_id, &size);
   if (!data || start_bytes >= size) {
@@ -134,6 +205,9 @@ uint32_t sys_resource_get_and_cache(ResAppNum app_num, uint32_t resource_id) {
 
 const uint8_t *sys_resource_read_only_bytes(ResAppNum app_num, uint32_t resource_id,
                                             size_t *num_bytes_out) {
+  if (app_num != SYSTEM_APP) {
+    return NULL;  // not mappable; callers fall back to load
+  }
   return prv_lookup(app_num, resource_id, num_bytes_out);
 }
 
@@ -151,6 +225,19 @@ bool sys_resource_bytes_are_readonly(void *bytes) {
 void *applib_resource_mmap_or_load(ResAppNum app_num, uint32_t resource_id, size_t offset,
                                    size_t length, bool use_aligned) {
   (void)use_aligned;
+  if (app_num != SYSTEM_APP) {
+    uint32_t off; size_t size;
+    if (!prv_app_pack_locate(app_num, resource_id, &off, &size) || offset > size ||
+        length > size - offset) {
+      return NULL;
+    }
+    uint8_t *copy = applib_malloc(length);  // freed by applib_resource_munmap_or_free
+    if (copy && prv_app_pack_read(app_num, off + offset, copy, length) != length) {
+      applib_free(copy);
+      copy = NULL;
+    }
+    return copy;
+  }
   size_t size = 0;
   const uint8_t *data = prv_lookup(app_num, resource_id, &size);
   if (!data || offset > size || length > size - offset) {
@@ -160,6 +247,10 @@ void *applib_resource_mmap_or_load(ResAppNum app_num, uint32_t resource_id, size
 }
 
 void applib_resource_munmap_or_free(void *bytes) {
+  if (bytes && !sys_resource_bytes_are_readonly(bytes)) {
+    applib_free(bytes);  // loaded copy (app pack, or gbitmap's decoded pixels)
+    return;
+  }
   port_applib_resource_munmap_or_free(bytes);
 }
 

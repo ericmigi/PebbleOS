@@ -132,6 +132,8 @@ bool ppog_min_send_pp(uint16_t endpoint, const uint8_t *payload,
 
 // Transport hook for fw_pp_dispatch.c (BlobDB acks etc.): over BLE, a PP
 // notify on the live PPoGATT connection.
+bool fw_pp_session_is_up(void) { return s_session_open; }
+
 bool fw_pp_send(uint16_t endpoint, const uint8_t *payload, uint16_t len) {
   return ppog_min_send_pp(endpoint, payload, len);
 }

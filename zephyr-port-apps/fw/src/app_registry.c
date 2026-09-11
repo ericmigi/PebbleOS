@@ -210,6 +210,12 @@ static void prv_build(void) {
 void fw_app_registry_reload(void) {
   prv_build();
   printk("FW_REGISTRY_RELOAD apps=%zu\n", s_entry_count);
+  for (size_t i = 0; i < s_entry_count; ++i) {
+    if (s_entries[i].installed) {
+      printk("FW_APP_INSTALLED %" PRId32 " \"%s\" flags=0x%08x\n", s_entries[i].install_id,
+             s_entries[i].name, (unsigned)s_entries[i].info_flags);
+    }
+  }
 }
 
 void fw_app_registry_init(void) {

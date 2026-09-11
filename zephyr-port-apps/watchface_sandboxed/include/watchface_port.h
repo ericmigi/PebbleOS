@@ -9,7 +9,7 @@
 
 #include "kernel/events.h"
 
-extern const void *const g_pbl_system_tbl[626];
+extern const void *const g_sandbox_system_tbl[626];
 
 void watchface_port_set_threads(struct k_thread *kernel_thread, struct k_thread *app_thread);
 void watchface_port_graphics_init(void);

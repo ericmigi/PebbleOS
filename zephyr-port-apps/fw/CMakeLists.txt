@@ -319,6 +319,13 @@ target_sources(app PRIVATE
   src/notifications_app.c
   src/fw_pp_dispatch.c
   src/fw_pbw_install.c
+  src/fw_pbw_runner.c
+  src/pbl_table_stubs.c
+  src/applib_pbw_glue.c
+  "${PEBBLEOS_ROOT}/src/fw/services/persist/service.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/filesystem/app_file.c"
+  "${PEBBLEOS_ROOT}/src/fw/applib/ui/text_layer_flow.c"
+  "${FW_GEN_DIR}/src/fw/pebble.auto.c"
   src/timeline_app.c
   src/digital_face.c
   src/fw_music_glue.c
@@ -1214,3 +1221,10 @@ set_property(SOURCE "${PEBBLEOS_ROOT}/zephyr-port-apps/watchface_sandboxed/src/p
   applib_resource_munmap_or_free=port_applib_resource_munmap_or_free
   applib_resource_get_handle=port_applib_resource_get_handle
 )
+
+set_source_files_properties("${FW_GEN_DIR}/src/fw/pebble.auto.c"
+  PROPERTIES COMPILE_OPTIONS "-include;${CMAKE_CURRENT_SOURCE_DIR}/include/pbl_table_pre.h")
+
+set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/src/applib_pbw_glue.c"
+  "${PEBBLEOS_ROOT}/src/fw/services/persist/service.c"
+  PROPERTIES COMPILE_OPTIONS "-include;fw_zephyr_pre.h")

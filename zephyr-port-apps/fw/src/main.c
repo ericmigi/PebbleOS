@@ -136,6 +136,8 @@ static void prv_kernel_main(void *parameter) {
     fw_alarm_alert_init();
     extern void fw_pbw_install_init(void);
     fw_pbw_install_init();
+    extern void persist_service_init(void);
+    persist_service_init();
 #if defined(CONFIG_BOARD_QEMU_EMERY)
     extern void fw_qemu_notif_rx_init(void);
     fw_qemu_notif_rx_init();
@@ -198,7 +200,7 @@ int main(void) {
   TaskParameters_t main_task = {
     .pvTaskCode = prv_kernel_main,
     .pcName = "KernelMain",
-    .usStackDepth = 6144 / sizeof(portSTACK_TYPE),
+    .usStackDepth = 10240 / sizeof(portSTACK_TYPE),
     .uxPriority = tskIDLE_PRIORITY + 3,
   };
   pebble_task_create(PebbleTask_KernelMain, &main_task, NULL);
