@@ -33,28 +33,37 @@ void watchface_set_default_install_id(AppInstallId app_id);
 static PebbleProcessMdSystem s_md;
 static char s_md_name[PROCESS_NAME_BYTES + 1];
 static AppInstallId s_loaded = INSTALL_ID_INVALID;   // id whose image is in the segment
-static AppInstallId s_running = INSTALL_ID_INVALID;  // resource bank while its main runs
+static AppInstallId s_running = INSTALL_ID_INVALID;  // resource bank of the app whose main runs now
 static int (*s_entry)(void);
 
+// The resource bank of the CURRENTLY running app. system_app.c drives this
+// around each (nested) launch so a system app (launcher, glances) always sees
+// SYSTEM_APP even if a PBW watchface launched it. A sticky flag would leak the
+// PBW bank into the launcher's glance-icon load and NULL it (assert).
 ResAppNum fw_pbw_current_resource_num(void) {
   return s_running != INSTALL_ID_INVALID ? (ResAppNum)s_running : SYSTEM_APP;
 }
 
+// Bank the given md runs in: the loaded PBW's id for the PBW md, else SYSTEM.
+AppInstallId fw_pbw_bank_for_md(const PebbleProcessMd *md) {
+  return (md == &s_md.common) ? s_loaded : INSTALL_ID_INVALID;
+}
+AppInstallId fw_pbw_bank_get(void) { return s_running; }
+void fw_pbw_bank_set(AppInstallId bank) { s_running = bank; }
+
 const Uuid *fw_pbw_current_uuid(void) {
-  return s_running != INSTALL_ID_INVALID ? &s_md.common.uuid : NULL;
+  return (s_running != INSTALL_ID_INVALID && s_running == s_loaded) ? &s_md.common.uuid : NULL;
 }
 
 static void prv_main(void) {
   const AppInstallId id = s_loaded;
   extern void persist_service_client_open(const Uuid *uuid);
   extern void persist_service_client_close(const Uuid *uuid);
-  s_running = id;
   persist_service_client_open(&s_md.common.uuid);
   printk("PBW_MAIN %d\n", (int)id);
   const int rc = s_entry();
   printk("PBW_EXIT %d rc=%d\n", (int)id, rc);
   persist_service_client_close(&s_md.common.uuid);
-  s_running = INSTALL_ID_INVALID;
 }
 
 // md for an installed PBW; loads it into the (single) app segment.

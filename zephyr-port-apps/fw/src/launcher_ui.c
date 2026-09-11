@@ -904,6 +904,13 @@ void fw_ui_pump_once(void) {
   if (s_wf_switch_pending) {
     if (s_stack_top >= 0) {
       prv_window_pop();
+      // Clear the instant the stack empties, in this same pop: the shell root
+      // loop relaunches the selected face right after and pushes its window;
+      // leaving the flag set until the next pump would pop that new face too
+      // (infinite relaunch churn that starves the rest of KernelMain).
+      if (s_stack_top < 0) {
+        s_wf_switch_pending = false;
+      }
     } else {
       s_wf_switch_pending = false;
     }

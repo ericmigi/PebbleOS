@@ -297,6 +297,14 @@ void fw_system_app_launch(const PebbleProcessMd *md) {
     tick_timer_service_unsubscribe();
   }
 
+  extern AppInstallId fw_pbw_bank_for_md(const PebbleProcessMd *md) __attribute__((weak));
+  extern AppInstallId fw_pbw_bank_get(void) __attribute__((weak));
+  extern void fw_pbw_bank_set(AppInstallId bank) __attribute__((weak));
+  const AppInstallId prev_bank = fw_pbw_bank_get ? fw_pbw_bank_get() : 0;
+  if (fw_pbw_bank_set) {
+    fw_pbw_bank_set(fw_pbw_bank_for_md(md));
+  }
+
   s_app_user_data = NULL;
   s_app_base_depth = fw_window_stack_depth();
   g_fw_privileged_window = true;
@@ -314,6 +322,9 @@ void fw_system_app_launch(const PebbleProcessMd *md) {
   prv_unschedule_animations_since(anim_mark);
   prv_cancel_app_timers_since(timer_mark);
 
+  if (fw_pbw_bank_set) {
+    fw_pbw_bank_set(prev_bank);
+  }
   s_app_user_data = prev_user_data;
   s_app_base_depth = prev_base_depth;
   g_fw_privileged_window = prev_privileged;
