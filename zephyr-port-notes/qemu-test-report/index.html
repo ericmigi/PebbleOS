@@ -1,5 +1,5 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Zephyr port QEMU test report — 823a33d8c</title>
+<html><head><meta charset="utf-8"><title>Zephyr port QEMU test report — f390f3b49</title>
 <style>
  body{font:14px/1.4 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;margin:24px;color:#222}
  h1{margin:0 0 4px} .meta{color:#555;margin-bottom:16px} code{background:#f3f3f3;padding:1px 4px}
@@ -11,28 +11,10 @@
 </style></head><body>
 <h1>Zephyr port — QEMU end-to-end test report</h1>
 <div class="meta">
-  Firmware: <code>823a33d8c</code> (<code>823a33d8ca17db05db5aada3719d45472892bd01</code>) on <code>zephyr/obelix</code> — zephyr-port: tear down an exiting app&#x27;s animations and timers<br>
-  <b>Uncommitted changes in tree:</b> <code>M zephyr-port-notes/qemu-test-report/index.html
- M zephyr-port-notes/qemu-test-report/screenshots/clock_t0.png
- M zephyr-port-notes/qemu-test-report/screenshots/clock_ticks.png
- M zephyr-port-notes/qemu-test-report/screenshots/music_now_playing.png
- M zephyr-port-notes/qemu-test-report/screenshots/music_pause_freezes.png
- M zephyr-port-notes/qemu-test-report/screenshots/music_pause_t0.png
- M zephyr-port-notes/qemu-test-report/screenshots/music_progress_t0.png
- M zephyr-port-notes/qemu-test-report/screenshots/music_progress_ticks.png
- M zephyr-port-notes/qemu-test-report/screenshots/no_fatal_overall.png
- M zephyr-port-notes/qemu-test-report/screenshots/notif_popup.png
- M zephyr-port-notes/qemu-test-report/screenshots/notif_stays.png
- M zephyr-port-notes/qemu-test-report/screenshots/timeline_card.png
- M zephyr-port-notes/qemu-test-report/screenshots/timeline_pins_list.png
- M zephyr-port-notes/qemu-test-report/screenshots/timeline_swipe.png
- M zephyr-port-notes/qemu-test-report/screenshots/timeline_swipe_t0.png
- M zephyr-port-notes/qemu-test-report/screenshots/watchface_persists_reboot.png
- M zephyr-port-notes/qemu-test-report/screenshots/watchface_switch.png
- M zephyr-port-notes/qemu-test-report/screenshots/watchface_tictoc.png
-?? zephyr-port-notes/qemu-test-report/screenshots/settings_system_information.png</code><br>
-  ELF built: 2026-09-08T17:42:02 &nbsp;·&nbsp; Board: qemu_emery &nbsp;·&nbsp; Run: 2026-09-08T17:42:03 → 2026-09-08T17:46:38<br>
-  Reproduce: <code>git checkout 823a33d8c && bash ~/dev/pblboot-ws/fwbuild.sh && python3 zephyr-port-notes/tools/qemu_test_suite.py</code>
+  Firmware: <code>f390f3b49</code> (<code>f390f3b4987893c31aeaf4be69283a9598340939</code>) on <code>zephyr/obelix</code> — zephyr-port: serve installed-app resources and fonts; single PutBytes path<br>
+  Tree clean.<br>
+  ELF built: 2026-09-11T13:25:01 &nbsp;·&nbsp; Board: qemu_emery &nbsp;·&nbsp; Run: 2026-09-11T13:25:02 → 2026-09-11T13:29:38<br>
+  Reproduce: <code>git checkout f390f3b49 && bash ~/dev/pblboot-ws/fwbuild.sh && python3 zephyr-port-notes/tools/qemu_test_suite.py</code>
 </div>
 <div class="summary"><span class="ok">24 / 24 passed</span></div>
 <table><thead><tr><th>Test</th><th>Result</th><th>Reason / evidence</th><th>Screenshot</th></tr></thead>
@@ -52,7 +34,7 @@
       <tr class="pass">
         <td class="name">clock_ticks<div class="desc">Per-second tick pump: the watchface minute hand moves across a minute boundary</div></td>
         <td class="status">PASS</td>
-        <td class="reason">876 px changed after minute rollover</td>
+        <td class="reason">957 px changed after minute rollover</td>
         <td class="shot"><img src="screenshots/clock_ticks.png" alt="clock_ticks"></td>
       </tr>
       <tr class="pass">
@@ -100,7 +82,7 @@
       <tr class="pass">
         <td class="name">music_progress_ticks<div class="desc">Progress bar/position advance while playing (8s)</div></td>
         <td class="status">PASS</td>
-        <td class="reason">42 px changed in progress region over 8s</td>
+        <td class="reason">89 px changed in progress region over 8s</td>
         <td class="shot"><img src="screenshots/music_progress_ticks.png" alt="music_progress_ticks"></td>
       </tr>
       <tr class="pass">
@@ -148,7 +130,7 @@
       <tr class="pass">
         <td class="name">timeline_swipe<div class="desc">DOWN swipes to the next pin card (SwapLayer)</div></td>
         <td class="status">PASS</td>
-        <td class="reason">card changed on DOWN (991 px)</td>
+        <td class="reason">card changed on DOWN (1833 px)</td>
         <td class="shot"><img src="screenshots/timeline_swipe.png" alt="timeline_swipe"></td>
       </tr>
       <tr class="pass">
