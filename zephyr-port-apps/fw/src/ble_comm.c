@@ -55,6 +55,8 @@ K_THREAD_STACK_DEFINE(s_host_stack, BLE_HOST_STACK_SIZE);
 static struct k_thread s_init_thread;
 static struct k_thread s_host_thread;
 static struct k_work_delayable s_sync_timeout;
+static struct k_work_delayable s_sec_initiate;
+static uint16_t s_pending_sec_conn = 0xffff;
 static bool s_init_started;
 static bool s_synchronized;
 static uint16_t s_service_changed_val_handle;
@@ -119,6 +121,11 @@ static int prv_gap_event(struct ble_gap_event *event, void *arg) {
       if (event->connect.status == 0) {
         printk("FW_BLE_CONNECTED handle=%u\n",
                (unsigned int)event->connect.conn_handle);
+        // Peripheral-initiated pairing fallback: if the central has not started
+        // security within a few seconds (some CoreApp reconnect paths skip the
+        // pairing-service trigger), request it ourselves.
+        s_pending_sec_conn = event->connect.conn_handle;
+        (void)k_work_reschedule(&s_sec_initiate, K_SECONDS(3));
       } else {
         prv_fail("connect", event->connect.status);
         (void)prv_start_advertising();
@@ -126,6 +133,8 @@ static int prv_gap_event(struct ble_gap_event *event, void *arg) {
       break;
     case BLE_GAP_EVENT_DISCONNECT:
       printk("FW_BLE_DISCONNECTED reason=0x%x\n", event->disconnect.reason);
+      s_pending_sec_conn = 0xffff;
+      (void)k_work_cancel_delayable(&s_sec_initiate);
       (void)prv_start_advertising();
       break;
     case BLE_GAP_EVENT_ENC_CHANGE:
@@ -135,6 +144,8 @@ static int prv_gap_event(struct ble_gap_event *event, void *arg) {
 
         printk("FW_BLE_ENCRYPTED handle=%u\n",
                (unsigned int)event->enc_change.conn_handle);
+        s_pending_sec_conn = 0xffff;
+        (void)k_work_cancel_delayable(&s_sec_initiate);
         if (rc != 0) {
           prv_fail("conn_find", rc);
         } else if (desc.sec_state.bonded && s_service_changed_cccd_seeded &&
@@ -219,6 +230,19 @@ static int prv_start_advertising(void) {
   }
   printk("FW_BLE_ADV\n");
   return 0;
+}
+
+static void prv_sec_initiate_work(struct k_work *work) {
+  (void)work;
+  const uint16_t conn = s_pending_sec_conn;
+  if (conn == 0xffff) {
+    return;
+  }
+  struct ble_gap_conn_desc desc;
+  if (ble_gap_conn_find(conn, &desc) == 0 && !desc.sec_state.encrypted) {
+    const int rc = ble_gap_security_initiate(conn);
+    printk("FW_BLE_SEC_INITIATE handle=%u rc=%d\n", (unsigned int)conn, rc);
+  }
 }
 
 static void prv_sync_timeout(struct k_work *work) {
@@ -351,6 +375,7 @@ static void prv_init_main(void *arg1, void *arg2, void *arg3) {
   printk("FW_BLE_HOST_UP\n");
 
   k_work_init_delayable(&s_sync_timeout, prv_sync_timeout);
+  k_work_init_delayable(&s_sec_initiate, prv_sec_initiate_work);
   (void)k_work_schedule(&s_sync_timeout, K_SECONDS(5));
   ble_hs_sched_start();
 }
