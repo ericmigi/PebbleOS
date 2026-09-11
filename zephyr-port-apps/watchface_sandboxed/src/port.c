@@ -869,7 +869,21 @@ GFont sys_font_get_system_font(const char *font_key) {
   return fonts_get_system_font(font_key);
 }
 
+// A phone-installed PBW's font lives in its own resource pack: build a
+// FontInfo over it like shipping's fonts_load_custom_font_system.
 GFont fonts_load_custom_font(ResHandle handle) {
+  const ResAppNum bank = sys_get_current_resource_num();
+  if (bank != SYSTEM_APP && handle != NULL) {
+    FontInfo *font_info = applib_malloc(sizeof(FontInfo));
+    if (font_info) {
+      memset(font_info, 0, sizeof(*font_info));
+      if (text_resources_init_font(bank, (uint32_t)(uintptr_t)handle, 0, font_info)) {
+        return font_info;
+      }
+      applib_free(font_info);
+    }
+    return &s_font_system;
+  }
   switch ((uintptr_t)handle) {
     case FONT_RESOURCE_GOTHAM_BOLD_50:
       return &s_font_bold;
@@ -881,7 +895,9 @@ GFont fonts_load_custom_font(ResHandle handle) {
 }
 
 void fonts_unload_custom_font(GFont font) {
-  ARG_UNUSED(font);
+  if (font && font != &s_font_system && font != &s_font_bold && font != &s_font_light) {
+    applib_free(font);  // app-pack font from fonts_load_custom_font
+  }
 }
 
 void sys_font_reload_font(FontInfo *font_info) {

@@ -148,6 +148,10 @@ static void prv_handle_music(const uint8_t *data, uint16_t pp_len) {
 #define BLOB_DB_ACK_GENERAL_FAILURE 0x02
 #define APP_FETCH_ENDPOINT 0x1771
 #define APP_RUN_STATE_ENDPOINT 0x0034
+#define PUT_BYTES_ENDPOINT 0xbeef
+#define SYSTEM_MESSAGE_ENDPOINT 0x0012
+void putbytes_min_handle_request(const uint8_t *payload, uint16_t payload_len);
+void putbytes_min_handle_system_message(const uint8_t *payload, uint16_t payload_len);
 
 // fw_pbw_install.c
 bool fw_pbw_appdb_insert(const uint8_t *key, int key_len, const uint8_t *val, int val_len);
@@ -213,6 +217,14 @@ void fw_pp_handle_endpoint(uint16_t endpoint, const uint8_t *data, uint16_t pp_l
   }
   if (endpoint == APP_FETCH_ENDPOINT) {
     fw_pbw_handle_fetch_response(data, pp_len);
+    return;
+  }
+  if (endpoint == PUT_BYTES_ENDPOINT) {
+    putbytes_min_handle_request(data, pp_len);
+    return;
+  }
+  if (endpoint == SYSTEM_MESSAGE_ENDPOINT) {
+    putbytes_min_handle_system_message(data, pp_len);
     return;
   }
   if (endpoint == APP_RUN_STATE_ENDPOINT) {

@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <zephyr/sys/printk.h>
 
 #include "applib/applib_resource.h"
 #include "flash_region/flash_region.h"
@@ -261,7 +262,9 @@ bool applib_resource_is_mmapped(const void *bytes) {
 }
 
 ResHandle applib_resource_get_handle(uint32_t resource_id) {
-  return sys_resource_is_valid(SYSTEM_APP, resource_id) ? (ResHandle)(uintptr_t)resource_id : NULL;
+  ResAppNum sys_get_current_resource_num(void);
+  return sys_resource_is_valid(sys_get_current_resource_num(), resource_id)
+             ? (ResHandle)(uintptr_t)resource_id : NULL;
 }
 
 // resource.h entry used by the real timezone-database service (compiled on the
@@ -269,4 +272,23 @@ ResHandle applib_resource_get_handle(uint32_t resource_id) {
 size_t resource_load_byte_range_system(ResAppNum app_num, uint32_t resource_id,
                                        uint32_t start_offset, uint8_t *data, size_t num_bytes) {
   return sys_resource_load_range(app_num, resource_id, start_offset, data, num_bytes);
+}
+
+ResAppNum sys_get_current_resource_num(void);
+
+// applib_resource.c entries the SDK table exports (fonts_load_custom_font
+// sizes/loads through these): resolve against the running app's bank.
+size_t applib_resource_size(ResHandle h) {
+  return sys_resource_size(sys_get_current_resource_num(), (uint32_t)(uintptr_t)h);
+}
+
+size_t applib_resource_load(ResHandle h, uint8_t *buffer, size_t max_length) {
+  return sys_resource_load_range(sys_get_current_resource_num(), (uint32_t)(uintptr_t)h, 0, buffer,
+                                 max_length);
+}
+
+size_t applib_resource_load_byte_range(ResHandle h, uint32_t start_offset, uint8_t *buffer,
+                                       size_t num_bytes) {
+  return sys_resource_load_range(sys_get_current_resource_num(), (uint32_t)(uintptr_t)h,
+                                 start_offset, buffer, num_bytes);
 }

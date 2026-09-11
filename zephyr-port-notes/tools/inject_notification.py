@@ -71,6 +71,50 @@ TYPE_PIN = 2
 DB_APPS = 0x02
 
 
+EP_PUTBYTES = 0xbeef
+PB_CHUNK = 2000
+
+
+def pb_token(seq):
+    """putbytes_min tokens: seed += 0x9e3779b9 per Init since boot."""
+    return (seq * 0x9e3779b9) & 0xffffffff or 1
+
+
+def legacy_checksum(data):
+    """util/legacy_checksum.c (STM32 CRC over 32-bit words, tail padded)."""
+    table = [0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b, 0x1a864db2,
+             0x1e475005, 0x2608edb8, 0x22c9f00f, 0x2f8ad6d6, 0x2b4bcb61, 0x350c9b64, 0x31cd86d3,
+             0x3c8ea00a, 0x384fbdbd]
+    crc = 0xffffffff
+    def byte(crc, b):
+        crc = ((crc << 4) ^ table[((crc >> 28) ^ (b >> 4)) & 0xf]) & 0xffffffff
+        crc = ((crc << 4) ^ table[((crc >> 28) ^ (b & 0xf)) & 0xf]) & 0xffffffff
+        return crc
+    # words are fed MSB-first after byte-reversal (the "defective" part)
+    full = len(data) - (len(data) % 4)
+    for i in range(0, full, 4):
+        for b in data[i:i+4][::-1]:
+            crc = byte(crc, b)
+    tail = data[full:]
+    if tail:  # finish(): zero padding first, then the tail bytes in order
+        for _ in range(4 - len(tail)):
+            crc = byte(crc, 0)
+        for b in tail:
+            crc = byte(crc, b)
+    return crc
+
+
+def putbytes_frames(obj_type, cookie, data, seq):
+    tok = pb_token(seq)
+    frames = [struct.pack('>BIBI', 0x01, len(data), obj_type | 0x80, cookie)]
+    for i in range(0, len(data), PB_CHUNK):
+        chunk = data[i:i+PB_CHUNK]
+        frames.append(struct.pack('>BII', 0x02, tok, len(chunk)) + chunk)
+    frames.append(struct.pack('>BII', 0x03, tok, legacy_checksum(data)))
+    frames.append(struct.pack('>BI', 0x05, tok))
+    return frames
+
+
 def appdb_entry(name, uuid_obj, watchface=False):
     """AppDBEntry (services/blob_db/app_db.h): uuid, info_flags, icon_resource_id,
     app_version, sdk_version, app_face_bg_color, template_id, name[96]."""
@@ -210,11 +254,53 @@ def main():
                     help='insert an AppDB entry (endpoint 0xb1db, db 0x02) named --title; --watchface flags it as a face')
     ap.add_argument('--watchface', action='store_true')
     ap.add_argument('--uuid', default=None, help='app uuid for --appdb (default derived from --title)')
+    ap.add_argument('--pbw', default=None, help='install a .pbw: AppDB insert from appinfo.json, then app + resources over PutBytes')
+    ap.add_argument('--platform', default='emery')
+    ap.add_argument('--install-id', type=int, default=1, help='AppInstallId the watch assigned (PutBytes cookie)')
+    ap.add_argument('--pb-seq', type=int, default=1, help='number of PutBytes Inits already done since boot + 1')
+    ap.add_argument('--run', default=None, help='APP_RUN_STATE run command for this app uuid (endpoint 0x34)')
     ap.add_argument('--pin', action='store_true',
                     help='insert an alarm timeline pin into the Pins DB (endpoint 0xb1db, db 0x01)')
     ap.add_argument('--when', type=int, default=3600,
                     help='pin time as seconds from now (default +3600; use a future value so it lands in Timeline Future)')
     args = ap.parse_args()
+
+    if args.run:
+        pp = pebble_protocol(0x0034, b'\x01' + uuid.UUID(args.run).bytes)
+        frame = qemu_frame(PROTO_SPP, pp)
+        if args.sock:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.connect(args.sock)
+        else:
+            s = socket.create_connection((args.host, args.port))
+        s.sendall(frame); s.close(); print('injected run', args.run)
+        return
+
+    if args.pbw:
+        import io, json, zipfile
+        z = zipfile.ZipFile(args.pbw)
+        info = json.loads(z.read('appinfo.json'))
+        u = uuid.UUID(info['uuid'])
+        face = bool(info.get('watchapp', {}).get('watchface'))
+        app_bin = z.read('%s/pebble-app.bin' % args.platform)
+        res = z.read('%s/app_resources.pbpack' % args.platform) if ('%s/app_resources.pbpack' % args.platform) in z.namelist() else None
+        frames = [qemu_frame(PROTO_SPP, pebble_protocol(EP_BLOBDB, blobdb_insert(u, appdb_entry(info['longName'], u, face), db_id=DB_APPS)))]
+        seq = args.pb_seq
+        for obj_type, data in ((0x05, app_bin), (0x04, res)):
+            if data is None:
+                continue
+            for f in putbytes_frames(obj_type, args.install_id, data, seq):
+                frames.append(qemu_frame(PROTO_SPP, pebble_protocol(EP_PUTBYTES, f)))
+            seq += 1
+        if args.sock:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.connect(args.sock)
+        else:
+            s = socket.create_connection((args.host, args.port))
+        for i, f in enumerate(frames):
+            s.sendall(f)
+            time.sleep(0.6 if i == 0 else 0.08)
+        s.close()
+        print('injected pbw %s (%s) app=%d res=%s frames=%d' % (info['longName'], 'watchface' if face else 'app', len(app_bin), len(res) if res else None, len(frames)))
+        return
 
     if args.battery:
         pp = pebble_protocol(EP_BATTERY, battery_state(args.percent, args.charging, args.plugged))

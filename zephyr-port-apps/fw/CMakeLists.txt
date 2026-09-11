@@ -206,7 +206,6 @@ target_sources(app PRIVATE
   src/flash_shim.c
   src/qspi_board.c
   src/ppog_min.c
-  src/putbytes_min.c
   src/ram_store.c
   src/sprf_bond.c
   "${PEBBLEOS_ROOT}/src/fw/services/shared_prf_storage/shared_prf_storage.c"
@@ -319,9 +318,11 @@ target_sources(app PRIVATE
   src/notifications_app.c
   src/fw_pp_dispatch.c
   src/fw_pbw_install.c
+  src/putbytes_min.c
   src/fw_pbw_runner.c
   src/pbl_table_stubs.c
   src/applib_pbw_glue.c
+  "${PEBBLEOS_ROOT}/src/fw/util/dict.c"
   "${PEBBLEOS_ROOT}/src/fw/services/persist/service.c"
   "${PEBBLEOS_ROOT}/src/fw/services/filesystem/app_file.c"
   "${PEBBLEOS_ROOT}/src/fw/applib/ui/text_layer_flow.c"

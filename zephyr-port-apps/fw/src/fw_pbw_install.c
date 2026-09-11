@@ -245,6 +245,8 @@ void fw_pbw_appdb_refresh_from_header(AppInstallId id, const char *name, uint32_
 }
 
 void fw_pbw_install_init(void) {
+  extern void putbytes_min_init(void);
+  putbytes_min_init();
   s_fetching = INSTALL_ID_INVALID;
   k_work_init_delayable(&s_install_done_work, prv_install_done_work);
 }

@@ -16,8 +16,10 @@
 #include <zephyr/sys/reboot.h>
 
 #include "fw_ota_boot.h"
+
+// Transport-agnostic reply path (ppog_min.c over BLE; no-op on the qemu serial).
+bool fw_pp_send(uint16_t endpoint, const uint8_t *payload, uint16_t len);
 #include "pbl/services/filesystem/pfs.h"
-#include "ppog_min.h"
 #include "util/legacy_checksum.h"
 
 // App objects (PBW install, cookie = AppInstallId) stream into PFS app files;
@@ -124,12 +126,12 @@ static bool prv_send_putbytes_response(uint8_t code, uint32_t token) {
   uint8_t response[5];
   response[0] = code;
   prv_write_be32(response + 1, token);
-  return ppog_min_send_pp(PP_ENDPOINT_PUT_BYTES, response, sizeof(response));
+  return fw_pp_send(PP_ENDPOINT_PUT_BYTES, response, sizeof(response));
 }
 
 static bool prv_send_system_message(uint8_t type) {
   const uint8_t response[2] = {0x00, type};
-  return ppog_min_send_pp(PP_ENDPOINT_SYSTEM_MESSAGE, response,
+  return fw_pp_send(PP_ENDPOINT_SYSTEM_MESSAGE, response,
                           sizeof(response));
 }
 
@@ -502,7 +504,7 @@ static void prv_send_firmware_status(void) {
     }
   }
 
-  (void)ppog_min_send_pp(PP_ENDPOINT_SYSTEM_MESSAGE, response,
+  (void)fw_pp_send(PP_ENDPOINT_SYSTEM_MESSAGE, response,
                          sizeof(response));
 }
 
@@ -519,7 +521,7 @@ void putbytes_min_handle_system_message(const uint8_t *payload,
           0x00, SYSTEM_MESSAGE_FIRMWARE_START_RESPONSE,
           FIRMWARE_UPDATE_RUNNING,
       };
-      (void)ppog_min_send_pp(PP_ENDPOINT_SYSTEM_MESSAGE, response,
+      (void)fw_pp_send(PP_ENDPOINT_SYSTEM_MESSAGE, response,
                              sizeof(response));
       break;
     }

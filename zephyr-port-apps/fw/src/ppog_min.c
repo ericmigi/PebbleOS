@@ -208,10 +208,9 @@ static void prv_dispatch_pp(uint16_t endpoint, const uint8_t *payload,
     extern void fw_pp_handle_endpoint(uint16_t endpoint, const uint8_t *data, uint16_t len);
     printk("FW_BLE_PP_RX endpoint=0x%04x len=%u\n", endpoint, payload_len);
     fw_pp_handle_endpoint(endpoint, payload, payload_len);
-  } else if (endpoint == PP_ENDPOINT_SYSTEM_MESSAGE) {
-    putbytes_min_handle_system_message(payload, payload_len);
-  } else if (endpoint == PP_ENDPOINT_PUT_BYTES) {
-    putbytes_min_handle_request(payload, payload_len);
+  } else if (endpoint == PP_ENDPOINT_SYSTEM_MESSAGE || endpoint == PP_ENDPOINT_PUT_BYTES) {
+    extern void fw_pp_handle_endpoint(uint16_t endpoint, const uint8_t *data, uint16_t len);
+    fw_pp_handle_endpoint(endpoint, payload, payload_len);
   }
 }
 
