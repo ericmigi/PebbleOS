@@ -16,11 +16,20 @@
 #include <zephyr/sys/reboot.h>
 
 #include "fw_ota_boot.h"
+#include "pbl/services/filesystem/pfs.h"
 #include "ppog_min.h"
 #include "util/legacy_checksum.h"
 
+// App objects (PBW install, cookie = AppInstallId) stream into PFS app files;
+// fw_pbw_install.c owns the naming and the fetch state machine.
+void fw_pbw_file_name(char *buf, size_t buf_len, int32_t id, const char *suffix);
+void fw_pbw_object_installed(int32_t id, uint8_t object_type);
+
 #define OBJECT_FIRMWARE 0x01
 #define OBJECT_SYS_RESOURCES 0x03
+#define OBJECT_APP_RESOURCES 0x04
+#define OBJECT_WATCH_APP 0x05
+#define OBJECT_WATCH_WORKER 0x07
 
 #define PUT_BYTES_INIT 0x01
 #define PUT_BYTES_PUT 0x02
@@ -62,8 +71,28 @@ static struct {
   LegacyChecksum checksum;
   ReadyObject firmware;
   ReadyObject resources;
+  ReadyObject app;       // app/res/worker object awaiting Install
+  uint8_t app_ready_type;
+  int32_t app_id;        // cookie of the in-flight / ready app object
+  int app_fd;            // PFS fd while an app object streams in
   struct k_work_delayable reboot_work;
 } s_putbytes;
+
+static bool prv_is_app_object(uint8_t object_type) {
+  return object_type == OBJECT_WATCH_APP || object_type == OBJECT_APP_RESOURCES ||
+         object_type == OBJECT_WATCH_WORKER;
+}
+
+static const char *prv_app_suffix(uint8_t object_type) {
+  return object_type == OBJECT_WATCH_APP ? "app" : object_type == OBJECT_APP_RESOURCES ? "res" : "worker";
+}
+
+static void prv_app_abort(void) {
+  if (s_putbytes.app_fd >= 0) {
+    (void)pfs_close_and_remove(s_putbytes.app_fd);
+    s_putbytes.app_fd = -1;
+  }
+}
 
 static uint32_t s_token_seed;
 
@@ -122,6 +151,7 @@ static void prv_reboot_work(struct k_work *work) {
 
 void putbytes_min_init(void) {
   memset(&s_putbytes, 0, sizeof(s_putbytes));
+  s_putbytes.app_fd = -1;
   k_work_init_delayable(&s_putbytes.reboot_work, prv_reboot_work);
 }
 
@@ -138,10 +168,11 @@ static void prv_handle_init(const uint8_t *payload, uint16_t payload_len) {
   const uint8_t object_type = type_byte & 0x7f;
   const bool has_cookie = (type_byte & 0x80) != 0;
   const uint16_t base_length = has_cookie ? 10U : 7U;
+  const bool app_object = prv_is_app_object(object_type) && has_cookie;
   if ((payload_len < base_length) || (transfer_size == 0U) ||
-      !s_putbytes.update_active ||
-      ((object_type != OBJECT_FIRMWARE) &&
-       (object_type != OBJECT_SYS_RESOURCES))) {
+      (!app_object && (!s_putbytes.update_active ||
+                       ((object_type != OBJECT_FIRMWARE) &&
+                        (object_type != OBJECT_SYS_RESOURCES))))) {
     (void)prv_send_putbytes_response(PUT_BYTES_NACK, 0);
     return;
   }
@@ -176,10 +207,26 @@ static void prv_handle_init(const uint8_t *payload, uint16_t payload_len) {
     if (s_putbytes.object_type == OBJECT_FIRMWARE) {
       fw_ota_slot_abort();
     }
+    prv_app_abort();
     s_putbytes.have_transfer = false;
   }
 
-  if (object_type == OBJECT_FIRMWARE) {
+  if (app_object) {
+    if (append_offset != 0U) {  // resume into a PFS file is not supported
+      (void)prv_send_putbytes_response(PUT_BYTES_NACK, 0);
+      return;
+    }
+    s_putbytes.app_id = (int32_t)prv_read_be32(payload + 6);  // cookie (ntohl in shipping)
+    char name[32];
+    fw_pbw_file_name(name, sizeof(name), s_putbytes.app_id, prv_app_suffix(object_type));
+    (void)pfs_remove(name);
+    s_putbytes.app_fd = pfs_open(name, OP_FLAG_WRITE, FILE_TYPE_STATIC, object_size);
+    printk("PBW_RECV_BEGIN %s size=%u fd=%d\n", name, object_size, s_putbytes.app_fd);
+    if (s_putbytes.app_fd < 0) {
+      (void)prv_send_putbytes_response(PUT_BYTES_NACK, 0);
+      return;
+    }
+  } else if (object_type == OBJECT_FIRMWARE) {
     int result = fw_ota_slot_begin(object_size, append_offset);
     if (result != 0) {
       printk("FW_OTA_RECV_BEGIN_FAIL rc=%d size=%u append=%u\n", result,
@@ -225,7 +272,16 @@ static void prv_handle_put(const uint8_t *payload, uint16_t payload_len) {
   }
 
   const uint8_t *data = payload + 9;
-  if (s_putbytes.object_type == OBJECT_FIRMWARE) {
+  if (prv_is_app_object(s_putbytes.object_type)) {
+    const int wrote = pfs_write(s_putbytes.app_fd, data, data_len);
+    if (wrote != (int)data_len) {
+      printk("PBW_WRITE_FAIL rc=%d\n", wrote);
+      prv_app_abort();
+      s_putbytes.have_transfer = false;
+      (void)prv_send_putbytes_response(PUT_BYTES_NACK, token);
+      return;
+    }
+  } else if (s_putbytes.object_type == OBJECT_FIRMWARE) {
     int result =
         fw_ota_slot_write(s_putbytes.written, data, data_len);
     if (result != 0) {
@@ -240,8 +296,10 @@ static void prv_handle_put(const uint8_t *payload, uint16_t payload_len) {
 
   legacy_defective_checksum_update(&s_putbytes.checksum, data, data_len);
   s_putbytes.written += data_len;
-  printk("FW_OTA_PUT %u/%u\n", s_putbytes.written,
-         s_putbytes.object_size);
+  if (!prv_is_app_object(s_putbytes.object_type) ||
+      s_putbytes.written == s_putbytes.object_size) {
+    printk("FW_OTA_PUT %u/%u\n", s_putbytes.written, s_putbytes.object_size);
+  }
   (void)prv_send_putbytes_response(PUT_BYTES_ACK, token);
 }
 
@@ -274,6 +332,21 @@ static void prv_handle_commit(const uint8_t *payload, uint16_t payload_len) {
     }
   }
 
+  if (prv_is_app_object(s_putbytes.object_type)) {
+    if (success) {
+      (void)pfs_close(s_putbytes.app_fd);
+      s_putbytes.app = (ReadyObject){ .valid = true, .token = token,
+                                      .bytes = s_putbytes.written, .checksum = calculated };
+      s_putbytes.app_ready_type = s_putbytes.object_type;
+    } else {
+      prv_app_abort();
+    }
+    s_putbytes.app_fd = -1;
+    s_putbytes.have_transfer = false;
+    (void)prv_send_putbytes_response(success ? PUT_BYTES_ACK : PUT_BYTES_NACK, token);
+    return;
+  }
+
   ReadyObject *ready = prv_ready_object(s_putbytes.object_type);
   if (success && (ready != NULL)) {
     *ready = (ReadyObject){
@@ -302,6 +375,7 @@ static void prv_handle_abort(const uint8_t *payload, uint16_t payload_len) {
   if (s_putbytes.object_type == OBJECT_FIRMWARE) {
     fw_ota_slot_abort();
   }
+  prv_app_abort();
   s_putbytes.have_transfer = false;
   (void)prv_send_putbytes_response(PUT_BYTES_ACK, token);
 }
@@ -313,6 +387,12 @@ static void prv_handle_install(const uint8_t *payload, uint16_t payload_len) {
   }
 
   const uint32_t token = prv_read_be32(payload + 1);
+  if (s_putbytes.app.valid && s_putbytes.app.token == token) {
+    s_putbytes.app = (ReadyObject){};
+    (void)prv_send_putbytes_response(PUT_BYTES_ACK, token);
+    fw_pbw_object_installed(s_putbytes.app_id, s_putbytes.app_ready_type);
+    return;
+  }
   ReadyObject *ready = NULL;
   uint8_t object_type = 0;
   if (s_putbytes.firmware.valid &&

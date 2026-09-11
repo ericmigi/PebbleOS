@@ -302,8 +302,8 @@ bool app_install_get_uuid_for_install_id(AppInstallId install_id, Uuid *uuid_out
   const size_t count = fw_app_registry_count();
   for (size_t i = 0; i < count; ++i) {
     const FwAppRegistryEntry *reg = fw_app_registry_get(i);
-    if (reg && reg->install_id == install_id && reg->md) {
-      *uuid_out = reg->md->uuid;
+    if (reg && reg->install_id == install_id && (reg->md || reg->installed)) {
+      *uuid_out = reg->md ? reg->md->uuid : reg->uuid;
       return true;
     }
   }
@@ -314,7 +314,8 @@ AppInstallId app_install_get_id_for_uuid(const Uuid *uuid) {
   const size_t count = fw_app_registry_count();
   for (size_t i = 0; i < count; ++i) {
     const FwAppRegistryEntry *reg = fw_app_registry_get(i);
-    if (reg && reg->md && uuid_equal(&reg->md->uuid, uuid)) {
+    if (reg && ((reg->md && uuid_equal(&reg->md->uuid, uuid)) ||
+                (reg->installed && uuid_equal(&reg->uuid, uuid)))) {
       return reg->install_id;
     }
   }

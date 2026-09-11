@@ -134,6 +134,8 @@ static void prv_kernel_main(void *parameter) {
     alarm_service_enable_alarms(true);
     extern void fw_alarm_alert_init(void);
     fw_alarm_alert_init();
+    extern void fw_pbw_install_init(void);
+    fw_pbw_install_init();
 #if defined(CONFIG_BOARD_QEMU_EMERY)
     extern void fw_qemu_notif_rx_init(void);
     fw_qemu_notif_rx_init();

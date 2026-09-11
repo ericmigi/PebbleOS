@@ -190,7 +190,7 @@ static const FwAppRegistryEntry *prv_pick_app(void) {
   return s_entry_count == 0 ? NULL : &s_entries[0];
 }
 
-void fw_app_registry_init(void) {
+static void prv_build(void) {
   s_entry_count = 0;
 
   for (size_t i = 0; i < FW_ARRAY_SIZE(s_system_apps); ++i) {
@@ -202,10 +202,19 @@ void fw_app_registry_init(void) {
     strncpy(entry->name, s_system_apps[i].name, FW_APP_NAME_SIZE);
   }
 
-  app_db_init();
   app_db_enumerate_entries(prv_add_installed_app, NULL);
   s_launch_candidate = prv_pick_app();
+}
 
+// AppDB changed (phone install/remove): rebuild the rows. KernelMain only.
+void fw_app_registry_reload(void) {
+  prv_build();
+  printk("FW_REGISTRY_RELOAD apps=%zu\n", s_entry_count);
+}
+
+void fw_app_registry_init(void) {
+  app_db_init();
+  prv_build();
   printk("FW_REGISTRY_UP\n");
   printk("FW_APP_COUNT %zu\n", s_entry_count);
   for (size_t i = 0; i < s_entry_count; ++i) {

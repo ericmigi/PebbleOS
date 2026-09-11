@@ -256,6 +256,22 @@ bool app_install_get_entry_for_install_id(AppInstallId install_id, AppInstallEnt
     if (!reg || reg->install_id != install_id) {
       continue;
     }
+    if (reg->installed) {
+      // Phone-installed PBW (AppDB): type/visibility from its info flags.
+      *entry = (AppInstallEntry) {
+        .install_id = install_id,
+        .type = AppInstallStorageFlash,
+        .visibility = (reg->info_flags & PROCESS_INFO_VISIBILITY_HIDDEN) ? ProcessVisibilityHidden
+                      : (reg->info_flags & PROCESS_INFO_VISIBILITY_SHOWN_ON_COMMUNICATION)
+                          ? ProcessVisibilityShownOnCommunication
+                          : ProcessVisibilityShown,
+        .process_type = (reg->info_flags & PROCESS_INFO_WATCH_FACE) ? ProcessTypeWatchface
+                                                                      : ProcessTypeApp,
+        .uuid = reg->uuid,
+      };
+      strncpy(entry->name, reg->name, sizeof(entry->name) - 1);
+      return true;
+    }
     if (!reg->md) {
       // Registry rows without an md (Timeline Future/Past, Health data
       // source) still resolve for name lookups (Quick Launch subtitles).

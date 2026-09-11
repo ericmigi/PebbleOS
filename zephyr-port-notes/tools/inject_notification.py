@@ -68,6 +68,15 @@ def blobdb_insert(item_id, value, token=0x1234, db_id=DB_NOTIFS):
 
 DB_PINS = 0x01
 TYPE_PIN = 2
+DB_APPS = 0x02
+
+
+def appdb_entry(name, uuid_obj, watchface=False):
+    """AppDBEntry (services/blob_db/app_db.h): uuid, info_flags, icon_resource_id,
+    app_version, sdk_version, app_face_bg_color, template_id, name[96]."""
+    flags = 1 if watchface else 0  # PROCESS_INFO_WATCH_FACE
+    return (uuid_obj.bytes + struct.pack('<II', flags, 0) + bytes([1, 0, 5, 86, 0, 0]) +
+            name.encode()[:95].ljust(96, b'\0'))
 LAYOUT_ALARM = 8
 ATTR_ALARM_KIND = 45
 ALARM_KIND_JUST_ONCE = 3
@@ -197,6 +206,10 @@ def main():
     ap.add_argument('--percent', type=int, default=100, help='battery charge percent')
     ap.add_argument('--charging', action='store_true', help='battery is charging')
     ap.add_argument('--plugged', action='store_true', help='battery is plugged in')
+    ap.add_argument('--appdb', action='store_true',
+                    help='insert an AppDB entry (endpoint 0xb1db, db 0x02) named --title; --watchface flags it as a face')
+    ap.add_argument('--watchface', action='store_true')
+    ap.add_argument('--uuid', default=None, help='app uuid for --appdb (default derived from --title)')
     ap.add_argument('--pin', action='store_true',
                     help='insert an alarm timeline pin into the Pins DB (endpoint 0xb1db, db 0x01)')
     ap.add_argument('--when', type=int, default=3600,
@@ -207,6 +220,11 @@ def main():
         pp = pebble_protocol(EP_BATTERY, battery_state(args.percent, args.charging, args.plugged))
         frame = qemu_frame(PROTO_SPP, pp)
         item_id = 'battery:%d%%' % args.percent
+    elif args.appdb:
+        u = uuid.UUID(args.uuid) if args.uuid else uuid.uuid5(uuid.NAMESPACE_DNS, args.title)
+        pp = pebble_protocol(EP_BLOBDB, blobdb_insert(u, appdb_entry(args.title, u, args.watchface), db_id=DB_APPS))
+        frame = qemu_frame(PROTO_SPP, pp)
+        item_id = 'appdb:' + args.title
     elif args.pin:
         item_id, value = pin_item(args.title, args.subtitle or 'ONCE', int(time.time()) + args.when)
         pp = pebble_protocol(EP_BLOBDB, blobdb_insert(item_id, value, db_id=DB_PINS))

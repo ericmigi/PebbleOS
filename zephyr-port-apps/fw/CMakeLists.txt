@@ -318,6 +318,7 @@ target_sources(app PRIVATE
   src/alarm_alert_glue.c
   src/notifications_app.c
   src/fw_pp_dispatch.c
+  src/fw_pbw_install.c
   src/timeline_app.c
   src/digital_face.c
   src/fw_music_glue.c

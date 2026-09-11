@@ -146,6 +146,13 @@ void app_manager_put_launch_app_event(const AppLaunchEventConfig *config) {
   // A non-watchface md-backed entry (real launcher SELECT): leave the current
   // app (the launcher) and launch the target through the shared pump.
   const FwAppRegistryEntry *entry = fw_app_registry_find_by_id(config->id);
+  if (entry && entry->installed && !(entry->info_flags & PROCESS_INFO_WATCH_FACE)) {
+    // Phone-installed app: fetch/run the PBW (fw_pbw_install.c).
+    extern void fw_pbw_launch(AppInstallId id);
+    printk("SHELL_LAUNCH_PBW %" PRId32 " %s\n", config->id, entry->name);
+    fw_pbw_launch(config->id);
+    return;
+  }
   if (entry && entry->md && entry->md->process_type != ProcessTypeWatchface) {
     printk("SHELL_LAUNCH %" PRId32 " %s\n", config->id, entry->name);
     // Shipping (shell.c): launcher -> app uses the launcher-app moook slide;
@@ -210,6 +217,8 @@ bool activity_stop_tracking(void) { return true; }
 // This keeps watchfaces.c (the real picker UI + filter) byte-for-byte real.
 // ponytail: static list (no install/remove events, no per-app icons or ordering).
 // ---------------------------------------------------------------------------
+bool app_install_get_entry_for_install_id(AppInstallId install_id, AppInstallEntry *entry);
+
 void app_menu_data_source_init(AppMenuDataSource *source,
                                const AppMenuDataSourceCallbacks *callbacks,
                                void *callback_context) {
@@ -229,18 +238,13 @@ static void prv_load_if_needed(AppMenuDataSource *source) {
   const size_t count = fw_app_registry_count();
   for (size_t i = 0; i < count; ++i) {
     const FwAppRegistryEntry *reg = fw_app_registry_get(i);
-    if (!reg || !reg->md) {
+    if (!reg || (!reg->md && !reg->installed)) {
       continue;
     }
-    const PebbleProcessMdSystem *md = (const PebbleProcessMdSystem *)reg->md;
-
-    AppInstallEntry entry = {
-      .install_id = reg->install_id,
-      .visibility = reg->md->visibility,
-      .process_type = reg->md->process_type,
-      .uuid = reg->md->uuid,
-    };
-    strncpy(entry.name, md->name ? md->name : "", sizeof(entry.name) - 1);
+    AppInstallEntry entry;
+    if (!app_install_get_entry_for_install_id(reg->install_id, &entry)) {
+      continue;
+    }
 
     if (source->callbacks.filter && !source->callbacks.filter(source, &entry)) {
       continue;
@@ -253,9 +257,9 @@ static void prv_load_if_needed(AppMenuDataSource *source) {
     node->visibility = entry.visibility;
     node->icon = source->default_icon;
     node->app_num = SYSTEM_APP;
-    node->icon_resource_id = ((const PebbleProcessMdSystem *)reg->md)->icon_resource_id;
+    node->icon_resource_id = reg->md ? ((const PebbleProcessMdSystem *)reg->md)->icon_resource_id : 0;
 
-    const char *name = md->name ? md->name : "";
+    const char *name = entry.name;
     const size_t len = strlen(name) + 1;
     node->name = app_malloc_check(len);
     memcpy(node->name, name, len);

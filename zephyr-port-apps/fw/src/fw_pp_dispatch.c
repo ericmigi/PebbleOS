@@ -142,6 +142,19 @@ static void prv_handle_music(const uint8_t *data, uint16_t pp_len) {
 #define BLOB_DB_CMD_INSERT_TS 0x0D
 #define BLOB_DB_ID_NOTIFS 0x04
 #define BLOB_DB_ID_PINS 0x01
+#define BLOB_DB_ID_APPS 0x02
+#define BLOB_DB_CMD_DELETE 0x04
+#define BLOB_DB_CMD_CLEAR 0x05
+#define BLOB_DB_ACK_GENERAL_FAILURE 0x02
+#define APP_FETCH_ENDPOINT 0x1771
+#define APP_RUN_STATE_ENDPOINT 0x0034
+
+// fw_pbw_install.c
+bool fw_pbw_appdb_insert(const uint8_t *key, int key_len, const uint8_t *val, int val_len);
+bool fw_pbw_appdb_delete(const uint8_t *key, int key_len);
+bool fw_pbw_appdb_clear(void);
+void fw_pbw_handle_fetch_response(const uint8_t *data, uint16_t len);
+void fw_pbw_launch_uuid(const uint8_t uuid[16]);
 #define BLOB_DB_ACK_SUCCESS 0x01
 #define BLOB_DB_ACK_DB_NOT_SUPPORTED 0x09
 
@@ -198,16 +211,56 @@ void fw_pp_handle_endpoint(uint16_t endpoint, const uint8_t *data, uint16_t pp_l
     prv_handle_battery(data, pp_len);
     return;
   }
+  if (endpoint == APP_FETCH_ENDPOINT) {
+    fw_pbw_handle_fetch_response(data, pp_len);
+    return;
+  }
+  if (endpoint == APP_RUN_STATE_ENDPOINT) {
+    // [cmd][uuid]: 1 run, 2 stop (ignored), 3 status (answered by the transport)
+    if (pp_len >= 17 && data[0] == 0x01) {
+      fw_pbw_launch_uuid(data + 1);
+    }
+    return;
+  }
   if (endpoint != BLOB_DB_ENDPOINT) {
     return;
   }
   // BlobDB: [cmd:1][token:2][db_id:1][key_len:1][key:N][val_len:2][value:M]
-  if (pp_len < 7) {
+  if (pp_len < 4) {
     return;
   }
   const uint8_t cmd = data[0];
   const uint8_t db_id = data[3];
   printk("BLOBDB cmd=0x%02x db=%u len=%u\n", cmd, db_id, pp_len);
+  if (db_id == BLOB_DB_ID_APPS) {
+    bool ok = false;
+    if (cmd == BLOB_DB_CMD_CLEAR) {
+      ok = fw_pbw_appdb_clear();
+    } else if (pp_len >= 5 && (cmd == BLOB_DB_CMD_DELETE || cmd == BLOB_DB_CMD_INSERT ||
+                               cmd == BLOB_DB_CMD_INSERT_TS)) {
+      const uint8_t key_len = data[4];
+      const uint8_t *key = data + 5;
+      if (5 + key_len > pp_len) {
+        return;
+      }
+      if (cmd == BLOB_DB_CMD_DELETE) {
+        ok = fw_pbw_appdb_delete(key, key_len);
+      } else if (5 + key_len + 2 <= pp_len) {
+        const uint16_t val_len = prv_rd16le(key + key_len);
+        const uint8_t *val = key + key_len + 2;
+        if (val + val_len <= data + pp_len) {
+          ok = fw_pbw_appdb_insert(key, key_len, val, val_len);
+        }
+      }
+    } else {
+      ok = true;  // read/update: not implemented in shipping either
+    }
+    prv_blob_db_ack(data, ok ? BLOB_DB_ACK_SUCCESS : BLOB_DB_ACK_GENERAL_FAILURE);
+    return;
+  }
+  if (pp_len < 7) {
+    return;
+  }
   if (cmd != BLOB_DB_CMD_INSERT && cmd != BLOB_DB_CMD_INSERT_TS) {
     // Deletes/clears (phone-side dismissals, DB resets) are accepted so the
     // phone's sync state machine keeps moving; the watch keeps its own copy.

@@ -197,7 +197,8 @@ static void prv_dispatch_pp(uint16_t endpoint, const uint8_t *payload,
     memset(run_response + 1, 0x5a, sizeof(run_response) - 1);
     (void)ppog_min_send_pp(PP_ENDPOINT_APP_RUN_STATE, run_response,
                            sizeof(run_response));
-  } else if (endpoint == PP_ENDPOINT_BLOB_DB || endpoint == 0x0020 ||
+  } else if (endpoint == PP_ENDPOINT_BLOB_DB || endpoint == 0x1771 ||
+             endpoint == PP_ENDPOINT_APP_RUN_STATE || endpoint == 0x0020 ||
              endpoint == 0x0021 || endpoint == 0x0022) {
     // BlobDB (notifications / timeline pins) and the port's music / weather /
     // battery endpoints share the transport-agnostic dispatcher with the qemu

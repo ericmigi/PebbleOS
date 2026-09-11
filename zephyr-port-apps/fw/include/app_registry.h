@@ -28,3 +28,4 @@ size_t fw_app_registry_count(void);
 const FwAppRegistryEntry *fw_app_registry_get(size_t index);
 const FwAppRegistryEntry *fw_launcher_pick_app(void);
 const FwAppRegistryEntry *fw_app_registry_find_by_id(AppInstallId install_id);
+void fw_app_registry_reload(void);
