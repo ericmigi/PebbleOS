@@ -207,8 +207,17 @@ void qspi_flash_init(QSPIFlash *dev, QSPIFlashPart *part, bool coredump_mode) {
   dev->state->part = part;
   dev->qspi->state->ctx.dual_mode = 1;
 
+  // We execute in place from this flash. HAL_FLASH_Init issues manual commands
+  // and switches the AHB read path (single-line to quad) with two separate
+  // register writes, so an ISR fetched from XIP in between reads garbage and
+  // the core locks up. The HAL runs from RAM; mask all configurable-priority
+  // interrupts, including the zero-latency ones pbl_irq_lock() leaves enabled,
+  // until it is done.
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
   res = HAL_FLASH_Init(&dev->qspi->state->ctx, &dev->qspi->state->cfg, &dev->qspi->state->hdma,
                        &dev->qspi->state->dma, dev->qspi->clk_div);
+  __set_PRIMASK(primask);
 
   PBL_ASSERT(res == HAL_OK, "HAL_FLASH_Init failed");
 
