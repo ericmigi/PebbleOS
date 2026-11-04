@@ -51,10 +51,13 @@ typedef enum {
 // with the vendor's ble_hs_enabled_state (Stopped<->OFF, Started<->ON).
 static DriverState s_driver_state = DriverStateStopped;
 
+void pbl_bt_index01_scan_start(void);
+
 static void prv_sync_cb(void) {
   PBL_LOG_DBG("NimBLE host synchronized");
   pbl_sem_give(&s_host_started);
   pbl_bt_handle_host_resynced();
+  pbl_bt_index01_scan_start();
 }
 
 static void prv_reset_cb(int reason) {
