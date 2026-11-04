@@ -1,0 +1,7 @@
+flashed i480w60pn
+phone connected after 10 s, settling 60.0 s
+idle: mean 771.44 uA
+presses: missed 0/30, down p50 246.9 p90 483.9 max 850.9 ms, up p50 284.8 p90 553.3 ms, motor runs 30
+idle: mean 791.55 uA
+presses: missed 0/30, down p50 446.2 p90 1074.9 max 1492.5 ms, up p50 462.1 p90 1112.7 ms, motor runs 30
+SWEEP DONE D

@@ -1,0 +1,26 @@
+== i60w30pn 15:51:39
+flashed i60w30pn
+phone connected after 7 s, settling 60.0 s
+idle: mean 2153.29 uA
+presses: missed 0/12, down p50 69.5 p90 223.4 max 249.6 ms, up p50 173.9 p90 349.6 ms, motor runs 12
+== i120w30pn 15:57:03
+flashed i120w30pn
+phone connected after 7 s, settling 60.0 s
+idle: mean 1304.18 uA
+presses: missed 0/12, down p50 141.5 p90 415.2 max 466.6 ms, up p50 140.8 p90 406.7 ms, motor runs 12
+== i240w30pn 16:02:37
+flashed i240w30pn
+phone connected after 7 s, settling 60.0 s
+idle: mean 862.75 uA
+presses: missed 0/12, down p50 215.5 p90 507.2 max 1058.1 ms, up p50 419.4 p90 585.6 ms, motor runs 12
+== i480w30pn 16:08:14
+flashed i480w30pn
+phone connected after 7 s, settling 60.0 s
+idle: mean 636.0 uA
+presses: missed 0/12, down p50 403.7 p90 1351.9 max 1825.0 ms, up p50 748.1 p90 2233.4 ms, motor runs 12
+== i960w30pn 16:13:38
+flashed i960w30pn
+phone connected after 10 s, settling 60.0 s
+idle: mean 465.15 uA
+presses: missed 3/12, down p50 889.1 p90 1372.0 max 1585.3 ms, up p50 806.4 p90 2598.5 ms, motor runs 9
+SWEEP DONE B

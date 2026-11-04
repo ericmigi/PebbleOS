@@ -1,0 +1,22 @@
+{
+ "name": "D-real-i480w60",
+ "adv_ms": 50,
+ "idle_mean_ua": 827.92,
+ "idle_p99_ua": 4362.88,
+ "idle_s": 5.0,
+ "real": true,
+ "ring_adv_gap_ms_p10": null,
+ "ring_adv_gap_ms_p50": null,
+ "ring_adv_gap_ms_p90": null,
+ "presses": 0,
+ "motor_runs": 0,
+ "missed": 0,
+ "down_ms": [],
+ "up_ms": [],
+ "down_p50": null,
+ "down_p90": null,
+ "down_max": null,
+ "up_p50": null,
+ "up_p90": null,
+ "up_max": null
+}

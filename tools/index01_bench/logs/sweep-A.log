@@ -1,0 +1,21 @@
+== a30-w30-act 15:28:56
+flashed a30-w30-act
+phone connected after 10 s, settling 60.0 s
+idle: mean 3610.42 uA
+presses: missed 0/12, down p50 23.7 p90 33.5 max 81.2 ms, up p50 37.5 p90 48.3 ms, motor runs 12
+== i30w30ad 15:34:05
+flashed i30w30ad
+phone connected after 7 s, settling 60.0 s
+idle: mean 3559.72 uA
+presses: missed 0/12, down p50 22.1 p90 78.6 max 79.0 ms, up p50 167.4 p90 201.4 ms, motor runs 12
+== i30w30pn 15:39:46
+flashed i30w30pn
+phone connected after 7 s, settling 60.0 s
+idle: mean 3612.61 uA
+presses: missed 0/12, down p50 22.2 p90 28.6 max 34.4 ms, up p50 40.6 p90 105.0 ms, motor runs 12
+== i30w30pd 15:45:30
+flashed i30w30pd
+phone connected after 10 s, settling 60.0 s
+idle: mean 3556.06 uA
+presses: missed 0/12, down p50 19.1 p90 77.6 max 79.7 ms, up p50 117.5 p90 199.3 ms, motor runs 12
+SWEEP DONE A
