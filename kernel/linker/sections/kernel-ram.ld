@@ -8,6 +8,8 @@
 
         *(.data)
         *(.data.*)
+        *(.sdata)
+        *(.sdata.*)
 
         . = ALIGN(8);
         __data_end = .;
@@ -31,10 +33,13 @@
     .kernel_bss (NOLOAD) : {
         *(.freertos_privileged_data)
 
+        *(.sbss)
+        *(.sbss.*)
         *(.bss)
         *(.bss.*)
 
         *(COMMON)
+        *(.scommon)
 
         __bss_end = .;
     } >RAM
