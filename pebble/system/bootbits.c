@@ -24,7 +24,7 @@ extern uint32_t RTC_ReadBackupRegister(uint32_t reg_id);
 #include <inttypes.h>
 #include <stdint.h>
 
-#ifdef CONFIG_SOC_NRF52
+#ifdef RTC_REGISTERS_RETAINED_RAM
 void boot_bit_init(void) {
   // Make sure that the bootbits have a valid CRC -- otherwise, their
   // in-memory value is probably scrambled and should be reset.
