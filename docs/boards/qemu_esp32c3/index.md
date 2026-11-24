@@ -44,3 +44,19 @@ The flash image, `qemu_esp32_flash.bin` in the build directory, is sized to
 the partitions, with the system resources at their partition when the build
 has them. The rest of an existing image is kept, so the filesystem survives
 between runs, as on a watch; delete the file for a factory-fresh flash.
+
+## Host tools and third-party apps
+
+The console carries the Pebble protocol in frames between its log lines, as
+a watch's does. `--console-port` serves the console on a TCP port instead of
+the terminal, for the host tools that speak it, e.g. the integration tests:
+
+```shell
+pbl run --console-port 12345
+pbl itest --connection serial:socket://127.0.0.1:12345
+```
+
+The Pebble firmware's normal variant runs third-party apps from `.pbw`
+files, installed over that connection as a phone installs them: Samsa
+interprets their ARM code, with what it keeps per process sized for the
+chip in `pebble/boards/qemu_esp32c3_normal.conf`.
