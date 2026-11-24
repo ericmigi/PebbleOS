@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/iio/adc/esp,esp32c3-adc.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif ESP32-C3 SAR ADC1
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+description:
+  SAR ADC1 of the ESP32-C3, read one channel at a time through the one-shot
+  conversions of its digital controller (APB_SARADC). Channel N is GPIO N,
+  for N from 0 to 4. The factory calibration comes from eFuse BLOCK2. ADC2 is
+  not supported.
+
+properties:
+  compatible:
+    const: esp,esp32c3-adc
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  "#io-channel-cells":
+    const: 1
+
+  esp,attenuation:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    minItems: 5
+    maxItems: 5
+    items:
+      enum: [0, 1, 2, 3]
+    description:
+      Input attenuation of channels 0 to 4, 0, 1, 2 or 3 for 0, 2.5, 6 or
+      11 dB. With 11 dB the input reaches about 3 V, past which it reads
+      full scale.
+
+  pinctrl-0: true
+  pinctrl-names: true
+
+required:
+  - compatible
+  - reg
+  - "#io-channel-cells"
+  - esp,attenuation
+
+additionalProperties: false
+
+examples:
+  - |
+    adc@60040000 {
+        compatible = "esp,esp32c3-adc";
+        reg = <0x60040000 0x1000>;
+        interrupts = <43>;
+        #io-channel-cells = <1>;
+        esp,attenuation = <3 3 3 3 3>;
+    };

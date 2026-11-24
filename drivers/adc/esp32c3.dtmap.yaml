@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: esp,esp32c3-adc
+config: ADC_ESP32C3
+class: adc
+define: PBL_ADC_ESP32C3_DEFINE
+args:
+  - name: true
+  - reg: 0
+  - pinctrl: default
+    default: nullptr
+  - prop: esp,attenuation
+    item: "{}"
