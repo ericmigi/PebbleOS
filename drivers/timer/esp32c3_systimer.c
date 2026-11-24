@@ -13,8 +13,10 @@
 
 /*
  * Unit 0 of the SYSTIMER, a 52-bit counter of a fixed 16 MHz, is the clock source, read 32 bits
- * at a time; comparator 0 on it, one shot, the clock event device. The comparator matches once
- * the counter is at or past its value, so a value already passed raises the event at once.
+ * at a time; comparator 0 on it, one shot, the clock event device. A value loaded while the
+ * comparator works only matches the counter reaching it, so one already passed would never raise
+ * the event; loaded with the comparator stopped, it is compared once it starts again, and a
+ * value passed raises the event at once.
  */
 
 #define SYSTIMER_BASE PBL_DT_REG_ESP_ESP32C3_SYSTIMER
@@ -55,11 +57,12 @@ static uint32_t prv_read(const struct pbl_clocksource *cs) {
 static void prv_set_next(const struct pbl_clockevent *ce, uint32_t delta) {
   const uint64_t target = prv_now() + delta;
 
-  // Cleared first: a match of the new value from here on stays
+  pbl_modifyl(SYSTIMER_CONF_TARGET0_WORK_EN, 0U, SYSTIMER_BASE + ESP32C3_SYSTIMER_CONF_OFFSET);
   prv_putreg(ESP32C3_SYSTIMER_INT_CLR_OFFSET, SYSTIMER_INT_TARGET0);
   prv_putreg(ESP32C3_SYSTIMER_TARGET0_HI_OFFSET, (uint32_t)(target >> 32) & SYSTIMER_VALUE_HI_MASK);
   prv_putreg(ESP32C3_SYSTIMER_TARGET0_LO_OFFSET, (uint32_t)target);
   prv_putreg(ESP32C3_SYSTIMER_COMP0_LOAD_OFFSET, SYSTIMER_COMP_LOAD);
+  pbl_modifyl(0U, SYSTIMER_CONF_TARGET0_WORK_EN, SYSTIMER_BASE + ESP32C3_SYSTIMER_CONF_OFFSET);
   prv_putreg(ESP32C3_SYSTIMER_INT_ENA_OFFSET, SYSTIMER_INT_TARGET0);
 }
 
