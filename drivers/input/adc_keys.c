@@ -39,6 +39,12 @@ static const struct pbl_adc_keys_key *prv_nearest(const struct pbl_adc_keys *key
   return nearest;
 }
 
+// A polled ladder samples on the high priority queue, so threads busy for long, e.g. writing a
+// panel, do not starve it into missing taps
+static struct pbl_workq *prv_workq(const struct pbl_adc_keys *keys) {
+  return (keys->poll_ms != 0U) ? &pbl_sys_workq_high : &pbl_sys_workq;
+}
+
 static void prv_report(struct pbl_adc_keys_state *state, const struct pbl_adc_keys_key *key) {
   if (state->pressed != nullptr) {
     pbl_input_report_key(state->pressed->code, false, key == nullptr);
@@ -68,7 +74,7 @@ static void prv_poll(struct pbl_adc_keys_state *state, const struct pbl_adc_keys
     }
   }
 
-  (void)pbl_delayed_work_schedule(&pbl_sys_workq, &state->scan, PBL_MSEC(delay_ms));
+  (void)pbl_delayed_work_schedule(prv_workq(state->keys), &state->scan, PBL_MSEC(delay_ms));
 }
 
 static void prv_scan(struct pbl_work *work) {
@@ -78,11 +84,12 @@ static void prv_scan(struct pbl_work *work) {
 
   if (pbl_adc_read(&keys->channel, &uv) != 0) {
     if (keys->poll_ms != 0U) {
-      (void)pbl_delayed_work_schedule(&pbl_sys_workq, &state->scan, PBL_MSEC(keys->poll_ms));
+      (void)pbl_delayed_work_schedule(prv_workq(state->keys), &state->scan,
+                                      PBL_MSEC(keys->poll_ms));
       return;
     }
     if (++state->failures < MAX_FAILURES) {
-      (void)pbl_delayed_work_schedule(&pbl_sys_workq, &state->scan, PBL_MSEC(HELD_SCAN_MS));
+      (void)pbl_delayed_work_schedule(prv_workq(state->keys), &state->scan, PBL_MSEC(HELD_SCAN_MS));
     }
     return;
   }
@@ -100,7 +107,7 @@ static void prv_scan(struct pbl_work *work) {
   }
 
   if (key != nullptr) {
-    (void)pbl_delayed_work_schedule(&pbl_sys_workq, &state->scan, PBL_MSEC(HELD_SCAN_MS));
+    (void)pbl_delayed_work_schedule(prv_workq(state->keys), &state->scan, PBL_MSEC(HELD_SCAN_MS));
   }
 }
 
@@ -108,7 +115,7 @@ static void prv_edge(void *arg) {
   struct pbl_adc_keys_state *state = arg;
 
   state->failures = 0U;
-  (void)pbl_delayed_work_reschedule(&pbl_sys_workq, &state->scan, PBL_MSEC(SETTLE_MS));
+  (void)pbl_delayed_work_reschedule(prv_workq(state->keys), &state->scan, PBL_MSEC(SETTLE_MS));
 }
 
 int pbl_adc_keys_init(const struct pbl_device *dev) {
@@ -151,7 +158,7 @@ int pbl_adc_keys_init(const struct pbl_device *dev) {
   }
 
   // The keys as they are now
-  (void)pbl_delayed_work_schedule(&pbl_sys_workq, &state->scan, PBL_MSEC(SETTLE_MS));
+  (void)pbl_delayed_work_schedule(prv_workq(state->keys), &state->scan, PBL_MSEC(SETTLE_MS));
 
   return 0;
 }
