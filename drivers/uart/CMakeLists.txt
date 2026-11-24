@@ -3,6 +3,7 @@
 
 pbl_library()
 pbl_library_sources(uart.c)
+pbl_library_sources_ifdef(CONFIG_UART_ESP32C3 esp32c3.c)
 pbl_library_sources_ifdef(CONFIG_UART_QEMU qemu.c)
 pbl_library_sources_ifdef(CONFIG_UART_POSIX posix/uart_posix.c)
 pbl_library_sources_ifdef(CONFIG_UART_NRF5 nrf5.c)
