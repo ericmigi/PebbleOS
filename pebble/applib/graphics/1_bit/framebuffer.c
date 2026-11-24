@@ -13,7 +13,7 @@ volatile const int FrameBuffer_MaxX = PBL_DISPLAY_WIDTH;
 volatile const int FrameBuffer_MaxY = PBL_DISPLAY_HEIGHT;
 volatile const int FrameBuffer_BytesPerRow = FRAMEBUFFER_BYTES_PER_ROW;
 
-uint32_t *framebuffer_get_line(FrameBuffer *f, uint8_t y) {
+uint32_t *framebuffer_get_line(FrameBuffer *f, uint16_t y) {
   PBL_ASSERTN(y < f->size.h);
 
   return f->buffer + (y * ((f->size.w / 32) + 1));
