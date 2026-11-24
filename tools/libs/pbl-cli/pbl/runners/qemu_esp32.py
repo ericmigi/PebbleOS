@@ -4,6 +4,7 @@
 import os
 import shutil
 
+from .. import emulator
 from .core import Runner, RunnerCaps, RunnerError
 
 # The flash image the ROM boots from, the firmware padded to a size the
@@ -24,7 +25,8 @@ class QemuEsp32Runner(Runner):
 
     def do_run(self, command):
         build = self.cfg.build
-        argv = self._command_line(build)
+        # A window for a display, as the Pebble QEMU runner opens one
+        argv = self._command_line(build, window=bool(build.config.CONFIG_DISPLAY))
         return self.run_program(argv + list(self.cfg.extra_args), cwd=build.topdir)
 
     def console_command(self):
@@ -59,15 +61,20 @@ class QemuEsp32Runner(Runner):
             dst.write(b"\xff" * (padded - size))
         return image
 
-    def _command_line(self, build):
+    def _command_line(self, build, window=False):
         machine = build.board_spec.qemu.get("machine")
         if not machine:
             raise RunnerError(f"board {build.board} declares no QEMU machine")
+        if window:
+            # The monitor socket takes screendumps
+            monitor = build.join(emulator.MONITOR_SOCKET)
+            display = ["-display", "sdl", "-monitor", f"unix:{monitor},server,nowait"]
+        else:
+            display = ["-display", "none", "-monitor", "none"]
         return [
             self._qemu(),
             "-machine", machine,
-            "-display", "none",
-            "-monitor", "none",
+            *display,
             # A plain stdio backend gets nothing through on this machine
             "-serial", "mon:stdio",
             "-no-reboot",
