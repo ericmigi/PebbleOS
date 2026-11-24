@@ -1,6 +1,9 @@
 /* SPDX-FileCopyrightText: 2026 Core Devices LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include "intmatrix.h"
+
+#include <errno.h>
 #include <stdint.h>
 
 #include <pbl/kernel/irq.h>
@@ -33,6 +36,18 @@
 
 static uint32_t s_enabled[SOURCE_WORDS];
 static uint32_t s_sw_pending[SOURCE_WORDS];
+
+// Handlers attached at runtime, for code that names its sources only then (the radio libraries)
+#define ATTACH_SLOTS 4U
+
+static struct {
+  pbl_irq_t source;
+  void (*fn)(void *arg);
+  void *arg;
+} s_attached[ATTACH_SLOTS];
+static uint32_t s_attached_mask[SOURCE_WORDS];
+
+void arch_irq_spurious(void);
 
 #define IRQ_WORD(irq) ((uint32_t)(irq) / 32U)
 #define IRQ_BIT(irq)  PBL_BIT((uint32_t)(irq) % 32U)
@@ -95,6 +110,64 @@ void pbl_irq_clear_pending(pbl_irq_t irq) {
   arch_irq_restore_all(key);
 }
 
+int esp32c3_irq_attach(pbl_irq_t source, void (*fn)(void *arg), void *arg) {
+  int ret = -ENOSPC;
+
+  if (source >= CONFIG_NUM_IRQS || fn == nullptr) {
+    return -EINVAL;
+  }
+  // A line bound at build time keeps its handler
+  if (riscv_isr_table[source] != arch_irq_spurious) {
+    return -EBUSY;
+  }
+
+  unsigned int key = arch_irq_disable_all();
+
+  if ((s_attached_mask[IRQ_WORD(source)] & IRQ_BIT(source)) != 0U) {
+    ret = -EBUSY;
+  } else {
+    for (uint32_t i = 0U; i < ATTACH_SLOTS; i++) {
+      if (s_attached[i].fn == nullptr) {
+        s_attached[i].source = source;
+        s_attached[i].fn = fn;
+        s_attached[i].arg = arg;
+        s_attached_mask[IRQ_WORD(source)] |= IRQ_BIT(source);
+        ret = 0;
+        break;
+      }
+    }
+  }
+  arch_irq_restore_all(key);
+
+  return ret;
+}
+
+void esp32c3_irq_detach(pbl_irq_t source) {
+  pbl_irq_disable(source);
+
+  unsigned int key = arch_irq_disable_all();
+
+  for (uint32_t i = 0U; i < ATTACH_SLOTS; i++) {
+    if (s_attached[i].fn != nullptr && s_attached[i].source == source) {
+      s_attached[i].fn = nullptr;
+    }
+  }
+  s_attached_mask[IRQ_WORD(source)] &= ~IRQ_BIT(source);
+  arch_irq_restore_all(key);
+}
+
+static void prv_call(uint32_t n) {
+  if ((s_attached_mask[IRQ_WORD(n)] & IRQ_BIT(n)) != 0U) {
+    for (uint32_t i = 0U; i < ATTACH_SLOTS; i++) {
+      if (s_attached[i].fn != nullptr && s_attached[i].source == n) {
+        s_attached[i].fn(s_attached[i].arg);
+        return;
+      }
+    }
+  }
+  riscv_isr_table[n]();
+}
+
 void riscv_irq_dispatch(uint32_t cause) {
   uint32_t pending[SOURCE_WORDS];
 
@@ -120,7 +193,7 @@ void riscv_irq_dispatch(uint32_t cause) {
         continue;
       }
       s_sw_pending[i] &= ~bit;
-      riscv_isr_table[n]();
+      prv_call(n);
     }
   }
 }
