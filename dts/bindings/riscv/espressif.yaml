@@ -18,5 +18,9 @@ properties:
         items:
           - const: qemu,esp32c3
           - const: esp,esp32c3
+      - description: Xteink X4 e-reader
+        items:
+          - const: xteink,x4
+          - const: esp,esp32c3
 
 additionalProperties: true

@@ -1,0 +1,58 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+
+/dts-v1/;
+
+// Xteink X4 e-reader: an ESP32-C3 (QFN32, 40 MHz crystal) with 16 MiB of flash in DIO mode, an
+// 800x480 e-paper panel and a microSD slot on one SPI bus, keys on two ADC ladders, and a power
+// latch that keeps the battery connected. The console is the USB-Serial-JTAG port: UART0's pins
+// are the panel's chip select (GPIO21) and the USB detect input (GPIO20).
+
+#include <dt-bindings/gpio/gpio.h>
+
+#include "espressif/esp32c3.dtsi"
+
+/ {
+	model = "Xteink X4";
+	compatible = "xteink,x4", "esp,esp32c3";
+
+	chosen {
+		stdout-path = &usb_serial_jtag;
+	};
+
+	// The battery reaches the board through a MOSFET this pin holds on: driven high from reset,
+	// it keeps the board powered once the power button is released
+	power_latch: regulator-latch {
+		compatible = "regulator-fixed";
+		regulator-name = "latch";
+		gpios = <&gpio 13 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-always-on;
+	};
+
+	// 16 MiB SPI NOR (JEDEC ID 0x85 0x2018), of which the ROM maps the first 4 MiB for a direct boot
+	flash0: flash@0 {
+		compatible = "esp,esp32c3-flash";
+		reg = <0x0 0x1000000>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			// Where the ROM boots from
+			partition@0 {
+				label = "code";
+				reg = <0x0 0x400000>;
+			};
+		};
+	};
+};
+
+&gpio {
+	status = "okay";
+};
+
+&usb_serial_jtag {
+	status = "okay";
+};

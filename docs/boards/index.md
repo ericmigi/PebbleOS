@@ -27,6 +27,9 @@
   - STMicroelectronics STM32H747I-DISCO discovery kit
   - ```{thumbnail} stm32h747i_disco/images/stm32h747i_disco.webp
     ```
+* - [`xteink_x4`](xteink_x4/index.md)
+  - Xteink X4 e-reader
+  -
 * - `qemu_flint`
   - Flint platform emulator (e.g. Pebble 2 Duo)
   -
@@ -62,4 +65,5 @@ getafix/index.md
 sf32lb57_dpi_hdk/index.md
 stm32h747i_disco/index.md
 qemu_esp32c3/index.md
+xteink_x4/index.md
 ```

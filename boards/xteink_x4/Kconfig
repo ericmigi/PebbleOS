@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_XTEINK_X4
+    bool
+    default y
+    # The power latch, an always-on rail, has no consumer to pull it in
+    select REGULATOR
