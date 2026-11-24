@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: esp,esp32c3-pinctrl
+config: PINCTRL_ESP32C3
+class: pinctrl
+pinctrl:
+  define: PBL_PINCTRL_ESP32C3_DT_STATE
+  pinmux: "PBL_PINCTRL_ESP32C3_PINMUX({value:#x})"
+  flags:
+    bias-disable: "0U"
+    bias-pull-up: PBL_PINCTRL_ESP32C3_PULL_UP
+    bias-pull-down: PBL_PINCTRL_ESP32C3_PULL_DOWN
+    drive-push-pull: "0U"
+    drive-open-drain: PBL_PINCTRL_ESP32C3_OPEN_DRAIN
+  values:
+    drive-strength: "PBL_PINCTRL_ESP32C3_DRIVE({value})"

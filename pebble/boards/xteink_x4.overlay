@@ -1,0 +1,17 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: Apache-2.0
+
+// Flint's 144x168, three times as large on the 480x800 panel
+&display {
+	width = <144>;
+	height = <168>;
+	scale = <3>;
+};
+
+&flash0 {
+	partitions {
+		/delete-node/ partition@0;
+
+#include "esp32c3-flash-16m.dtsi"
+	};
+};

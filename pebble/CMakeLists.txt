@@ -97,9 +97,9 @@ if(NOT CONFIG_RECOVERY_FW)
     EXCLUDE apps/prf/** apps/samples/** apps/stored/**)
 endif()
 
-# The stored apps are built for the watch, which the recovery firmware runs
-# none on.
-if(NOT CONFIG_RECOVERY_FW AND NOT CONFIG_SOC_POSIX)
+# The stored apps are built for the watch's CPU, which the recovery firmware
+# runs none on.
+if(NOT CONFIG_RECOVERY_FW AND CONFIG_CPU_CORTEX_M)
   add_subdirectory(apps/stored ${pebble_bin}/apps/stored)
 endif()
 

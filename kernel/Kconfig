@@ -191,6 +191,15 @@ config RAMFUNC
 	  section is loaded from flash and copied to RAM at boot. Selected
 	  by SoCs that need code to run while flash is unavailable.
 
+config RAMFUNC_ALIAS_OFFSET
+	hex
+	default 0x0
+	depends on RAMFUNC
+	help
+	  Offset from the RAM addresses .ramfunc is copied to, at the start
+	  of RAM, to those it runs at, for SoCs that fetch instructions from
+	  their RAM through another bus window than they read and write it.
+
 config SCRATCH_HEAP_SHARED
 	bool "Scratch heap in the kernel heap" if RAM
 	default y
@@ -212,3 +221,4 @@ endmenu
 
 rsource "arch/arm/Kconfig"
 rsource "arch/posix/Kconfig"
+rsource "arch/riscv/Kconfig"

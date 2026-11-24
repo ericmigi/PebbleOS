@@ -19,7 +19,8 @@
  *
  * The key whose voltage is the nearest to the channel's is pressed, none if the key-up voltage is
  * the nearest. The channel is read once the line has settled after an interrupt that a press or
- * release raises.
+ * release raises, or, with no interrupt, polled: a change is reported once two polls agree on a
+ * key, three on key-up.
  * @{
  */
 
@@ -43,6 +44,10 @@ struct pbl_adc_keys_state {
   const struct pbl_adc_keys_key *pressed;
   /** Failed reads in a row since the last edge. */
   uint8_t failures;
+  /** Polled: key the last polls read, NULL for key-up, while it differs from @ref pressed. */
+  const struct pbl_adc_keys_key *candidate;
+  /** Polled: polls in a row that read @ref candidate. */
+  uint8_t count;
 };
 
 /** @brief ADC keys. */
@@ -53,8 +58,10 @@ struct pbl_adc_keys {
   struct pbl_adc_channel channel;
   /** Voltage with no key pressed, in microvolts, @c keyup-threshold-microvolt. */
   int32_t keyup_uv;
-  /** Interrupt on a press or release, @c interrupts. */
+  /** Interrupt on a press or release, @c interrupts, unless polled. */
   struct pbl_irq_spec irq;
+  /** Poll period in milliseconds, @c poll-interval, 0 for the interrupt. */
+  uint16_t poll_ms;
   /** Pad of the line, if the board sets it up, @c pinctrl-0. */
   struct pbl_pinctrl pinctrl;
   /** Keys. */
@@ -75,14 +82,15 @@ int pbl_adc_keys_init(const struct pbl_device *dev);
     .press_uv = (_press_uv),                       \
   }
 
-#define PBL_ADC_KEYS_DEFINE(sym, _name, _channel, _keyup_uv, _irq, _pins, ...)                  \
-  static const struct pbl_adc_keys_key sym##_keys[] = {__VA_ARGS__};                            \
-  static struct pbl_adc_keys_state sym##_adc_keys_state;                                        \
-  PBL_DEVICE_STATE_DEFINE(sym);                                                                 \
-  PBL_DEVICE_INSTANCE_DEV(sym, struct pbl_adc_keys) {                                           \
-    .dev = PBL_DEVICE_INIT(sym, _name, pbl_adc_keys_init, nullptr), .channel = _channel,        \
-    .keyup_uv = (_keyup_uv), .irq = _irq, .pinctrl = PBL_PINCTRL(_pins, nullptr, 0U),           \
-    .keys = sym##_keys, .num_keys = PBL_ARRAY_SIZE(sym##_keys), .state = &sym##_adc_keys_state, \
+#define PBL_ADC_KEYS_DEFINE(sym, _name, _channel, _keyup_uv, _irq, _pins, _poll_ms, ...) \
+  static const struct pbl_adc_keys_key sym##_keys[] = {__VA_ARGS__};                     \
+  static struct pbl_adc_keys_state sym##_adc_keys_state;                                 \
+  PBL_DEVICE_STATE_DEFINE(sym);                                                          \
+  PBL_DEVICE_INSTANCE_DEV(sym, struct pbl_adc_keys) {                                    \
+    .dev = PBL_DEVICE_INIT(sym, _name, pbl_adc_keys_init, nullptr), .channel = _channel, \
+    .keyup_uv = (_keyup_uv), .irq = _irq, .poll_ms = (_poll_ms),                         \
+    .pinctrl = PBL_PINCTRL(_pins, nullptr, 0U), .keys = sym##_keys,                      \
+    .num_keys = PBL_ARRAY_SIZE(sym##_keys), .state = &sym##_adc_keys_state,              \
   }
 /** @endcond */
 

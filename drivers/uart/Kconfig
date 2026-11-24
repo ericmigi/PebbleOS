@@ -57,6 +57,45 @@ config UART_STM32_IRQ_PRIO
     help
       Priority of the port interrupts.
 
+config UART_ESP32C3
+    bool "Espressif ESP32-C3 UART Controller"
+    default y
+    depends on DT_HAS_ESP_ESP32C3_UART_ENABLED
+    select CLK
+    help
+      Support for the UART controllers of the ESP32-C3.
+
+config UART_ESP32C3_IRQ_PRIO
+    int "Interrupt priority"
+    default 0
+    depends on UART_ESP32C3
+    help
+      Priority of the port interrupts.
+
+config UART_ESP32C3_USB_SERIAL_JTAG
+    bool "Espressif ESP32-C3 USB-Serial-JTAG serial port"
+    default y
+    depends on DT_HAS_ESP_ESP32C3_USB_SERIAL_JTAG_ENABLED
+    help
+      Support for the serial port of the USB-Serial-JTAG controller of the
+      ESP32-C3.
+
+config UART_ESP32C3_USB_SERIAL_JTAG_IRQ_PRIO
+    int "Interrupt priority"
+    default 0
+    depends on UART_ESP32C3_USB_SERIAL_JTAG
+    help
+      Priority of the port interrupt.
+
+config UART_ESP32C3_USB_SERIAL_JTAG_TX_TIMEOUT_MS
+    int "Transmit timeout (ms)"
+    default 50
+    depends on UART_ESP32C3_USB_SERIAL_JTAG
+    help
+      How long a byte waits for the host to take the bytes before it. Once
+      a wait times out, bytes are dropped without waiting until the host
+      reads again.
+
 config UART_QEMU
     bool "QEMU Simple UART"
     default y

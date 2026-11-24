@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+# The system timer, up before there are devices
+config: TIMER_ESP32C3_SYSTIMER
+compatible: esp,esp32c3-systimer

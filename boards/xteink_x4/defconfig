@@ -1,0 +1,5 @@
+# xteink_x4 board configuration
+
+CONFIG_SOC_ESP32C3=y
+
+CONFIG_UART=y

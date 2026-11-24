@@ -21,4 +21,5 @@ and how NOR parts are described.
 | --- | --- | --- |
 | SPI NOR | `jedec,spi-nor` | `CONFIG_FLASH_SPI_NOR` |
 | QEMU External Flash | `qemu,pebble-extflash` | `CONFIG_FLASH_QEMU` |
+| ESP32-C3 boot flash, through the ROM's routines | `esp,esp32c3-flash` | `CONFIG_FLASH_ESP32C3` |
 | POSIX External Flash | — | `CONFIG_FLASH_POSIX` |

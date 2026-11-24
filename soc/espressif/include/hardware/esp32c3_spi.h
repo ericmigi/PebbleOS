@@ -1,0 +1,62 @@
+/* SPDX-FileCopyrightText: 2026 Core Devices LLC */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+#pragma once
+
+#include <pbl/util/bits.h>
+
+// GPSPI2, the general purpose SPI controller, as a master moving data through its buffer
+
+#define ESP32C3_SPI_CMD_OFFSET         0x0000
+#define ESP32C3_SPI_CTRL_OFFSET        0x0008
+#define ESP32C3_SPI_CLOCK_OFFSET       0x000c
+#define ESP32C3_SPI_USER_OFFSET        0x0010
+#define ESP32C3_SPI_USER1_OFFSET       0x0014
+#define ESP32C3_SPI_USER2_OFFSET       0x0018
+#define ESP32C3_SPI_MS_DLEN_OFFSET     0x001c
+#define ESP32C3_SPI_MISC_OFFSET        0x0020
+#define ESP32C3_SPI_DMA_CONF_OFFSET    0x0030
+#define ESP32C3_SPI_DMA_INT_ENA_OFFSET 0x0034
+#define ESP32C3_SPI_DMA_INT_CLR_OFFSET 0x0038
+#define ESP32C3_SPI_DMA_INT_RAW_OFFSET 0x003c
+#define ESP32C3_SPI_W_OFFSET(n)        (0x0098 + 4U * (n))
+#define ESP32C3_SPI_SLAVE_OFFSET       0x00e0
+#define ESP32C3_SPI_CLK_GATE_OFFSET    0x00e8
+#define ESP32C3_SPI_DATE_OFFSET        0x00f0
+
+// The data buffer, W0 to W15
+#define ESP32C3_SPI_BUF_LEN 64U
+
+#define SPI_CMD_USR    PBL_BIT(24)
+#define SPI_CMD_UPDATE PBL_BIT(23)
+
+#define SPI_CTRL_WR_BIT_ORDER PBL_BIT(26)
+#define SPI_CTRL_RD_BIT_ORDER PBL_BIT(25)
+
+#define SPI_CLOCK_EQU_SYSCLK PBL_BIT(31)
+#define SPI_CLOCK_PRE_MASK   PBL_GENMASK(21, 18)
+#define SPI_CLOCK_N_MASK     PBL_GENMASK(17, 12)
+#define SPI_CLOCK_H_MASK     PBL_GENMASK(11, 6)
+#define SPI_CLOCK_L_MASK     PBL_GENMASK(5, 0)
+
+#define SPI_USER_USR_MISO    PBL_BIT(28)
+#define SPI_USER_USR_MOSI    PBL_BIT(27)
+#define SPI_USER_CK_OUT_EDGE PBL_BIT(9)
+#define SPI_USER_DOUTDIN     PBL_BIT(0)
+
+#define SPI_MISC_CK_IDLE_EDGE PBL_BIT(29)
+// CS0_DIS to CS5_DIS: the controller's own chip selects, unused
+#define SPI_MISC_CS_DIS_ALL PBL_GENMASK(5, 0)
+
+#define SPI_INT_TRANS_DONE PBL_BIT(12)
+
+#define SPI_CLK_GATE_MST_CLK_SEL    PBL_BIT(2)
+#define SPI_CLK_GATE_MST_CLK_ACTIVE PBL_BIT(1)
+#define SPI_CLK_GATE_CLK_EN         PBL_BIT(0)
+
+#define SPI_DATE_MASK PBL_GENMASK(27, 0)
+
+// SYSTEM: the controller's bus clock and reset
+#define ESP32C3_SYSTEM_PERIP_CLK_EN0_OFFSET 0x0010
+#define ESP32C3_SYSTEM_PERIP_RST_EN0_OFFSET 0x0018
+#define SYSTEM_PERIP_SPI2                   PBL_BIT(6)

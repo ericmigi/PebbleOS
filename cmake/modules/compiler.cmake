@@ -48,6 +48,20 @@ if(CONFIG_ARCH_POSIX)
   if(pbl_sanitize_flags)
     pbl_host_compile_options(${pbl_sanitize_flags})
   endif()
+elseif(CONFIG_CPU_RISCV)
+  set(pbl_arch_flags
+    -fvar-tracking-assignments
+    -march=${CONFIG_RISCV_ISA}
+    -mabi=${CONFIG_RISCV_ABI}
+    # Enums as small as the ARM EABI makes them, for the same struct layouts
+    -fshort-enums
+    # Silicon traps on some misaligned accesses that the emulator allows
+    -mstrict-align
+    -ffreestanding
+    -ffunction-sections
+    -fdata-sections
+    -fbuiltin
+  )
 else()
   set(pbl_arch_flags
     -fvar-tracking-assignments
@@ -75,7 +89,7 @@ if(CONFIG_COMPILER_SAVE_TEMPS)
   list(APPEND pbl_arch_flags -save-temps=obj)
 endif()
 
-if(CONFIG_ARCH_POSIX)
+if(CONFIG_ARCH_POSIX OR CONFIG_CPU_RISCV)
 elseif(CONFIG_CPU_STAR_MC1)
   set(pbl_cpu star-mc1)
 elseif(CONFIG_CPU_CORTEX_M33)

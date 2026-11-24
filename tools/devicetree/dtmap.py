@@ -1419,7 +1419,7 @@ PARTITIONS = "fixed-partitions"
 PARTITIONS_HEADER = "devicetree/partitions.h"
 REGS_HEADER = "devicetree/regs.h"
 REGS_KEYS = {"config", "labels", "props", "compatible"}
-REGS_PROP_KEYS = {"label", "prop"}
+REGS_PROP_KEYS = {"label", "prop", "cell"}
 KIB = 1024
 MIB = 1024 * KIB
 
@@ -1631,7 +1631,16 @@ def regs_header(tree, regs, config):
             if not node.has(item["prop"]):
                 raise error(f"{node.path} has no '{item['prop']}'")
             name = c_ident(f"{item['label']}_{item['prop']}").upper()
-            defines[f"PBL_DT_PROP_{name}"] = f"{node.u32(item['prop'])}U"
+            if "cell" in item:
+                cells = node.u32s(item["prop"])
+                if item["cell"] >= len(cells):
+                    raise error(
+                        f"{node.path}: '{item['prop']}' has no cell {item['cell']}"
+                    )
+                value = cells[item["cell"]]
+            else:
+                value = node.u32(item["prop"])
+            defines[f"PBL_DT_PROP_{name}"] = f"{value}U"
         for item in labels:
             label, reg = (
                 (item, None) if isinstance(item, str) else (item["label"], item["reg"])

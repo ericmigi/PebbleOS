@@ -72,6 +72,8 @@ extern uint8_t __bss_end[];
 extern uint8_t __ramfunc_load_start[];
 extern uint8_t __ramfunc_start[];
 extern uint8_t __ramfunc_end[];
+// Where .ramfunc is written, which is where it runs unless the SoC fetches it through an alias
+extern uint8_t __ramfunc_copy_start[];
 #endif
 
 extern int main(void);
@@ -79,7 +81,7 @@ extern int main(void);
 void kernel_prep_c(void) {
   memcpy(__data_start, __data_load_start, __data_end - __data_start);
 #ifdef CONFIG_RAMFUNC
-  memcpy(__ramfunc_start, __ramfunc_load_start, __ramfunc_end - __ramfunc_start);
+  memcpy(__ramfunc_copy_start, __ramfunc_load_start, __ramfunc_end - __ramfunc_start);
 #endif
   memset(__bss_start, 0, __bss_end - __bss_start);
 

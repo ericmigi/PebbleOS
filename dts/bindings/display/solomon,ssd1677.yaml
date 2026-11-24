@@ -1,0 +1,109 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/display/solomon,ssd1677.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Solomon Systech SSD1677 e-paper controller
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+description:
+  Black and white e-paper controller of up to 960x680 pixels, an SPI device
+  with a data/command line and a BUSY output, high while it works. The
+  framebuffer is scaled up by a whole number, centred on the panel and turned
+  by the mounting rotation, as for qemu,esp-rgb. The panel's own size, as its
+  controller scans it, is panel-width by panel-height, swapped at 90 or 270.
+
+allOf:
+  - $ref: /schemas/spi/spi-peripheral-props.yaml#
+
+properties:
+  compatible:
+    const: solomon,ssd1677
+
+  reg:
+    maxItems: 1
+
+  dc-gpios:
+    maxItems: 1
+    description: Data/command select, high for data.
+
+  reset-gpios:
+    maxItems: 1
+
+  busy-gpios:
+    maxItems: 1
+    description: BUSY, active while the controller works.
+
+  width:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: Framebuffer width, in pixels.
+
+  height:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: Framebuffer height, in pixels.
+
+  panel-width:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: Panel width as mounted, in pixels.
+
+  panel-height:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: Panel height as mounted, in pixels.
+
+  scale:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: Panel pixels per framebuffer pixel, in each direction.
+    minimum: 1
+    default: 1
+
+  rotation:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: Mounting rotation of the panel, counter-clockwise, in degrees.
+    enum: [0, 90, 180, 270]
+    default: 0
+
+  full-refresh-interval:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description:
+      Updates from one full refresh to the next, the others fast ones; 0 for
+      fast refreshes only, after the first.
+    default: 20
+
+required:
+  - compatible
+  - reg
+  - dc-gpios
+  - reset-gpios
+  - busy-gpios
+  - width
+  - height
+  - panel-width
+  - panel-height
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/gpio/gpio.h>
+
+    spi {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        display@0 {
+            compatible = "solomon,ssd1677";
+            reg = <0>;
+            spi-max-frequency = <10000000>;
+            dc-gpios = <&gpio 4 GPIO_ACTIVE_HIGH>;
+            reset-gpios = <&gpio 5 GPIO_ACTIVE_LOW>;
+            busy-gpios = <&gpio 6 GPIO_ACTIVE_HIGH>;
+            width = <480>;
+            height = <800>;
+            panel-width = <480>;
+            panel-height = <800>;
+            rotation = <270>;
+        };
+    };

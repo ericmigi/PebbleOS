@@ -15,6 +15,7 @@ peripheral, and its sleep state, if any, after powering it down.
 
 | Driver | Compatible | Kconfig |
 | --- | --- | --- |
+| Espressif ESP32-C3 pin controller | `esp,esp32c3-pinctrl` | `CONFIG_PINCTRL_ESP32C3` |
 | SiFli SF32LB52 pin controller | `sifli,sf32lb52-pinctrl` | `CONFIG_PINCTRL_SF32LB52` |
 | SiFli SF32LB57 pin controller | `sifli,sf32lb57-pinctrl` | `CONFIG_PINCTRL_SF32LB57` |
 | ST STM32 pin controller | `st,stm32h743-pinctrl` | `CONFIG_PINCTRL_STM32` |

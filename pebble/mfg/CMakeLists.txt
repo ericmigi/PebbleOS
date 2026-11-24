@@ -1,8 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
 # SPDX-License-Identifier: Apache-2.0
 
-# The active board's manufacturing sources.
-if(CONFIG_QEMU OR CONFIG_SOC_POSIX)
+# The active board's manufacturing sources: the flash-backed ones for boards
+# without factory data of their own.
+if(CONFIG_QEMU OR CONFIG_SOC_POSIX OR CONFIG_SOC_ESP32C3)
   set(mfg_board qemu)
 elseif(CONFIG_BOARD_ASTERIX)
   set(mfg_board asterix)

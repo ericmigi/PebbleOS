@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+# The SoC interrupt controller: its cells are the source, a SoC line
+compatible: esp,esp32c3-intmatrix
+config: SOC_ESP32C3
+provides:
+  irq: "{0}"

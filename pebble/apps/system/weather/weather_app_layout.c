@@ -21,9 +21,9 @@
 // and the UV box (the description's alert line still carries UV), and the
 // today:tomorrow split moves up so the footer keeps its full row.
 #define WEATHER_APP_LAYOUT_RECT_SMALL (!PBL_ROUND && PBL_DISPLAY_HEIGHT < 200)
-// Tall rect displays have a sidebar down the right edge in the day's condition colour, with the
-// today disc centred on its left edge. Round and small rect displays have none.
-#if PBL_RECT && !WEATHER_APP_LAYOUT_RECT_SMALL
+// The 200x228 display has a sidebar down the right edge in the day's condition colour, with the
+// today disc centred on its left edge. Other displays have none.
+#if PBL_RECT && PBL_DISPLAY_WIDTH == 200 && PBL_DISPLAY_HEIGHT == 228
 #define WEATHER_APP_LAYOUT_SIDEBAR_W 30
 #else
 #define WEATHER_APP_LAYOUT_SIDEBAR_W 0

@@ -67,6 +67,19 @@ config TIMER_STM32_LPTIM_IRQ_PRIO
     help
       Priority of the LPTIM interrupt.
 
+config TIMER_ESP32C3_SYSTIMER
+    bool "Espressif ESP32-C3 SYSTIMER"
+    help
+      Clock source and clock event device on unit 0 and comparator 0 of
+      the SYSTIMER, counting a fixed 16 MHz.
+
+config TIMER_ESP32C3_SYSTIMER_IRQ_PRIO
+    int "Interrupt priority"
+    default 0
+    depends on TIMER_ESP32C3_SYSTIMER
+    help
+      Priority of the target 0 interrupt.
+
 config TIMER_POSIX
     bool "POSIX"
     help

@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
 # SPDX-License-Identifier: Apache-2.0
 
-compatible: adc-keys-irq
+# adc-keys is polled, adc-keys-irq read on its interrupt
+compatible: [adc-keys-irq, adc-keys]
 config: INPUT_ADC_KEYS
 class: input
 define: PBL_ADC_KEYS_DEFINE
@@ -10,8 +11,11 @@ args:
   - io-channel: buttons
   - prop: keyup-threshold-microvolt
   - irq: 0
+    default: "{}"
   - pinctrl: default
     default: nullptr
+  - prop: poll-interval
+    default: 0
   - list: []
     item:
       define: PBL_ADC_KEYS_KEY

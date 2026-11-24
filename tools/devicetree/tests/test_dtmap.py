@@ -2628,6 +2628,13 @@ def test_regs_props(tmp_path):
         regs(tmp_path, [], props=[{"label": "rcc", "prop": "acme,missing"}])
 
 
+def test_regs_prop_cell(tmp_path):
+    prop = {"label": "flash", "prop": "reg", "cell": 2}
+    assert "#define PBL_DT_PROP_FLASH_REG 524288U" in regs(tmp_path, [], props=[prop])
+    with pytest.raises(DtError, match="has no cell 4"):
+        regs(tmp_path, [], props=[{**prop, "cell": 4}])
+
+
 def test_regs_of_the_enabled_node_of_a_compatible(tmp_path):
     text = regs(tmp_path, [], compatible="acme,lptimer-timer")
     assert "#define PBL_DT_REG_ACME_LPTIMER_TIMER 0x40003000UL" in text

@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+# Blocks the early init and the interrupt matrix touch before there are devices
+config: SOC_ESP32C3
+labels:
+  - intmatrix
+  - rtc_cntl
+  - system
+  - timg0
+  - timg1
+props:
+  - label: cpu0
+    prop: clock-frequency
+  - label: clk_apb
+    prop: clock-frequency

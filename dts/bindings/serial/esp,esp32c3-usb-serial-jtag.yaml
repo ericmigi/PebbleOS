@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/serial/esp,esp32c3-usb-serial-jtag.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif ESP32-C3 USB-Serial-JTAG controller
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+description:
+  USB device controller on the chip's USB pins, giving the host a CDC-ACM
+  serial port and a JTAG adapter. Set up by the ROM, which also resets the
+  chip through it.
+
+properties:
+  compatible:
+    const: esp,esp32c3-usb-serial-jtag
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+  - interrupts
+
+additionalProperties: false
+
+examples:
+  - |
+    serial@60043000 {
+        compatible = "esp,esp32c3-usb-serial-jtag";
+        reg = <0x60043000 0x1000>;
+        interrupts = <26>;
+    };

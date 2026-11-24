@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+# The firmware runs Flint on it, scaled up on the panel
+config RESOURCES_BOARD
+    default "qemu_flint"

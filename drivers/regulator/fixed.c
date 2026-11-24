@@ -23,8 +23,10 @@ static int prv_init(const struct pbl_regulator *reg) {
     return -ENODEV;
   }
 
-  ret = pbl_gpio_configure(&fixed->enable,
-                           fixed->active_high ? PBL_GPIO_OUTPUT_LOW : PBL_GPIO_OUTPUT_HIGH);
+  // An always-on rail starts on: switching it off first could cut what it powers, the SoC too
+  ret = pbl_gpio_configure(&fixed->enable, (fixed->active_high == reg->always_on)
+                                               ? PBL_GPIO_OUTPUT_HIGH
+                                               : PBL_GPIO_OUTPUT_LOW);
   if (ret != 0) {
     return ret;
   }

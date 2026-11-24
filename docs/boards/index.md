@@ -27,6 +27,9 @@
   - STMicroelectronics STM32H747I-DISCO discovery kit
   - ```{thumbnail} stm32h747i_disco/images/stm32h747i_disco.webp
     ```
+* - [`xteink_x4`](xteink_x4/index.md)
+  - Xteink X4 e-reader
+  -
 * - `qemu_flint`
   - Flint platform emulator (e.g. Pebble 2 Duo)
   -
@@ -35,6 +38,9 @@
   -
 * - `qemu_gabbro`
   - Gabbro platform emulator (e.g. Pebble Round 2)
+  -
+* - [`qemu_esp32c3`](qemu_esp32c3/index.md)
+  - Espressif ESP32-C3 emulator
   -
 * - `native_flint`
   - Flint platform host/wasm simulator (e.g. Pebble 2 Duo)
@@ -58,4 +64,6 @@ obelix/index.md
 getafix/index.md
 sf32lb57_dpi_hdk/index.md
 stm32h747i_disco/index.md
+qemu_esp32c3/index.md
+xteink_x4/index.md
 ```

@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_ESP32C3_POWER_LATCH
+    bool "Drive the power latch high at reset"
+    default $(dt_has_nodelabel,power_latch)
+    depends on SOC_ESP32C3
+    help
+      Drive the pin of the board's power_latch node high as the first
+      thing the early init does, before there are devices: a board that
+      powers itself from the battery through it stays on once the power
+      button is released. The device that owns the pin keeps it high.

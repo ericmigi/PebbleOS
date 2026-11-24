@@ -183,7 +183,15 @@ def load_qemu(board_dir, board):
         raise TypeError(f"Invalid revision manifest {manifest}: expected qemu mapping")
 
     decorations = _validate_string_list(manifest, qemu, "decorations")
-    return {"decorations": decorations}
+    result = {"decorations": decorations}
+    machine = qemu.get("machine")
+    if machine is not None:
+        if not isinstance(machine, str):
+            raise TypeError(
+                f"Invalid revision manifest {manifest}: qemu.machine must be a string"
+            )
+        result["machine"] = machine
+    return result
 
 
 def available_boards(srcdir):

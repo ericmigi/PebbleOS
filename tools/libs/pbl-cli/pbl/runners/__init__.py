@@ -7,12 +7,14 @@ from .core import (
     RunnerError,
     UnsupportedOperation,
 )
+from .esptool import EsptoolRunner
 from .native import NativeRunner
 from .nrfutil import NrfUtilRunner
 from .openocd import OpenOcdRunner
 from .phone import PhoneRunner
 from .probe_rs import ProbeRsRunner
 from .qemu import QemuRunner
+from .qemu_esp32 import QemuEsp32Runner
 from .sftool import SfToolRunner
 from .wasm import WasmRunner
 
@@ -33,9 +35,11 @@ RUNNERS = {
     for runner in (
         OpenOcdRunner,
         SfToolRunner,
+        EsptoolRunner,
         NrfUtilRunner,
         ProbeRsRunner,
         QemuRunner,
+        QemuEsp32Runner,
         NativeRunner,
         WasmRunner,
         PhoneRunner,

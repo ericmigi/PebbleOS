@@ -8,6 +8,17 @@ menuconfig SPI
 
 if SPI
 
+config SPI_ESP32C3
+    bool "Espressif ESP32-C3 SPI Controller"
+    default y
+    depends on DT_HAS_ESP_ESP32C3_SPI_ENABLED
+    select CLK
+    select GPIO
+    select PINCTRL
+    help
+      Support for GPSPI2, the general purpose SPI controller of the
+      ESP32-C3, polled.
+
 config SPI_NRF5
     bool "Nordic nRF5 SPI Controller"
     default y

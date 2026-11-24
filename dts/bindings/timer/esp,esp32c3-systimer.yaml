@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/timer/esp,esp32c3-systimer.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif ESP32-C3 system timer
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+description:
+  Two 52-bit counters of a fixed 16 MHz, from XTAL_CLK, and three
+  comparators, each with its interrupt.
+
+properties:
+  compatible:
+    const: esp,esp32c3-systimer
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    items:
+      - description: Comparator 0
+      - description: Comparator 1
+      - description: Comparator 2
+
+required:
+  - compatible
+  - reg
+  - interrupts
+
+additionalProperties: false
+
+examples:
+  - |
+    timer@60023000 {
+        compatible = "esp,esp32c3-systimer";
+        reg = <0x60023000 0x1000>;
+        interrupts = <37>, <38>, <39>;
+    };

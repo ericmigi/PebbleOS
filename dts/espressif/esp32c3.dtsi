@@ -1,0 +1,140 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		// The CPU clock the early init sets, from the PLL; what the cycle counter counts
+		cpu0: cpu@0 {
+			compatible = "esp,riscv";
+			device_type = "cpu";
+			reg = <0>;
+			clock-frequency = <160000000>;
+		};
+	};
+
+	// SRAM1 on the data bus, up to the ROM's own data
+	sram0: memory@3fc80000 {
+		device_type = "memory";
+		reg = <0x3fc80000 0x5c000>;
+	};
+
+	clocks {
+		// The CPU clock up to 80 MHz: the PLL's 80 MHz with the CPU on it
+		clk_apb: clk-apb {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <80000000>;
+		};
+	};
+
+	soc {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		interrupt-parent = <&intmatrix>;
+		ranges;
+
+		uart0: serial@60000000 {
+			compatible = "esp,esp32c3-uart";
+			reg = <0x60000000 0x1000>;
+			interrupts = <21>;
+			clocks = <&clk_apb>;
+			status = "disabled";
+		};
+
+		gpio: gpio@60004000 {
+			compatible = "esp,esp32c3-gpio";
+			reg = <0x60004000 0x1000>;
+			interrupts = <16>;
+			esp,io-mux = <&io_mux>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <22>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			status = "disabled";
+		};
+
+		rtc_cntl: rtc@60008000 {
+			compatible = "esp,esp32c3-rtc-cntl";
+			reg = <0x60008000 0x1000>;
+			interrupts = <27>;
+		};
+
+		io_mux: pinctrl@60009000 {
+			compatible = "esp,esp32c3-pinctrl";
+			reg = <0x60009000 0x1000>;
+			esp,gpio-matrix = <&gpio>;
+		};
+
+		uart1: serial@60010000 {
+			compatible = "esp,esp32c3-uart";
+			reg = <0x60010000 0x1000>;
+			interrupts = <22>;
+			clocks = <&clk_apb>;
+			status = "disabled";
+		};
+
+		timg0: timer@6001f000 {
+			compatible = "esp,esp32c3-timg";
+			reg = <0x6001f000 0x1000>;
+			interrupts = <32>, <33>;
+		};
+
+		timg1: timer@60020000 {
+			compatible = "esp,esp32c3-timg";
+			reg = <0x60020000 0x1000>;
+			interrupts = <34>, <35>;
+		};
+
+		systimer: timer@60023000 {
+			compatible = "esp,esp32c3-systimer";
+			reg = <0x60023000 0x1000>;
+			interrupts = <37>, <38>, <39>;
+		};
+
+		spi2: spi@60024000 {
+			compatible = "esp,esp32c3-spi";
+			reg = <0x60024000 0x1000>;
+			interrupts = <19>;
+			clocks = <&clk_apb>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		adc: adc@60040000 {
+			compatible = "esp,esp32c3-adc";
+			reg = <0x60040000 0x1000>;
+			interrupts = <43>;
+			#io-channel-cells = <1>;
+			esp,attenuation = <3 3 3 3 3>;
+			status = "disabled";
+		};
+
+		usb_serial_jtag: serial@60043000 {
+			compatible = "esp,esp32c3-usb-serial-jtag";
+			reg = <0x60043000 0x1000>;
+			interrupts = <26>;
+			status = "disabled";
+		};
+
+		system: syscon@600c0000 {
+			compatible = "esp,esp32c3-system";
+			reg = <0x600c0000 0x1000>;
+		};
+
+		intmatrix: interrupt-controller@600c2000 {
+			compatible = "esp,esp32c3-intmatrix";
+			reg = <0x600c2000 0x800>;
+			interrupt-controller;
+			#interrupt-cells = <1>;
+		};
+	};
+};

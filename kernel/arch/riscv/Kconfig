@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config CPU_RISCV
+	bool
+	help
+	  RISC-V core running in machine mode only. Selected through the CPU
+	  the SoC selects.
+
+config CPU_RV32IMC
+	bool
+	select CPU_RISCV
+	help
+	  RV32IMC core with the Zicsr and Zifencei extensions, and no atomics:
+	  read-modify-write atomics are emulated with interrupts masked.
+
+config RISCV_ISA
+	string
+	default "rv32imc_zicsr_zifencei" if CPU_RV32IMC
+	help
+	  -march the code is built for.
+
+config RISCV_ABI
+	string
+	default "ilp32" if CPU_RV32IMC
+	help
+	  -mabi the code is built for.
+
+config RISCV_PCCR
+	bool
+	help
+	  The cycle counter is the Espressif PCCR CSR (0x7e2), which must be
+	  enabled, rather than mcycle.
+
+config RISCV_CODE_ALIAS_OFFSET
+	hex
+	default 0x0
+	help
+	  Offset from the FLASH addresses the code is loaded at to those it
+	  runs at, for SoCs whose data bus can't read the instruction-bus
+	  window of the flash, nor fetch from the data-bus one.

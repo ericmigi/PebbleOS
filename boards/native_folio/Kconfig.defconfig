@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config RESOURCES_BOARD
+    default "qemu_flint"
+
+config DISPLAY_SDL_WIDTH
+    default 240
+
+config DISPLAY_SDL_HEIGHT
+    default 400
+
+config DISPLAY_SDL_MONO
+    default y
+

@@ -21,4 +21,5 @@ selects the drivers of its timers.
 | Nordic nRF5 RTC | — | `CONFIG_TIMER_NRF5_RTC` |
 | SiFli SF32LB LPTIM | — | `CONFIG_TIMER_SF32LB_LPTIM` |
 | ST STM32 LPTIM | — | `CONFIG_TIMER_STM32_LPTIM` |
+| Espressif ESP32-C3 SYSTIMER | — | `CONFIG_TIMER_ESP32C3_SYSTIMER` |
 | POSIX | — | `CONFIG_TIMER_POSIX` |

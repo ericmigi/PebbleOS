@@ -16,4 +16,4 @@ typedef struct FrameBuffer {
   bool is_dirty;
 } FrameBuffer;
 
-uint32_t *framebuffer_get_line(FrameBuffer *f, uint8_t y);
+uint32_t *framebuffer_get_line(FrameBuffer *f, uint16_t y);

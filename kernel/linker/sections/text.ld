@@ -14,6 +14,7 @@
         *(.text.*)                 /* remaining code */
         *(.rodata)                 /* read-only data (constants) */
         *(.rodata*)
+        *(.srodata*)
         *(.constdata)              /* read-only data (constants) */
         *(.constdata*)
         *(.conststring)

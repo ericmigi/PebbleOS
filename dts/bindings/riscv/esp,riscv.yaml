@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/riscv/esp,riscv.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif RISC-V CPU
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+description:
+  The RV32IMC core of the ESP32-C3. It has no mie CSR; its interrupt lines
+  are enabled in the interrupt matrix.
+
+allOf:
+  - $ref: /schemas/cpu.yaml#
+
+properties:
+  compatible:
+    const: esp,riscv
+
+  reg:
+    maxItems: 1
+
+  clock-frequency:
+    description:
+      CPU clock the early init sets, 160, 80, 40 or 20 MHz, and the rate the
+      cycle counter (the PCCR CSR) counts at.
+
+required:
+  - compatible
+  - device_type
+  - reg
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    cpus {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        cpu@0 {
+            compatible = "esp,riscv";
+            device_type = "cpu";
+            reg = <0>;
+            clock-frequency = <160000000>;
+        };
+    };

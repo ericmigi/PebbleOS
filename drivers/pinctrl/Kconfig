@@ -9,6 +9,14 @@ menuconfig PINCTRL
 
 if PINCTRL
 
+config PINCTRL_ESP32C3
+    bool "Espressif ESP32-C3 pin controller"
+    default y
+    depends on DT_HAS_ESP_ESP32C3_PINCTRL_ENABLED
+    help
+      Pad configuration of the ESP32-C3 and the routing of the peripheral
+      signals to the pads through the GPIO matrix.
+
 config PINCTRL_SF32LB52
     bool "SiFli SF32LB52 pin controller"
     default y
