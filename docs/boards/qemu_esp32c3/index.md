@@ -14,9 +14,10 @@ samples, with UART0 for the console and the machine's virtual framebuffer as an
 800 × 480 display, which stands in for the [](../xteink_x4/index.md) panel;
 there is no input device or Bluetooth.
 
-The Pebble firmware (`pebble/`) runs on it as Flint, three times as large on
-the display, with simulated sensors; the shell's `button click` command
-presses its buttons.
+The Pebble firmware (`pebble/`) runs on it as Folio, the X4's platform:
+240 × 400, twice as large on the 480 × 800 panel, with simulated sensors.
+Flint, three times as large, is a change of the platform and of the display
+size in `pebble/boards/qemu_esp32c3.conf` and `.overlay`.
 
 The firmware is the image the ROM boots straight from the flash: the code
 runs in place at 0x42000000 and the read-only data is read through
@@ -38,7 +39,23 @@ pbl build
 pbl run
 ```
 
-Quit with Ctrl-A X.
+Quit with Ctrl-A X, or Ctrl-C with a display.
+
+With a display, QEMU's own window would show the panel as its controller
+scans it, a quarter turn sideways, at most 800 × 600, and it takes no input.
+`pbl run` runs QEMU without it and opens a window of its own instead
+(`pbl.qemu_view`): the panel upright, from screendumps of the QEMU monitor,
+at half its size, the firmware's own 240 × 400, or at its size with
+`python -m pbl.qemu_view <build>/qemu-mon.sock --full`. It redraws only what
+changed and remembers where it was put. Its Back, Up, Select and Down
+buttons, and the keys of the native simulator (arrows Up and Down; Right,
+Return or space for Select; Left, Backspace or Escape for Back), press the
+watch's buttons through the shell's `button` command; held past half a
+second, they are a long press. The console stays on the terminal.
+
+With `--console-port`, the window sends each press over a connection of its
+own to that port, which is free for other clients in between, e.g.
+`nc 127.0.0.1 12345` for the shell.
 
 The flash image, `qemu_esp32_flash.bin` in the build directory, is sized to
 the partitions, with the system resources at their partition when the build
@@ -59,4 +76,8 @@ pbl itest --connection serial:socket://127.0.0.1:12345
 The Pebble firmware's normal variant runs third-party apps from `.pbw`
 files, installed over that connection as a phone installs them: Samsa
 interprets their ARM code, with what it keeps per process sized for the
-chip in `pebble/boards/qemu_esp32c3_normal.conf`.
+chip in `pebble/boards/qemu_esp32c3_normal.conf`. The watch reports itself
+as the Flint emulator, so the host tools install a `.pbw`'s Flint binary,
+which runs in a 144 × 168 bezel. The integration harness's connection
+(`tests/integration/harness/connections.py`, `start_protocol` over
+`pblconsole`'s frame transport) carries libpebble2's app installer.

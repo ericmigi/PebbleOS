@@ -2,7 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+import selectors
 import shutil
+import signal
+import socket
+import subprocess
+import sys
+import time
 
 from .. import emulator, flash_layout
 from .core import Runner, RunnerCaps, RunnerError
@@ -43,13 +49,57 @@ class QemuEsp32Runner(Runner):
 
     def do_run(self, command):
         build = self.cfg.build
-        # A window for a display, as the Pebble QEMU runner opens one
-        argv = self._command_line(
-            build,
-            window=bool(build.config.CONFIG_DISPLAY),
-            console_port=self.console_port,
-        )
+        if build.config.CONFIG_DISPLAY:
+            return self._run_with_view(build)
+        argv = self._command_line(build, console_port=self.console_port)
         return self.run_program(argv + list(self.cfg.extra_args), cwd=build.topdir)
+
+    def _run_with_view(self, build):
+        """QEMU headless, and a window of its own onto the display and the
+        buttons (pbl.qemu_view): QEMU's window is sideways for a panel mounted
+        a quarter turn, at most 800x600, and has no input. Without a console
+        port the console stays on the terminal, through this process, which
+        also passes on the window's button presses."""
+        port = self.console_port or _free_port()
+        argv = self._command_line(build, window=True, console_port=port)
+        argv += list(self.cfg.extra_args)
+        view = [
+            sys.executable, "-m", "pbl.qemu_view", build.join(emulator.MONITOR_SOCKET),
+            "--title", f"PebbleOS on QEMU ({build.board})",
+        ]  # fmt: skip
+        if self.console_port:
+            view += ["--port", str(port)]
+        if self.cfg.dry_run:
+            print("[dry-run] " + self.quote(*argv))
+            print("[dry-run] " + self.quote(*view))
+            return 0
+        print(self.quote(*argv), flush=True)
+        # Stopped from outside, the window and QEMU stop with it
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+        qemu = subprocess.Popen([str(a) for a in argv], cwd=build.topdir)
+        pbl_cli = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        env = dict(
+            os.environ,
+            PYTHONPATH=os.pathsep.join(
+                filter(None, [pbl_cli, os.getenv("PYTHONPATH")])
+            ),
+        )
+        viewer = subprocess.Popen(
+            [str(a) for a in view],
+            env=env,
+            stdout=None if self.console_port else subprocess.PIPE,
+        )
+        try:
+            if self.console_port:
+                return qemu.wait()
+            return _bridge_console(qemu, viewer, port)
+        except KeyboardInterrupt:
+            return 0
+        finally:
+            for proc in (viewer, qemu):
+                if proc.poll() is None:
+                    proc.terminate()
+                    proc.wait()
 
     def console_command(self):
         return self._command_line(self.cfg.build), {}
@@ -102,9 +152,9 @@ class QemuEsp32Runner(Runner):
         if not machine:
             raise RunnerError(f"board {build.board} declares no QEMU machine")
         if window:
-            # The monitor socket takes screendumps
+            # The monitor socket takes the screendumps the window shows
             monitor = build.join(emulator.MONITOR_SOCKET)
-            display = ["-display", "sdl", "-monitor", f"unix:{monitor},server,nowait"]
+            display = ["-display", "none", "-monitor", f"unix:{monitor},server,nowait"]
         else:
             display = ["-display", "none", "-monitor", "none"]
         if console_port:
@@ -122,3 +172,44 @@ class QemuEsp32Runner(Runner):
             "-icount", "3",
             "-drive", f"file={self._flash_image(build)},if=mtd,format=raw",
         ]  # fmt: skip
+
+
+def _free_port():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _bridge_console(qemu, viewer, port):
+    """The console on the terminal, plus the window's button commands, over
+    the console's TCP port, until QEMU ends."""
+    for _ in range(100):
+        try:
+            console = socket.create_connection(("127.0.0.1", port))
+            break
+        except OSError:
+            if qemu.poll() is not None:
+                return qemu.returncode
+            time.sleep(0.1)
+    else:
+        raise RunnerError(f"QEMU does not serve the console on port {port}")
+    sel = selectors.DefaultSelector()
+    sel.register(console, selectors.EVENT_READ, "console")
+    sel.register(sys.stdin, selectors.EVENT_READ, "terminal")
+    sel.register(viewer.stdout, selectors.EVENT_READ, "window")
+    with console:
+        while qemu.poll() is None:
+            for key, _ in sel.select(timeout=0.5):
+                if key.data == "console":
+                    data = console.recv(65536)
+                    if not data:
+                        return qemu.wait()
+                    sys.stdout.buffer.write(data)
+                    sys.stdout.flush()
+                    continue
+                line = key.fileobj.readline()
+                if not line:
+                    sel.unregister(key.fileobj)
+                    continue
+                console.sendall(line.rstrip("\r\n").encode() + b"\r")
+    return qemu.returncode

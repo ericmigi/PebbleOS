@@ -39,6 +39,13 @@ UART1 output is also captured to `uart1.log` in the repository root.
 {doc}`../development/emulation/emulator` covers what the emulator models and how to
 operate it.
 
+On an Espressif QEMU board, `qemu_esp32c3`, the `qemu-esp32` runner boots
+the flash image through the emulated ROM. With a display it runs QEMU
+without a window of its own, which would show a quarter-turned panel
+sideways and has no input, and opens a window that shows the display
+upright, with whole pixels, and has the watch's buttons: see
+{doc}`../boards/qemu_esp32c3/index`.
+
 ## On the host
 
 On a native board, the `native` runner starts the
