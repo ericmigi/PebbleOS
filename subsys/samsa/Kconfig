@@ -13,6 +13,34 @@ config SAMSA
 
 if SAMSA
 
+# What the interpreter keeps per process for the firmware objects apps see.
+# The defaults suit a 64-bit host, where objects with pointers are twice the
+# size an app expects; a small target trades them for RAM.
+
+config SAMSA_APP_SCRATCH_SIZE
+    int "App scratch for the app's views of firmware objects (bytes)"
+    default 262144
+
+config SAMSA_APP_ARENA_SIZE
+    int "App arena for host copies of app objects (bytes)"
+    default 262144
+
+config SAMSA_WORKER_SCRATCH_SIZE
+    int "Worker scratch (bytes)"
+    default 32768
+
+config SAMSA_WORKER_ARENA_SIZE
+    int "Worker arena (bytes)"
+    default 32768
+
+config SAMSA_MAX_HANDLES
+    int "Firmware objects a process can address"
+    default 4096
+
+config SAMSA_MAX_OBJS
+    int "Converted objects a process can have"
+    default 1024
+
 module = SAMSA
 module-str = Samsa
 source "subsys/logging/Kconfig.template.log_level"

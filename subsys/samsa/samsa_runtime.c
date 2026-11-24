@@ -26,14 +26,14 @@ extern char __WORKER_RAM_end__[];
 // it is.
 #define GUEST_TABLE   UINT32_C(0x10000000)
 #define HANDLE_STRIDE UINT32_C(0x10000)
-#define MAX_HANDLES   4096
-#define MAX_OBJS      1024
+#define MAX_HANDLES   CONFIG_SAMSA_MAX_HANDLES
+#define MAX_OBJS      CONFIG_SAMSA_MAX_OBJS
 #define MAX_OPAQUE    256
 
-#define APP_SCRATCH_SIZE    (256 * 1024)
-#define APP_ARENA_SIZE      (256 * 1024)
-#define WORKER_SCRATCH_SIZE (32 * 1024)
-#define WORKER_ARENA_SIZE   (32 * 1024)
+#define APP_SCRATCH_SIZE    CONFIG_SAMSA_APP_SCRATCH_SIZE
+#define APP_ARENA_SIZE      CONFIG_SAMSA_APP_ARENA_SIZE
+#define WORKER_SCRATCH_SIZE CONFIG_SAMSA_WORKER_SCRATCH_SIZE
+#define WORKER_ARENA_SIZE   CONFIG_SAMSA_WORKER_ARENA_SIZE
 
 // App views of host objects (shadows, in scratch) and host copies of app
 // objects (in the arena), for types laid out differently.
@@ -736,4 +736,6 @@ void process_runtime_run(const PebbleProcessMd *app_md, PebbleTask task, void *e
   uint32_t ret;
   samsa_call_guest(entry_g, nullptr, 0, &ret);
   p->running = false;
+  PBL_LOG_DBG("%s used scratch %" PRIu32 ", arena %u, handles %u, objects %u", p->name,
+              p->scratch_used, (unsigned)p->arena_used, p->num_handles, p->num_objs);
 }
