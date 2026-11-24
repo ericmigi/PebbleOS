@@ -109,6 +109,15 @@
 			status = "disabled";
 		};
 
+		adc: adc@60040000 {
+			compatible = "esp,esp32c3-adc";
+			reg = <0x60040000 0x1000>;
+			interrupts = <43>;
+			#io-channel-cells = <1>;
+			esp,attenuation = <3 3 3 3 3>;
+			status = "disabled";
+		};
+
 		usb_serial_jtag: serial@60043000 {
 			compatible = "esp,esp32c3-usb-serial-jtag";
 			reg = <0x60043000 0x1000>;
