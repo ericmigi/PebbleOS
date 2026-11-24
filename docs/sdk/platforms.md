@@ -13,6 +13,16 @@ The name labels the platform's directory in the SDK and in a `.pbw`.
 Everything the builds need to know of a platform follows from its
 description.
 
+The firmware's platforms:
+
+| Platform | Display | Hardware |
+| --- | --- | --- |
+| Emery | 200 × 228, colour | Pebble Time 2 |
+| Flint | 144 × 168, black and white | Pebble 2 Duo |
+| Gabbro | 260 × 260 round, colour | Pebble Round 2 |
+| Cyberdeck | 400 × 240, black and white | Cyberdeck |
+| Folio | 240 × 400, black and white | Xteink X4, its 480 × 800 e-paper panel at two panel pixels per pixel |
+
 ## Where platforms are defined
 
 The platform is the firmware's: nothing below it (the kernel, the drivers,
@@ -88,6 +98,14 @@ What the system draws differently per platform (the status bar, the action
 bar, default text sizes) is that of the nearest of Emery, Flint and Gabbro:
 Gabbro if the display is round, Emery if it is rectangular and colour, Flint
 otherwise.
+
+A platform without a type of its own, such as Folio, reports that nearest
+one to apps, but its display is not that one's. Its own apps fill the
+display; a third-party app is given the display of the platform it was built
+for, which the compositor centres in a black bezel. With
+`CONFIG_WATCHFACE_BEZEL`, as on the Folio boards, the built-in watchfaces get
+the 144 × 168 of the classic watches too, rather than a display whose pixels
+are too small for them.
 
 ## In the SDK
 
