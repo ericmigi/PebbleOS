@@ -20,18 +20,28 @@
  *
  * The display takes @ref PBL_DISPLAY_FORMAT_MONO framebuffers of the panel's size or smaller,
  * scaled up by a whole number and centred on a white panel, turned by the mounting rotation; the
- * geometry is that of the QEMU ESP RGB display. The driver keeps a copy of the last frame, the
- * controller's old image. An update writes the whole frame to the controller, row by row, and
- * starts a refresh: a fast one, with the old frame for it to compare with, or every
- * full-refresh-interval-th and the first after init a half one, the stock firmware's clean
- * refresh, with the new frame in both planes. Updates complete from the BUSY interrupt at the end
- * of the refresh, or with @c -ETIMEDOUT if it does not end. The panel stays powered after a fast
- * refresh until the display is disabled.
+ * geometry is that of the QEMU ESP RGB display. The driver keeps a copy of the last frame. An
+ * update writes the controller RAM the changed rows cover and starts a refresh: a fast one, which
+ * compares the new plane with the old, or every full-refresh-interval-th and the first after init
+ * a half one, the stock firmware's clean refresh, with the new frame in both planes. The fast
+ * refresh is the panel's own OTP waveform, or with fast-frames set the same waveform with a main
+ * phase of that many frames, loaded into the controller. Updates complete from the BUSY interrupt
+ * at the end of the refresh, or with @c -ETIMEDOUT if it does not end; a controller still busy at
+ * the next update is reset. The panel stays powered after a fast refresh until the display is
+ * disabled.
  *
  * @{
  */
 
 /** @cond INTERNAL_HIDDEN */
+// Controller RAM: bytes x0..x1 of rows y0..y1, in the controller's own scan
+struct pbl_display_ssd1677_window {
+  uint16_t x0;
+  uint16_t x1;
+  uint16_t y0;
+  uint16_t y1;
+};
+
 struct pbl_display_ssd1677_state {
   const struct pbl_display *disp;
   struct pbl_irq_spec busy_irq;
@@ -39,7 +49,12 @@ struct pbl_display_ssd1677_state {
   volatile bool refreshing;
   bool flip;
   bool need_half;
+  // Clock and analog on
+  bool powered;
+  // The new plane is a frame behind in stale
+  bool stale_valid;
   uint16_t updates;
+  struct pbl_display_ssd1677_window stale;
 };
 /** @endcond */
 
@@ -73,12 +88,16 @@ struct pbl_display_ssd1677 {
   bool quarter;
   /** Updates from one full refresh to the next, 0 for none. */
   uint16_t full_interval;
+  /** Main phase of the fast waveform, in frames, 0 for the panel's own. */
+  uint8_t fast_frames;
 };
 
 /** @cond INTERNAL_HIDDEN */
 extern const struct pbl_display_ops pbl_display_ssd1677_ops;
 
 #define SSD1677_SCAN_WIDTH(_pw, _ph, _rot) (((_rot) % 180) ? (_ph) : (_pw))
+// Controller rows sent per SPI transfer
+#define SSD1677_ROWS_PER_WRITE 8
 /** @endcond */
 
 /**
@@ -100,20 +119,23 @@ extern const struct pbl_display_ops pbl_display_ssd1677_ops;
  * @param _scale Panel pixels per framebuffer pixel, in each direction.
  * @param _rotation Panel mounting rotation, counter-clockwise: 0, 90, 180 or 270 degrees.
  * @param _full_interval Updates from one full refresh to the next, 0 for none.
+ * @param _fast_frames Main phase of the fast waveform, in frames, 0 for the panel's own.
  */
 #define PBL_DISPLAY_SSD1677_DEFINE(sym, _name, _bus, _cs, _max_hz, _mode, _dc, _reset, _busy,  \
                                    _width, _height, _panel_width, _panel_height, _scale,       \
-                                   _rotation, _full_interval)                                  \
+                                   _rotation, _full_interval, _fast_frames)                    \
   static_assert((_rotation) % 90 == 0 && (_rotation) < 360, "rotation of 0, 90, 180 or 270");  \
   static_assert((_scale) >= 1 && (_width) * (_scale) <= (_panel_width) &&                      \
                     (_height) * (_scale) <= (_panel_height),                                   \
                 "scaled framebuffer larger than the panel");                                   \
   static_assert(SSD1677_SCAN_WIDTH(_panel_width, _panel_height, _rotation) % 8 == 0,           \
                 "controller rows of whole bytes");                                             \
+  static_assert((_fast_frames) <= 255, "fast waveform main phase of up to 255 frames");        \
   static struct pbl_display_ssd1677_state sym##_state;                                         \
   static uint8_t sym##_shadow[((_width) + 7) / 8 * (_height)];                                 \
   static int16_t sym##_along[SSD1677_SCAN_WIDTH(_panel_width, _panel_height, _rotation)];      \
-  static uint8_t sym##_row[SSD1677_SCAN_WIDTH(_panel_width, _panel_height, _rotation) / 8];    \
+  static uint8_t sym##_row[SSD1677_SCAN_WIDTH(_panel_width, _panel_height, _rotation) / 8 *    \
+                           SSD1677_ROWS_PER_WRITE];                                            \
   PBL_DISPLAY_STATE_DEFINE(sym);                                                               \
   PBL_DEVICE_INSTANCE(sym, struct pbl_display_ssd1677, struct pbl_display, disp) {             \
     .disp = PBL_DISPLAY_INIT(sym, _name, nullptr, &pbl_display_ssd1677_ops, _width, _height,   \
@@ -122,6 +144,7 @@ extern const struct pbl_display_ops pbl_display_ssd1677_ops;
     .reset = _reset, .busy = _busy, .shadow = sym##_shadow, .along = sym##_along,              \
     .row = sym##_row, .panel_width = (_panel_width), .panel_height = (_panel_height),          \
     .scale = (_scale), .quarter = ((_rotation) % 180) != 0, .full_interval = (_full_interval), \
+    .fast_frames = (_fast_frames),                                                             \
   }
 
 /** @} */

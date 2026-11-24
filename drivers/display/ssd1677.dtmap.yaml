@@ -29,3 +29,5 @@ args:
     default: 0
   - prop: full-refresh-interval
     default: 20
+  - prop: fast-frames
+    default: 0

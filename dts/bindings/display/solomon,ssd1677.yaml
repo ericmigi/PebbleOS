@@ -72,6 +72,16 @@ properties:
       fast refreshes only, after the first.
     default: 20
 
+  fast-frames:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description:
+      Main phase of the fast refresh waveform, in frames of 20 ms. 0 runs the
+      panel's own OTP waveform, which has 16, plus 5 frames of the other
+      phases. Fewer frames refresh faster and draw a lighter black; the
+      periodic full refresh clears what they leave behind.
+    maximum: 255
+    default: 0
+
 required:
   - compatible
   - reg
