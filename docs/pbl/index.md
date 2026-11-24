@@ -94,6 +94,7 @@ board can be flashed with one runner and debugged with another;
 | `probe-rs` | asterix, obelix, getafix, stm32h747i_disco | debug, debugserver |
 | `phone` | asterix, obelix, getafix | flash (always with resources) |
 | `qemu` | qemu_* | run, debug, debugserver |
+| `qemu-esp32` | qemu_esp32c3 | run |
 | `native` | native_* | run, debug |
 | `wasm` | native_*/wasm | run |
 

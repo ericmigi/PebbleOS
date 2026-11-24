@@ -13,6 +13,7 @@ from .openocd import OpenOcdRunner
 from .phone import PhoneRunner
 from .probe_rs import ProbeRsRunner
 from .qemu import QemuRunner
+from .qemu_esp32 import QemuEsp32Runner
 from .sftool import SfToolRunner
 from .wasm import WasmRunner
 
@@ -36,6 +37,7 @@ RUNNERS = {
         NrfUtilRunner,
         ProbeRsRunner,
         QemuRunner,
+        QemuEsp32Runner,
         NativeRunner,
         WasmRunner,
         PhoneRunner,
