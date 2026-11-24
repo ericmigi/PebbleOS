@@ -67,6 +67,11 @@
 			interrupts = <27>;
 		};
 
+		efuse: efuse@60008800 {
+			compatible = "esp,esp32c3-efuse";
+			reg = <0x60008800 0x200>;
+		};
+
 		io_mux: pinctrl@60009000 {
 			compatible = "esp,esp32c3-pinctrl";
 			reg = <0x60009000 0x1000>;
