@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/soc/espressif/esp,esp32c3-rtc-cntl.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif ESP32-C3 RTC control
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+description:
+  The always-on domain of the ESP32-C3, with its power, sleep and reset control,
+  the RTC watchdog and the super watchdog.
+
+properties:
+  compatible:
+    const: esp,esp32c3-rtc-cntl
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    rtc@60008000 {
+        compatible = "esp,esp32c3-rtc-cntl";
+        reg = <0x60008000 0x1000>;
+        interrupts = <27>;
+    };

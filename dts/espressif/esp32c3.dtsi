@@ -1,0 +1,94 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		// clock-frequency, what the cycle counter counts, is the board's
+		cpu0: cpu@0 {
+			compatible = "esp,riscv";
+			device_type = "cpu";
+			reg = <0>;
+		};
+	};
+
+	// SRAM1 on the data bus, up to the ROM's own data
+	sram0: memory@3fc80000 {
+		device_type = "memory";
+		reg = <0x3fc80000 0x5c000>;
+	};
+
+	clocks {
+		// XTAL_CLK / 2, what the CPU and APB run at after a direct boot
+		clk_apb: clk-apb {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <20000000>;
+		};
+	};
+
+	soc {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		interrupt-parent = <&intmatrix>;
+		ranges;
+
+		uart0: serial@60000000 {
+			compatible = "esp,esp32c3-uart";
+			reg = <0x60000000 0x1000>;
+			interrupts = <21>;
+			clocks = <&clk_apb>;
+			status = "disabled";
+		};
+
+		rtc_cntl: rtc@60008000 {
+			compatible = "esp,esp32c3-rtc-cntl";
+			reg = <0x60008000 0x1000>;
+			interrupts = <27>;
+		};
+
+		uart1: serial@60010000 {
+			compatible = "esp,esp32c3-uart";
+			reg = <0x60010000 0x1000>;
+			interrupts = <22>;
+			clocks = <&clk_apb>;
+			status = "disabled";
+		};
+
+		timg0: timer@6001f000 {
+			compatible = "esp,esp32c3-timg";
+			reg = <0x6001f000 0x1000>;
+			interrupts = <32>, <33>;
+		};
+
+		timg1: timer@60020000 {
+			compatible = "esp,esp32c3-timg";
+			reg = <0x60020000 0x1000>;
+			interrupts = <34>, <35>;
+		};
+
+		systimer: timer@60023000 {
+			compatible = "esp,esp32c3-systimer";
+			reg = <0x60023000 0x1000>;
+			interrupts = <37>, <38>, <39>;
+		};
+
+		system: syscon@600c0000 {
+			compatible = "esp,esp32c3-system";
+			reg = <0x600c0000 0x1000>;
+		};
+
+		intmatrix: interrupt-controller@600c2000 {
+			compatible = "esp,esp32c3-intmatrix";
+			reg = <0x600c2000 0x800>;
+			interrupt-controller;
+			#interrupt-cells = <1>;
+		};
+	};
+};

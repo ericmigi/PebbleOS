@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/riscv/espressif.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif ESP32-C3 boards
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+properties:
+  $nodename:
+    const: "/"
+  compatible:
+    oneOf:
+      - description: Espressif's QEMU esp32c3 machine
+        items:
+          - const: qemu,esp32c3
+          - const: esp,esp32c3
+
+additionalProperties: true

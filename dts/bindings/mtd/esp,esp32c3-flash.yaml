@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/mtd/esp,esp32c3-flash.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif ESP32-C3 flash
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+description:
+  The SPI flash the ESP32-C3 boots and runs from, mapped by the cache at
+  0x42000000 for instructions and 0x3c000000 for data. reg is its range in
+  flash offsets.
+
+properties:
+  compatible:
+    const: esp,esp32c3-flash
+
+  reg:
+    maxItems: 1
+
+  partitions:
+    type: object
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    flash@0 {
+        compatible = "esp,esp32c3-flash";
+        reg = <0x0 0x400000>;
+    };
