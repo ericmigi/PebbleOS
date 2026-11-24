@@ -37,6 +37,14 @@ config SAMSA_MAX_HANDLES
     int "Firmware objects a process can address"
     default 4096
 
+config SAMSA_HOST_STACK_SIZE
+    int "Stack of the interpreter and the firmware it calls (bytes)"
+    depends on !SOC_POSIX
+    default 8192
+    help
+      On a firmware, the task of a process Samsa runs gets this stack in
+      the process's RAM, besides the stack its ARM code runs on.
+
 config SAMSA_MAX_OBJS
     int "Converted objects a process can have"
     default 1024

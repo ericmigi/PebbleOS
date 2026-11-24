@@ -356,6 +356,17 @@ static bool prv_app_start(const PebbleProcessMd *app_md, const void *args,
     }
   }
 
+  // A runtime interpreting the app runs, with the firmware it calls, on a stack of its own.
+  const size_t host_stack_size = process_runtime_host_stack_size(app_md);
+  void *host_stack = nullptr;
+  if (host_stack_size) {
+    host_stack = memory_segment_split(&app_ram, nullptr, host_stack_size);
+    if (!host_stack) {
+      PBL_LOG_ERR("No room for the runtime's stack");
+      return false;
+    }
+  }
+
   // Synchronously handle process start since its new state is needed for app state initialization
   timeline_peek_handle_process_start();
 
@@ -413,8 +424,8 @@ static bool prv_app_start(const PebbleProcessMd *app_md, const void *args,
     .prio = CONFIG_APP_THREAD_PRIO,
     .privileged = true,
     .user_stack = prv_has_user_stack(app_md),
-    .stack = (char *)stack - stack_guard_size,
-    .stack_size = stack_size + stack_guard_size,
+    .stack = host_stack ?: (char *)stack - stack_guard_size,
+    .stack_size = host_stack ? host_stack_size : stack_size + stack_guard_size,
   };
 
   PBL_LOG_DBG("Starting %s", task_name);

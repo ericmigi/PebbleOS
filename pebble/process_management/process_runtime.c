@@ -23,6 +23,10 @@ PBL_WEAK uint32_t process_runtime_sdk_table(PebbleTask task) {
   return (uint32_t)(uintptr_t)&g_pbl_system_tbl;
 }
 
+PBL_WEAK size_t process_runtime_host_stack_size(const PebbleProcessMd *app_md) {
+  return 0;
+}
+
 PBL_WEAK void process_runtime_run(const PebbleProcessMd *app_md, PebbleTask task, void *entry,
                                   void *stack_top) {
   const PebbleMain main_func = entry;
