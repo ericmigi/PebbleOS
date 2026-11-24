@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include <pbl/console/console.h>
 #include <pbl/kernel/compiler.h>
 #include <pbl/kernel/init.h>
 #include <pbl/kernel/mmio.h>
@@ -19,6 +20,17 @@
 
 #define XTAL_HZ 40000000U
 #define CPU_HZ  PBL_DT_PROP_CPU0_CLOCK_FREQUENCY
+#define APB_HZ  PBL_DT_PROP_CLK_APB_CLOCK_FREQUENCY
+
+// ROM entry points (esp32c3.rom.ld)
+#define ROM_ETS_INSTALL_PUTC1        ((void (*)(void (*)(char)))0x40000044U)
+#define ROM_ETS_UPDATE_CPU_FREQUENCY ((void (*)(uint32_t ticks_per_us))0x40000588U)
+
+// Where ESP-IDF's clock init leaves the crystal and APB frequencies for the ROM and the PHY, as
+// a value repeated in both halves
+#define ESP32C3_RTC_CNTL_STORE4_OFFSET 0x00b8
+#define ESP32C3_RTC_CNTL_STORE5_OFFSET 0x00bc
+#define RTC_STORE_VAL(v)               (((v) & 0xffffU) | (((v) & 0xffffU) << 16))
 
 // The APB clock is the CPU's, up to 80 MHz
 static_assert(PBL_DT_PROP_CLK_APB_CLOCK_FREQUENCY == (CPU_HZ < 80000000U ? CPU_HZ : 80000000U),
@@ -79,6 +91,19 @@ static void prv_cpu_clock_set(void) {
 #endif
 }
 
+// The ROM prints, and the radio libraries through it, on UART0, whose TX pin a board may use for
+// something else: send them to the console. It does not wait, as they may come from an ISR.
+static void prv_rom_putc(char c) {
+#ifdef CONFIG_CONSOLE
+  if (c == '\n') {
+    pbl_console_putchar('\r');
+  }
+  pbl_console_putchar(c);
+#else
+  (void)c;
+#endif
+}
+
 void pbl_soc_early_init(void) {
 #ifdef CONFIG_SOC_ESP32C3_POWER_LATCH
   prv_power_latch_hold();
@@ -99,6 +124,12 @@ void pbl_soc_early_init(void) {
   prv_cpu_clock_set();
   // Busy waits count CPU cycles
   pbl_cycles_per_sec_set(CPU_HZ);
+  // So do the ROM's, ets_delay_us() included, at the rate given here
+  ROM_ETS_UPDATE_CPU_FREQUENCY(CPU_HZ / 1000000U);
+  pbl_writel(RTC_STORE_VAL(XTAL_HZ / 1000000U), RTC_CNTL(STORE4));
+  pbl_writel(RTC_STORE_VAL(APB_HZ >> 12), RTC_CNTL(STORE5));
+
+  ROM_ETS_INSTALL_PUTC1(prv_rom_putc);
 }
 
 void pbl_soc_reset(void) {
