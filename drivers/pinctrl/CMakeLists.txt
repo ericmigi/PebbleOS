@@ -3,6 +3,9 @@
 
 pbl_library()
 set(sources pinctrl.c)
+if(CONFIG_PINCTRL_ESP32C3)
+  list(APPEND sources esp32c3.c)
+endif()
 if(CONFIG_PINCTRL_SF32LB52)
   list(APPEND sources sf32lb52.c)
 endif()

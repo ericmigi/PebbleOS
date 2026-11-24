@@ -48,10 +48,29 @@
 			status = "disabled";
 		};
 
+		gpio: gpio@60004000 {
+			compatible = "esp,esp32c3-gpio";
+			reg = <0x60004000 0x1000>;
+			interrupts = <16>;
+			esp,io-mux = <&io_mux>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <22>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			status = "disabled";
+		};
+
 		rtc_cntl: rtc@60008000 {
 			compatible = "esp,esp32c3-rtc-cntl";
 			reg = <0x60008000 0x1000>;
 			interrupts = <27>;
+		};
+
+		io_mux: pinctrl@60009000 {
+			compatible = "esp,esp32c3-pinctrl";
+			reg = <0x60009000 0x1000>;
+			esp,gpio-matrix = <&gpio>;
 		};
 
 		uart1: serial@60010000 {
