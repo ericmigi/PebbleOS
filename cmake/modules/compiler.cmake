@@ -53,6 +53,10 @@ elseif(CONFIG_CPU_RISCV)
     -fvar-tracking-assignments
     -march=${CONFIG_RISCV_ISA}
     -mabi=${CONFIG_RISCV_ABI}
+    # Enums as small as the ARM EABI makes them, for the same struct layouts
+    -fshort-enums
+    # Silicon traps on some misaligned accesses that the emulator allows
+    -mstrict-align
     -ffreestanding
     -ffunction-sections
     -fdata-sections
