@@ -37,6 +37,14 @@ config RNG_STM32
     help
       Support for the ST STM32 RNG.
 
+config RNG_ESP32C3
+    bool "Espressif ESP32-C3"
+    default y if SOC_ESP32C3
+    depends on SOC_ESP32C3
+    help
+      Support for the ESP32-C3 RNG. Its output is only truly random while
+      the SAR ADC or the radio is on.
+
 config RNG_QEMU
     bool "QEMU"
     default y if SOC_QEMU_PEBBLE

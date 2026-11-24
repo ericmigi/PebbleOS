@@ -15,6 +15,7 @@ source.
 
 | Driver | Compatible | Kconfig |
 | --- | --- | --- |
+| Espressif ESP32-C3 | — | `CONFIG_RNG_ESP32C3` |
 | Nordic nRF5 | — | `CONFIG_RNG_NRF5` |
 | SiFli SF32LB | `sifli,sf32lb52-trng` | `CONFIG_RNG_SF32LB` |
 | ST STM32 | `st,stm32-rng` | `CONFIG_RNG_STM32` |

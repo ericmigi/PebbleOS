@@ -109,6 +109,11 @@
 			status = "disabled";
 		};
 
+		rng: rng@600260b0 {
+			compatible = "esp,esp32c3-rng";
+			reg = <0x600260b0 0x4>;
+		};
+
 		adc: adc@60040000 {
 			compatible = "esp,esp32c3-adc";
 			reg = <0x60040000 0x1000>;

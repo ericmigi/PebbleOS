@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config: RNG_ESP32C3
+labels:
+  - rng
+props:
+  - label: cpu0
+    prop: clock-frequency
+  - label: clk_apb
+    prop: clock-frequency
