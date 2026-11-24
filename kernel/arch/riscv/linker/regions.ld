@@ -5,5 +5,5 @@
 
 ENTRY(Reset_Handler)
 
-/* No MPU: the region only has to hold what is there. */
-__unpriv_ro_bss_size__ = 256;
+/* No MPU: the region only has to hold what is there, as much as on ARM. */
+__unpriv_ro_bss_size__ = 2K;

@@ -74,3 +74,14 @@
 ATOMIC_ALL(1, uint8_t)
 ATOMIC_ALL(2, uint16_t)
 ATOMIC_ALL(4, unsigned int)
+
+// atomic_flag_test_and_set(); the flag is a byte
+PBL_USED bool __atomic_test_and_set(volatile void *ptr, int memorder) {
+  volatile uint8_t *p = ptr;
+  unsigned int key = arch_irq_disable_all();
+  bool old = *p != 0U;
+  *p = 1U;
+  arch_irq_restore_all(key);
+  (void)memorder;
+  return old;
+}
