@@ -161,6 +161,15 @@ config APP_SCALING
       Scale legacy lower-resolution apps to the current display via
       the compositor.
 
+config WATCHFACE_BEZEL
+    bool "Watchfaces at 144x168 in a black bezel"
+    depends on !PLATFORM_ROUND
+    help
+      Give every watchface a 144x168 framebuffer, which the compositor
+      centres on the display in a black bezel, for displays whose pixels
+      are small enough that a watchface drawn to the whole display would
+      be too large.
+
 config ORIENTATION_MANAGER
     bool "Orientation manager UI"
     help

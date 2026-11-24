@@ -323,6 +323,12 @@ bool process_metadata_has_required_features(const PebbleProcessMd *md, uint32_t 
 GSize process_metadata_get_app_framebuffer_size(const PebbleProcessMd *md) {
   const GSize display_size = GSize(PBL_DISPLAY_WIDTH, PBL_DISPLAY_HEIGHT);
 
+#ifdef CONFIG_WATCHFACE_BEZEL
+  if (md->process_type == ProcessTypeWatchface && prv_app_display_fits(GSize(144, 168), false)) {
+    return GSize(144, 168);
+  }
+#endif
+
   // An app that says which display it was built for draws to a framebuffer of that size
   const PebblePlatformInfo *platform_info = process_metadata_get_platform_info(md);
   if (platform_info) {
@@ -337,12 +343,15 @@ GSize process_metadata_get_app_framebuffer_size(const PebbleProcessMd *md) {
     return (known_shape && prv_app_display_fits(size, round)) ? size : display_size;
   }
 
-  const PlatformType sdk_platform = process_metadata_get_app_sdk_platform(md);
-  if (sdk_platform == PBL_PLATFORM_TYPE_CURRENT) {
+  // The firmware's own apps are built for this display
+  if (!md->is_unprivileged) {
     return display_size;
   }
 
-  // The others are known by their platform
+  // The others are known by their platform, even the one this firmware reports itself as: a
+  // platform without a type of its own takes the nearest one, of another display size
+  const PlatformType sdk_platform = process_metadata_get_app_sdk_platform(md);
+
   GSize size;
   bool round = false;
   switch (sdk_platform) {
