@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include <kernel/pebble_tasks.h>
@@ -23,3 +24,7 @@ uint32_t process_runtime_sdk_table(PebbleTask task);
 //! main function returns.
 void process_runtime_run(const PebbleProcessMd *app_md, PebbleTask task, void *entry,
                          void *stack_top);
+
+//! The size of a stack the runtime needs besides the process's own, for itself
+//! and the firmware it calls, or 0 when it runs on the process's stack.
+size_t process_runtime_host_stack_size(const PebbleProcessMd *app_md);

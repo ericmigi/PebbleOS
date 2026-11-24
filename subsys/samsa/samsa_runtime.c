@@ -715,6 +715,16 @@ uint32_t process_runtime_address(PebbleTask task, const void *address) {
   return p->ram_base + (uint32_t)((const char *)address - p->ram);
 }
 
+size_t process_runtime_host_stack_size(const PebbleProcessMd *app_md) {
+  // The process's stack holds its ARM frames. A native build runs the
+  // interpreter on a host stack of its task's own; a firmware needs one.
+#ifdef CONFIG_SOC_POSIX
+  return 0;
+#else
+  return app_md->process_storage == ProcessStorageBuiltin ? 0 : CONFIG_SAMSA_HOST_STACK_SIZE;
+#endif
+}
+
 uint32_t process_runtime_sdk_table(PebbleTask task) {
   return GUEST_TABLE;
 }
