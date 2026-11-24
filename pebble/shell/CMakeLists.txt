@@ -10,8 +10,9 @@ else()
 endif()
 
 # The launcher's app registry, and the app id defines the sources use.
+# Resource apps are the stored apps, which are only built for Cortex-M.
 set(registry_args "")
-if(CONFIG_SOC_POSIX)
+if(NOT CONFIG_CPU_CORTEX_M)
   list(APPEND registry_args --no-resource-apps)
 endif()
 set(registry ${CMAKE_CURRENT_BINARY_DIR}/system_app_registry_list.auto.h)

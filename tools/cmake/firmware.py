@@ -46,7 +46,7 @@ def enabled(config, key):
 
 
 def max_resources_size(config):
-    if enabled(config, "CONFIG_SOC_NRF52"):
+    if enabled(config, "CONFIG_SOC_NRF52") or enabled(config, "CONFIG_SOC_ESP32C3"):
         return 1024 * BYTES_PER_K
     if enabled(config, "CONFIG_SOC_SF32LB52") or enabled(config, "CONFIG_QEMU"):
         return 2048 * BYTES_PER_K
