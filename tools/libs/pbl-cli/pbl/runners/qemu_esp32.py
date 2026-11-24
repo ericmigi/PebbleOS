@@ -4,7 +4,7 @@
 import os
 import shutil
 
-from .. import emulator
+from .. import emulator, flash_layout
 from .core import Runner, RunnerCaps, RunnerError
 
 # The flash image the ROM boots from, the firmware padded to a size the
@@ -46,19 +46,33 @@ class QemuEsp32Runner(Runner):
         return qemu
 
     def _flash_image(self, build):
+        """Write the firmware, and the system resources at their partition,
+        into the flash image, keeping the rest of an image already there:
+        the filesystem survives a restart, as on a watch."""
         image = build.join(FLASH_IMAGE)
         if self.cfg.dry_run:
             return image
         firmware = build.bin
         if not os.path.isfile(firmware):
             raise RunnerError(f"no {firmware}; run 'pbl build' first")
-        size = os.path.getsize(firmware)
-        padded = next((s for s in FLASH_SIZES if s >= size), None)
+        contents = [(0, firmware)]
+        if os.path.isfile(build.pbpack):
+            contents.append(
+                (build.flash_region("SYSTEM_RESOURCES_BANK_0")[0], build.pbpack)
+            )
+        end = max(off + size for off, size in flash_layout.regions(build).values())
+        end = max([end] + [off + os.path.getsize(path) for off, path in contents])
+        padded = next((s for s in FLASH_SIZES if s >= end), None)
         if padded is None:
             raise RunnerError(f"{firmware} is larger than the largest emulated flash")
-        with open(firmware, "rb") as src, open(image, "wb") as dst:
-            dst.write(src.read())
-            dst.write(b"\xff" * (padded - size))
+        if not os.path.isfile(image) or os.path.getsize(image) != padded:
+            with open(image, "wb") as dst:
+                dst.write(b"\xff" * padded)
+        with open(image, "r+b") as dst:
+            for offset, path in contents:
+                dst.seek(offset)
+                with open(path, "rb") as src:
+                    dst.write(src.read())
         return image
 
     def _command_line(self, build, window=False):

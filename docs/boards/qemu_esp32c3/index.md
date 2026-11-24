@@ -39,3 +39,8 @@ pbl run
 ```
 
 Quit with Ctrl-A X.
+
+The flash image, `qemu_esp32_flash.bin` in the build directory, is sized to
+the partitions, with the system resources at their partition when the build
+has them. The rest of an existing image is kept, so the filesystem survives
+between runs, as on a watch; delete the file for a factory-fresh flash.
