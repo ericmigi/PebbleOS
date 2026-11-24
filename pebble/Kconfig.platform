@@ -18,6 +18,8 @@ config PLATFORM_EMERY
     bool "Emery"
 config PLATFORM_FLINT
     bool "Flint"
+config PLATFORM_FOLIO
+    bool "Folio"
 config PLATFORM_GABBRO
     bool "Gabbro"
 endchoice

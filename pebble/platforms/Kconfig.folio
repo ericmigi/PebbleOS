@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+if PLATFORM_FOLIO
+
+config PLATFORM_NAME
+    default "folio"
+
+config PLATFORM_DISPLAY_WIDTH
+    default 240
+
+config PLATFORM_DISPLAY_HEIGHT
+    default 400
+
+# RAM of an app and of its runtime.
+
+config APP_RAM_4X_SEGMENT_SIZE
+    default 67584
+
+config APP_RAM_4X_RUNTIME_SIZE
+    default 30720
+
+endif # PLATFORM_FOLIO
