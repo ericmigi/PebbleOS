@@ -68,7 +68,8 @@ class Run(PblCommand):
                         "it takes no arguments after '--'"
                     )
                 return runner.run("flash")
-            if args.resources:
+            # A runner that flashes when it runs takes the resources along
+            if args.resources and not runner.capabilities().flash_data:
                 raise CommandContextError(
                     f"the {runner.name} runner does not flash, --resources "
                     "does not apply"

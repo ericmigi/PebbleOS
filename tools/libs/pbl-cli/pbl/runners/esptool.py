@@ -28,9 +28,11 @@ def _esptool():
     return esptool
 
 
-def flash_argv(soc, port, image, reset=True):
+def flash_argv(soc, port, image, reset=True, data_files=()):
     """The image is the ROM's direct boot image, flashed as is at 0: there is
-    no image header for esptool to patch the flash settings into."""
+    no image header for esptool to patch the flash settings into. The data
+    files, ``(file, offset)``, are written in the same run."""
+    data = [arg for f, offset in data_files for arg in (f"{offset:#x}", f)]
     return [
         _esptool(),
         "--chip", soc.lower(),
@@ -38,7 +40,7 @@ def flash_argv(soc, port, image, reset=True):
         "--after", "hard-reset" if reset else "no-reset",
         "write-flash",
         "--flash-mode", "keep", "--flash-freq", "keep", "--flash-size", "keep",
-        "0x0", image,
+        "0x0", image, *data,
     ]  # fmt: skip
 
 
@@ -48,7 +50,7 @@ class EsptoolRunner(Runner):
 
     @classmethod
     def capabilities(cls):
-        return RunnerCaps(commands={"flash", "run"})
+        return RunnerCaps(commands={"flash", "run"}, flash_data=True)
 
     @classmethod
     def supports(cls, cfg):
@@ -79,7 +81,12 @@ class EsptoolRunner(Runner):
     # Running on the chip is flashing it, as on any device; "run" is there for the console
     # command, which pbl samples takes from a runner that runs.
     def do_run(self, command):
-        argv = flash_argv(self.cfg.soc, self._port(), self.cfg.bin_file)
+        argv = flash_argv(
+            self.cfg.soc,
+            self._port(),
+            self.cfg.bin_file,
+            data_files=self.cfg.data_files,
+        )
         self.call(self.quote(*argv))
 
 

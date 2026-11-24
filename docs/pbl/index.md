@@ -93,7 +93,7 @@ board can be flashed with one runner and debugged with another;
 | `sftool` | obelix, getafix, sf32lb57_dpi_hdk | flash (with resources), erase |
 | `probe-rs` | asterix, obelix, getafix, stm32h747i_disco | debug, debugserver |
 | `phone` | asterix, obelix, getafix | flash (always with resources) |
-| `esptool` | xteink_x4 | flash |
+| `esptool` | xteink_x4 | flash (with resources) |
 | `qemu` | qemu_* | run, debug, debugserver |
 | `qemu-esp32` | qemu_esp32c3 | run |
 | `native` | native_* | run, debug |
