@@ -25,7 +25,8 @@ properties:
 
   clock-frequency:
     description:
-      CPU clock, the rate the cycle counter (the PCCR CSR) counts at.
+      CPU clock the early init sets, 160, 80, 40 or 20 MHz, and the rate the
+      cycle counter (the PCCR CSR) counts at.
 
 required:
   - compatible

@@ -9,11 +9,12 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		// clock-frequency, what the cycle counter counts, is the board's
+		// The CPU clock the early init sets, from the PLL; what the cycle counter counts
 		cpu0: cpu@0 {
 			compatible = "esp,riscv";
 			device_type = "cpu";
 			reg = <0>;
+			clock-frequency = <160000000>;
 		};
 	};
 
@@ -24,11 +25,11 @@
 	};
 
 	clocks {
-		// XTAL_CLK / 2, what the CPU and APB run at after a direct boot
+		// The CPU clock up to 80 MHz: the PLL's 80 MHz with the CPU on it
 		clk_apb: clk-apb {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
-			clock-frequency = <20000000>;
+			clock-frequency = <80000000>;
 		};
 	};
 

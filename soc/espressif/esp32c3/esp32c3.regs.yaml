@@ -12,3 +12,5 @@ labels:
 props:
   - label: cpu0
     prop: clock-frequency
+  - label: clk_apb
+    prop: clock-frequency
