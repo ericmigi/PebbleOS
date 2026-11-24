@@ -14,6 +14,6 @@ Touchscreens have the {doc}`touchscreen <touch>` class.
 
 | Driver | Compatible | Kconfig |
 | --- | --- | --- |
-| ADC keys | `adc-keys-irq` | `CONFIG_INPUT_ADC_KEYS` |
+| ADC keys | `adc-keys`, polled; `adc-keys-irq` | `CONFIG_INPUT_ADC_KEYS` |
 | GPIO keys | `gpio-keys` | `CONFIG_INPUT_GPIO_KEYS` |
 | SDL keyboard | — | `CONFIG_INPUT_SDL` |

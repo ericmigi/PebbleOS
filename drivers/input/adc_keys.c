@@ -16,6 +16,11 @@
 #define HELD_SCAN_MS 50U
 // A read that keeps failing is left until the next edge, so that the SoC can still sleep
 #define MAX_FAILURES 5U
+// Polled: presses settle in about a millisecond, releases chatter for up to some 25 ms, so a key
+// is taken after two polls that read it, the second soon after the first, and key-up after three
+#define PRESS_POLLS   2U
+#define RELEASE_POLLS 3U
+#define CONFIRM_MS    5U
 
 // The key nearest to the voltage, NULL if key-up is
 static const struct pbl_adc_keys_key *prv_nearest(const struct pbl_adc_keys *keys, int32_t uv) {
@@ -34,12 +39,48 @@ static const struct pbl_adc_keys_key *prv_nearest(const struct pbl_adc_keys *key
   return nearest;
 }
 
+static void prv_report(struct pbl_adc_keys_state *state, const struct pbl_adc_keys_key *key) {
+  if (state->pressed != nullptr) {
+    pbl_input_report_key(state->pressed->code, false, key == nullptr);
+  }
+  if (key != nullptr) {
+    pbl_input_report_key(key->code, true, true);
+  }
+  state->pressed = key;
+}
+
+static void prv_poll(struct pbl_adc_keys_state *state, const struct pbl_adc_keys_key *key) {
+  uint32_t delay_ms = state->keys->poll_ms;
+
+  if (key == state->pressed) {
+    state->count = 0U;
+  } else {
+    if (state->count == 0U || key != state->candidate) {
+      state->candidate = key;
+      state->count = 0U;
+    }
+    state->count++;
+    if (state->count >= (key == nullptr ? RELEASE_POLLS : PRESS_POLLS)) {
+      prv_report(state, key);
+      state->count = 0U;
+    } else if (key != nullptr) {
+      delay_ms = CONFIRM_MS;
+    }
+  }
+
+  (void)pbl_delayed_work_schedule(&pbl_sys_workq, &state->scan, PBL_MSEC(delay_ms));
+}
+
 static void prv_scan(struct pbl_work *work) {
   struct pbl_adc_keys_state *state = PBL_CONTAINER_OF(work, struct pbl_adc_keys_state, scan.work);
   const struct pbl_adc_keys *keys = state->keys;
   int32_t uv;
 
   if (pbl_adc_read(&keys->channel, &uv) != 0) {
+    if (keys->poll_ms != 0U) {
+      (void)pbl_delayed_work_schedule(&pbl_sys_workq, &state->scan, PBL_MSEC(keys->poll_ms));
+      return;
+    }
     if (++state->failures < MAX_FAILURES) {
       (void)pbl_delayed_work_schedule(&pbl_sys_workq, &state->scan, PBL_MSEC(HELD_SCAN_MS));
     }
@@ -49,14 +90,13 @@ static void prv_scan(struct pbl_work *work) {
 
   const struct pbl_adc_keys_key *key = prv_nearest(keys, uv);
 
+  if (keys->poll_ms != 0U) {
+    prv_poll(state, key);
+    return;
+  }
+
   if (key != state->pressed) {
-    if (state->pressed != nullptr) {
-      pbl_input_report_key(state->pressed->code, false, key == nullptr);
-    }
-    if (key != nullptr) {
-      pbl_input_report_key(key->code, true, true);
-    }
-    state->pressed = key;
+    prv_report(state, key);
   }
 
   if (key != nullptr) {
@@ -81,9 +121,11 @@ int pbl_adc_keys_init(const struct pbl_device *dev) {
     return ret;
   }
 
-  ret = pbl_device_init(&keys->irq.intc->dev);
-  if (ret != 0) {
-    return ret;
+  if (keys->poll_ms == 0U) {
+    ret = pbl_device_init(&keys->irq.intc->dev);
+    if (ret != 0) {
+      return ret;
+    }
   }
 
   ret = pbl_pinctrl_select_state(&keys->pinctrl, PBL_PINCTRL_STATE_DEFAULT);
@@ -93,16 +135,19 @@ int pbl_adc_keys_init(const struct pbl_device *dev) {
 
   state->keys = keys;
   state->pressed = nullptr;
+  state->count = 0U;
   pbl_delayed_work_init(&state->scan, prv_scan);
 
-  ret = pbl_intc_request(&keys->irq, prv_edge, state);
-  if (ret != 0) {
-    return ret;
-  }
+  if (keys->poll_ms == 0U) {
+    ret = pbl_intc_request(&keys->irq, prv_edge, state);
+    if (ret != 0) {
+      return ret;
+    }
 
-  ret = pbl_intc_enable(&keys->irq);
-  if (ret != 0) {
-    return ret;
+    ret = pbl_intc_enable(&keys->irq);
+    if (ret != 0) {
+      return ret;
+    }
   }
 
   // The keys as they are now
@@ -111,4 +156,4 @@ int pbl_adc_keys_init(const struct pbl_device *dev) {
   return 0;
 }
 
-#include PBL_DT_INSTANCES(adc_keys_irq)
+#include PBL_DT_INSTANCES(adc_keys)
