@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/nvmem/esp,esp32c3-efuse.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif ESP32-C3 eFuse controller
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+description:
+  The eFuse controller of the ESP32-C3, whose read registers mirror the
+  blocks programmed at the factory: the MAC address, chip revision and
+  calibration.
+
+properties:
+  compatible:
+    const: esp,esp32c3-efuse
+
+  reg:
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    efuse@60008800 {
+        compatible = "esp,esp32c3-efuse";
+        reg = <0x60008800 0x200>;
+    };

@@ -13,6 +13,7 @@ MCU information reports facts about the SoC, such as its unique ID.
 
 | Driver | Compatible | Kconfig |
 | --- | --- | --- |
+| Espressif ESP32-C3 | — | `CONFIG_MCU_ESP32C3` |
 | Nordic nRF5 | — | `CONFIG_MCU_NRF5` |
 | SiFli SF32LB | — | `CONFIG_MCU_SF32LB` |
 | QEMU | — | `CONFIG_MCU_QEMU` |
