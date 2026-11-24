@@ -3,3 +3,4 @@
 
 console_uart: usb_serial_jtag
 display: display
+flash: flash0

@@ -14,6 +14,12 @@ e-paper display, the keys (two ADC ladders, polled, and the power button) and
 the battery voltage (ADC channel 0, half the cell voltage); the microSD card is
 not supported yet.
 
+The Pebble firmware (`pebble/`, the default application) runs as Flint: its
+144 × 168 screen three times as large in the middle of the panel, the system
+resources and the filesystem in the flash, the keys as Back, Up, Select and
+Down. Sensors, vibration, the microphone and the charger are simulated, and
+there is no Bluetooth.
+
 The firmware is the image the ROM boots straight from the flash, as on
 [](../qemu_esp32c3/index.md): no second-stage bootloader, the code running in
 place at 0x42000000. The early init holds the power latch, sets the CPU to
@@ -54,6 +60,18 @@ pbl build
 pbl run --tty /dev/cu.usbmodem1101
 pbl console --tty /dev/cu.usbmodem1101
 ```
+
+The Pebble firmware also needs its system resources, which `--resources`
+writes in the same esptool run, at the `system-resources-bank-0` partition:
+
+```shell
+pbl configure --board xteink_x4
+pbl build
+pbl run --resources --tty /dev/cu.usbmodem1101
+```
+
+Its first boot formats the filesystem partition, which takes minutes when the
+flash holds the reader's own data.
 
 {doc}`../../pbl/samples` checks samples on the reader the way it does on the
 emulator, flashing each in turn and reading the console from the reset on:
