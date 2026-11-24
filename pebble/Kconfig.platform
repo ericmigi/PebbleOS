@@ -12,6 +12,8 @@
 
 choice
     prompt "SDK platform"
+config PLATFORM_CYBERDECK
+    bool "Cyberdeck"
 config PLATFORM_EMERY
     bool "Emery"
 config PLATFORM_FLINT
