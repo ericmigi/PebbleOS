@@ -50,8 +50,12 @@ typedef struct {
   bool shift_for_peek;  //!< shifted up above the timeline peek
 } AppFrameFit;
 
-//! Whether the current app frame's fit copies pixels one to one.
+//! Whether the current app frame's fit copies pixels one to one, and where it puts them.
 static bool s_app_frame_verbatim;
+static GPoint s_app_frame_origin;
+
+//! Where the mirrored app frame was copied to.
+static GPoint s_app_framebuffer_mirror_origin;
 
 //! Set by the completion of a flush whose rows did not reach the panel.
 static bool s_flush_failed;
@@ -114,6 +118,7 @@ static void prv_finish_transition(void);
 
 static AppFrameFit prv_get_app_frame_fit(void);
 static bool prv_app_frame_fit_is_verbatim(const AppFrameFit *fit);
+static bool prv_app_frame_one_to_one(const AppFrameFit *fit, GPoint *origin);
 static void prv_scaled_app_fb_copy(const GRect update_rect, bool copy_relative_to_origin,
                                    int16_t offset_y, const AppFrameFit *fit);
 
@@ -219,17 +224,20 @@ static bool prv_rows_differ(const uint8_t *a, const uint8_t *b, size_t byte0, si
   return false;
 }
 
-//! Narrows rect to the rows where the app framebuffer differs from the system framebuffer, which
-//! still holds the previous frame. False when no row differs.
-static bool prv_narrow_to_changed_rows(GRect *rect) {
+//! Narrows rect, in app framebuffer coordinates, to the rows where the app framebuffer differs
+//! from the system framebuffer, which still holds the previous frame copied to origin. False when
+//! no row differs.
+static bool prv_narrow_to_changed_rows(GRect *rect, GPoint origin) {
   const GBitmap app_bitmap = compositor_get_app_framebuffer_as_bitmap();
   const GBitmap sys_bitmap = compositor_get_framebuffer_as_bitmap();
   const int16_t x_max = grect_get_max_x(rect) - 1;
+  // The origin's column is byte aligned
+  const size_t sys_byte_offset = ((size_t)origin.x * CONFIG_SCREEN_COLOR_DEPTH_BITS) / 8;
   int16_t first = -1;
   int16_t last = -1;
   for (int16_t y = rect->origin.y; y < grect_get_max_y(rect); y++) {
     const GBitmapDataRowInfo app_row = gbitmap_get_data_row_info(&app_bitmap, y);
-    const GBitmapDataRowInfo sys_row = gbitmap_get_data_row_info(&sys_bitmap, y);
+    const GBitmapDataRowInfo sys_row = gbitmap_get_data_row_info(&sys_bitmap, y + origin.y);
     const int16_t x0 = PBL_MAX(rect->origin.x, app_row.min_x);
     const int16_t x1 = PBL_MIN(x_max, app_row.max_x);
     if (x0 > x1) {
@@ -239,7 +247,7 @@ static bool prv_narrow_to_changed_rows(GRect *rect) {
     const size_t byte0 = ((size_t)x0 * CONFIG_SCREEN_COLOR_DEPTH_BITS) / 8;
     const size_t byte1 =
         ((size_t)x1 * CONFIG_SCREEN_COLOR_DEPTH_BITS + CONFIG_SCREEN_COLOR_DEPTH_BITS - 1) / 8;
-    if (prv_rows_differ(app_row.data, sys_row.data, byte0, byte1)) {
+    if (prv_rows_differ(app_row.data, sys_row.data + sys_byte_offset, byte0, byte1)) {
       if (first < 0) {
         first = y;
       }
@@ -258,8 +266,10 @@ static bool prv_narrow_to_changed_rows(GRect *rect) {
 //! over the last frame, while the system framebuffer still holds that frame. False when a full
 //! composite is needed.
 static bool prv_render_app_dirty_rect(const AppFrameFit *fit) {
+  GPoint origin;
   if ((s_state != CompositorState_App && s_state != CompositorState_AppAndModal) ||
-      !s_app_framebuffer_mirrored || !prv_app_frame_fit_is_verbatim(fit)) {
+      !s_app_framebuffer_mirrored || !prv_app_frame_one_to_one(fit, &origin) ||
+      !gpoint_equal(&origin, &s_app_framebuffer_mirror_origin)) {
     return false;
   }
 
@@ -267,23 +277,34 @@ static bool prv_render_app_dirty_rect(const AppFrameFit *fit) {
   GRect rect = app_framebuffer->is_dirty ? app_framebuffer->dirty_rect : GRectZero;
   prv_reset_app_framebuffer_dirty(app_framebuffer);
 
-  // The rectangle comes from app memory and is not trusted until clipped
-  const GRect display_rect = GRect(0, 0, PBL_DISPLAY_WIDTH, PBL_DISPLAY_HEIGHT);
+  // The rectangle comes from app memory and is not trusted until clipped. It and the modal's
+  // are in app framebuffer coordinates here.
+  GSize app_size;
+  app_manager_get_framebuffer_size(&app_size);
+  const GRect app_rect = (GRect){GPointZero, app_size};
   grect_standardize(&rect);
-  grect_clip(&rect, &display_rect);
+  grect_clip(&rect, &app_rect);
   if (rect.size.w <= 0 || rect.size.h <= 0) {
     rect = GRectZero;
   }
   if (!grect_is_empty(&s_modal_rect)) {
-    rect = grect_is_empty(&rect) ? s_modal_rect : grect_union(&rect, &s_modal_rect);
-    grect_clip(&rect, &display_rect);
+    if (gpoint_equal(&origin, &GPointZero)) {
+      rect = grect_is_empty(&rect) ? s_modal_rect : grect_union(&rect, &s_modal_rect);
+      grect_clip(&rect, &app_rect);
+    } else {
+      // The modal may have drawn over the bezel too: put back the whole area it drew
+      prv_scaled_app_fb_copy(s_modal_rect, true /* copy_relative_to_origin */, 0 /* offset_y */,
+                             fit);
+      framebuffer_mark_dirty_rect(&s_framebuffer, s_modal_rect);
+    }
   }
 #ifdef CONFIG_SERVICE_COMPOSITOR_PARTIAL_FRAMES_WHOLE_SCREEN
   // The comparison alone decides what changed, whatever the app marked
-  rect = display_rect;
+  rect = app_rect;
 #endif
-  if (!grect_is_empty(&rect) && prv_narrow_to_changed_rows(&rect)) {
-    prv_scaled_app_fb_copy(rect, false /* copy_relative_to_origin */, 0 /* offset_y */, fit);
+  if (!grect_is_empty(&rect) && prv_narrow_to_changed_rows(&rect, origin)) {
+    rect.origin = gpoint_add(rect.origin, origin);
+    prv_scaled_app_fb_copy(rect, true /* copy_relative_to_origin */, 0 /* offset_y */, fit);
     framebuffer_mark_dirty_rect(&s_framebuffer, rect);
   }
 
@@ -304,7 +325,7 @@ void compositor_render_app(void) {
   PBL_PROFILER_NODE_START(compositor);
 
   const AppFrameFit fit = prv_get_app_frame_fit();
-  s_app_frame_verbatim = prv_app_frame_fit_is_verbatim(&fit);
+  s_app_frame_verbatim = prv_app_frame_one_to_one(&fit, &s_app_frame_origin);
   if (prv_render_app_dirty_rect(&fit)) {
     PBL_PROFILER_NODE_STOP(compositor);
     return;
@@ -452,6 +473,7 @@ void compositor_app_render_ready(void) {
     prv_compositor_flush();
     // The flush dropped the mirror; an app frame copied one to one and sent restores it
     s_app_framebuffer_mirrored = s_app_frame_verbatim && !s_flush_failed;
+    s_app_framebuffer_mirror_origin = s_app_frame_origin;
   }
 
   // Draw the modal if in the Modal state
@@ -753,6 +775,32 @@ static bool prv_app_frame_fit_is_verbatim(const AppFrameFit *fit) {
   return fit->matches_display && !fit->squish_for_peek && !fit->shift_for_peek;
 }
 
+//! Where a smaller app frame is centred in the black bezel, above the timeline peek if there is
+//! room.
+static GPoint prv_bezel_origin(GSize app_size) {
+  const int16_t bezel_height = (PBL_DISPLAY_HEIGHT - app_size.h) / 2;
+  return GPoint((PBL_DISPLAY_WIDTH - app_size.w) / 2,
+                PBL_CLAMP(timeline_peek_get_origin_y() - app_size.h, 0, bezel_height));
+}
+
+//! Whether the app frame is copied one to one, and if so where to: filling the display, or, on a
+//! black and white display, in the bezel at a whole byte.
+static bool prv_app_frame_one_to_one(const AppFrameFit *fit, GPoint *origin) {
+  *origin = GPointZero;
+  if (prv_app_frame_fit_is_verbatim(fit)) {
+    return true;
+  }
+#if !PBL_COLOR
+  if (!fit->squish_for_peek && !fit->shift_for_peek) {
+    GSize app_size;
+    app_manager_get_framebuffer_size(&app_size);
+    *origin = prv_bezel_origin(app_size);
+    return (origin->x % 8) == 0;
+  }
+#endif
+  return false;
+}
+
 GRect compositor_get_scaled_app_frame(GSize app_size) {
   const GSize display_size = GSize(PBL_DISPLAY_WIDTH, PBL_DISPLAY_HEIGHT);
 #if defined(CONFIG_PLATFORM_EMERY) || defined(CONFIG_PLATFORM_GABBRO)
@@ -1028,11 +1076,10 @@ static void prv_scaled_app_fb_copy(const GRect update_rect, bool copy_relative_t
   {
     // Bezel mode: centered in a black bezel. The app is as wide or as high as the display when
     // only the other direction is smaller.
-    const int16_t bezel_width = (PBL_DISPLAY_WIDTH - app_width) / 2;
-    const int16_t bezel_height = (PBL_DISPLAY_HEIGHT - app_height) / 2;
-    const int16_t app_peek_offset_y = timeline_peek_get_origin_y() - app_height;
-    const int16_t app_offset_y = PBL_CLAMP(app_peek_offset_y, 0, bezel_height);
-    PBL_ASSERTN((bezel_width >= 0) && (bezel_height >= 0));
+    const GPoint bezel_origin = prv_bezel_origin(GSize(app_width, app_height));
+    const int16_t bezel_width = bezel_origin.x;
+    const int16_t app_offset_y = bezel_origin.y;
+    PBL_ASSERTN((bezel_width >= 0) && (app_height <= PBL_DISPLAY_HEIGHT));
 
     // set the entire region to be updated to black
     int16_t first_row = PBL_CLAMP(update_rect.origin.y, 0, PBL_DISPLAY_HEIGHT - 1);
