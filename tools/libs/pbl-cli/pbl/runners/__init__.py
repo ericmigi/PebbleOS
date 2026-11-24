@@ -7,6 +7,7 @@ from .core import (
     RunnerError,
     UnsupportedOperation,
 )
+from .esptool import EsptoolRunner
 from .native import NativeRunner
 from .nrfutil import NrfUtilRunner
 from .openocd import OpenOcdRunner
@@ -34,6 +35,7 @@ RUNNERS = {
     for runner in (
         OpenOcdRunner,
         SfToolRunner,
+        EsptoolRunner,
         NrfUtilRunner,
         ProbeRsRunner,
         QemuRunner,
