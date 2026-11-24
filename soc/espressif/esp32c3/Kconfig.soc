@@ -5,6 +5,7 @@ config SOC_ESP32C3
     bool "Espressif ESP32-C3"
     select SOC_FAMILY_ESPRESSIF
     select CPU_RV32IMC
+    select RAMFUNC
     select RISCV_PCCR
     select SOC_HAS_RESET
     select TIMER_ESP32C3_SYSTIMER
