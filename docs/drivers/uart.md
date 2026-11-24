@@ -15,6 +15,7 @@ its interrupt while reception is enabled.
 | Driver | Compatible | Kconfig |
 | --- | --- | --- |
 | Espressif ESP32-C3 UART Controller | `esp,esp32c3-uart` | `CONFIG_UART_ESP32C3` |
+| Espressif ESP32-C3 USB-Serial-JTAG serial port | `esp,esp32c3-usb-serial-jtag` | `CONFIG_UART_ESP32C3_USB_SERIAL_JTAG` |
 | Nordic nRF5 UART Controller | `nordic,nrf52832-uarte` | `CONFIG_UART_NRF5` |
 | SiFli SF32LB UART Controller | `sifli,sf32lb52-usart` | `CONFIG_UART_SF32LB` |
 | ST STM32 UART Controller | `st,stm32h7-uart` | `CONFIG_UART_STM32` |

@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: esp,esp32c3-usb-serial-jtag
+config: UART_ESP32C3_USB_SERIAL_JTAG
+class: uart
+define: PBL_UART_ESP32C3_USJ_DEFINE
+args:
+  - name: true
+  - reg: 0
+  - irq: 0
