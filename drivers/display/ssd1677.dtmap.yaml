@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: solomon,ssd1677
+config: DISPLAY_SSD1677
+class: display
+define: PBL_DISPLAY_SSD1677_DEFINE
+header: pbl/drivers/display/ssd1677.h
+args:
+  - name: true
+  - parent: spi
+  - reg: 0
+  - prop: spi-max-frequency
+  - flags:
+      spi-cpha: PBL_SPI_CPHA
+      spi-cpol: PBL_SPI_CPOL
+      spi-cs-high: PBL_SPI_CS_HIGH
+      spi-lsb-first: PBL_SPI_LSB_FIRST
+  - gpio: dc
+  - gpio: reset
+  - gpio: busy
+  - prop: width
+  - prop: height
+  - prop: panel-width
+  - prop: panel-height
+  - prop: scale
+    default: 1
+  - prop: rotation
+    default: 0
+  - prop: full-refresh-interval
+    default: 20
