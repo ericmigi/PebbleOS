@@ -14,4 +14,5 @@ asserted throughout.
 
 | Driver | Compatible | Kconfig |
 | --- | --- | --- |
+| Espressif ESP32-C3 SPI Controller | `esp,esp32c3-spi` | `CONFIG_SPI_ESP32C3` |
 | Nordic nRF5 SPI Controller | `nordic,nrf52832-spim` | `CONFIG_SPI_NRF5` |

@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/spi/esp,esp32c3-spi.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif ESP32-C3 general purpose SPI controller (GPSPI2)
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+description:
+  The ESP32-C3's general purpose SPI controller as a master, clocked from the
+  APB clock. Chip selects are GPIOs, from cs-gpios; SCLK, MOSI and MISO are
+  routed through the GPIO matrix by the default pin state.
+
+allOf:
+  - $ref: /schemas/spi/spi-controller.yaml#
+
+properties:
+  compatible:
+    const: esp,esp32c3-spi
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  clocks:
+    maxItems: 1
+    description: APB clock.
+
+  pinctrl-0: true
+
+  pinctrl-names:
+    const: default
+
+required:
+  - compatible
+  - reg
+  - clocks
+  - pinctrl-0
+  - pinctrl-names
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    spi@60024000 {
+        compatible = "esp,esp32c3-spi";
+        reg = <0x60024000 0x1000>;
+        interrupts = <19>;
+        clocks = <&clk_apb>;
+        pinctrl-0 = <&spi2_default>;
+        pinctrl-names = "default";
+        cs-gpios = <&gpio 21 0>, <&gpio 12 0>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+    };

@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: esp,esp32c3-spi
+config: SPI_ESP32C3
+class: spi
+define: PBL_SPI_ESP32C3_DEFINE
+header: pbl/drivers/spi/esp32c3.h
+args:
+  - name: true
+  - reg: 0
+  - clock: 0
+  - pinctrl: default
+  - gpio: cs
+    all: true
+    optional: true
