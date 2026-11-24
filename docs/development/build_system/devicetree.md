@@ -815,6 +815,9 @@ props:
     prop: arm,num-irq-priority-bits
 ```
 
+A property of several cells, as a GPIO specifier, gives the one `cell` names,
+counted from 0: `{label: power_latch, prop: gpios, cell: 1}` is the pin.
+
 Code driving whichever of several instances the board enables, as the
 system timer on the LPTIM each core of the STM32H747 leaves to the other,
 names its compatible instead:
