@@ -99,6 +99,16 @@
 			interrupts = <37>, <38>, <39>;
 		};
 
+		spi2: spi@60024000 {
+			compatible = "esp,esp32c3-spi";
+			reg = <0x60024000 0x1000>;
+			interrupts = <19>;
+			clocks = <&clk_apb>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
 		usb_serial_jtag: serial@60043000 {
 			compatible = "esp,esp32c3-usb-serial-jtag";
 			reg = <0x60043000 0x1000>;
