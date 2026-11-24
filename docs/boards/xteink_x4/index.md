@@ -9,8 +9,10 @@
 :::
 
 The Xteink X4 is a pocket e-reader built on the ESP32-C3. PebbleOS runs the
-kernel and its samples on it, with the console on the chip's USB port and the
-e-paper display; the keys and the microSD card are not supported yet.
+kernel and its samples on it, with the console on the chip's USB port, the
+e-paper display, the keys (two ADC ladders, polled, and the power button) and
+the battery voltage (ADC channel 0, half the cell voltage); the microSD card is
+not supported yet.
 
 The firmware is the image the ROM boots straight from the flash, as on
 [](../qemu_esp32c3/index.md): no second-stage bootloader, the code running in

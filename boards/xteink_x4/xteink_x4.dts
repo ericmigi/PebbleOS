@@ -9,6 +9,7 @@
 // are the panel's chip select (GPIO21) and the USB detect input (GPIO20).
 
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
 #include <dt-bindings/pinctrl/esp32c3-pinctrl.h>
 
 #include "espressif/esp32c3.dtsi"
@@ -29,6 +30,75 @@
 		gpios = <&gpio 13 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 		regulator-always-on;
+	};
+
+	// Six keys on two ladders that pull an ADC input down from about 3.3 V, the input clipping
+	// at full scale with none pressed. Press voltages are the mean of those other X4 projects
+	// measured; the nearest one wins, so each key's band ends halfway to its neighbour's. Key-up
+	// is full scale as one unit's eFuse calibration reads it, 4095 x 1370 / 1851 mV.
+	keys_a: adc-keys-a {
+		compatible = "adc-keys";
+		io-channels = <&adc 1>;
+		io-channel-names = "buttons";
+		keyup-threshold-microvolt = <3030000>;
+		poll-interval = <15>;
+
+		button-back {
+			label = "Back";
+			linux,code = <KEY_BACK>;
+			press-threshold-microvolt = <2600000>;
+		};
+
+		button-confirm {
+			label = "Confirm";
+			linux,code = <KEY_SELECT>;
+			press-threshold-microvolt = <2000000>;
+		};
+
+		// Left and Right, side by side under the panel, as a second Up and Down
+		button-left {
+			label = "Left";
+			linux,code = <KEY_UP>;
+			press-threshold-microvolt = <1115000>;
+		};
+
+		button-right {
+			label = "Right";
+			linux,code = <KEY_DOWN>;
+			press-threshold-microvolt = <0>;
+		};
+	};
+
+	keys_b: adc-keys-b {
+		compatible = "adc-keys";
+		io-channels = <&adc 2>;
+		io-channel-names = "buttons";
+		keyup-threshold-microvolt = <3030000>;
+		poll-interval = <15>;
+
+		button-up {
+			label = "Up";
+			linux,code = <KEY_UP>;
+			press-threshold-microvolt = <1670000>;
+		};
+
+		button-down {
+			label = "Down";
+			linux,code = <KEY_DOWN>;
+			press-threshold-microvolt = <0>;
+		};
+	};
+
+	// The side power key, active low with a pull-up on the board
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		button-power {
+			label = "Power";
+			gpios = <&gpio 3 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_POWER>;
+			debounce-interval = <20>;
+		};
 	};
 
 	// 16 MiB SPI NOR (JEDEC ID 0x85 0x2018), of which the ROM maps the first 4 MiB for a direct boot
@@ -58,7 +128,26 @@
 	status = "okay";
 };
 
+// Channel 0 is the battery through a divider of two, 1 and 2 the key ladders; all at 11 dB
+&adc {
+	pinctrl-0 = <&adc_default>;
+	pinctrl-names = "default";
+	esp,attenuation = <3 3 3 3 3>;
+	status = "okay";
+};
+
 &io_mux {
+	// The battery (GPIO0, half the cell voltage) and the two key ladders (GPIO1, GPIO2): no
+	// pulls, no input buffer. GPIO2 is a strapping pin, sampled only at reset.
+	adc_default: adc-default-state {
+		analog-pins {
+			pinmux = <ESP32C3_PINMUX(0, ESP32C3_NOSIG, ESP32C3_NOSIG)>,
+				 <ESP32C3_PINMUX(1, ESP32C3_NOSIG, ESP32C3_NOSIG)>,
+				 <ESP32C3_PINMUX(2, ESP32C3_NOSIG, ESP32C3_NOSIG)>;
+			bias-disable;
+		};
+	};
+
 	spi2_default: spi2-default-state {
 		// FSPICLK and FSPID out, through the GPIO matrix
 		out-pins {
