@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_ESP32C3
+    bool "Espressif ESP32-C3"
+    select SOC_FAMILY_ESPRESSIF
+    select CPU_RV32IMC
+    select RISCV_PCCR
+    select SOC_HAS_RESET
+    select TIMER_ESP32C3_SYSTIMER
+    help
+      Espressif ESP32-C3, a single RV32IMC core booted by its ROM straight
+      into the flash, with the code at 0x42000000 and the read-only data
+      read through 0x3c000000.

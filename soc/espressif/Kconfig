@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_FAMILY_ESPRESSIF
+    bool
+    help
+      Espressif family, selected by its SoCs.
+
+orsource "*/Kconfig"

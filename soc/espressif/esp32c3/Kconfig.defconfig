@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+if SOC_ESP32C3
+
+# The data-bus window of the flash, the 4 MiB the ROM maps for a direct boot. The code runs from
+# the instruction-bus window of the same flash.
+config FLASH_BASE
+    default 0x3c000000
+
+config FLASH_SIZE
+    default 0x400000
+
+config RISCV_CODE_ALIAS_OFFSET
+    default 0x06000000
+
+config NUM_IRQS
+    default 62
+
+# The prebuilt picolibc of the Espressif toolchain has TLS and a 64-bit time_t; the firmware
+# wants neither.
+config LIBC_PICOLIBC_FROM_SOURCE
+    default y
+
+endif # SOC_ESP32C3
