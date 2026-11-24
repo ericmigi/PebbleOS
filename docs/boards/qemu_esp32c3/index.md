@@ -14,6 +14,10 @@ samples, with UART0 for the console and the machine's virtual framebuffer as an
 800 × 480 display, which stands in for the [](../xteink_x4/index.md) panel;
 there is no input device or Bluetooth.
 
+The Pebble firmware (`pebble/`) runs on it as Flint, three times as large on
+the display, with simulated sensors; the shell's `button click` command
+presses its buttons.
+
 The firmware is the image the ROM boots straight from the flash: the code
 runs in place at 0x42000000 and the read-only data is read through
 0x3c000000, as on a real ESP32-C3.
