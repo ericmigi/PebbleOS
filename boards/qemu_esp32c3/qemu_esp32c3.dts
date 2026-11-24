@@ -44,3 +44,19 @@
 	current-speed = <115200>;
 	status = "okay";
 };
+
+/ {
+	// The machine's virtual RGB framebuffer, emulating the 800x480 e-paper of the Xteink X4 mounted
+	// in portrait, so the window shows it sideways as its controller scans it
+	display: display@21000000 {
+		compatible = "qemu,esp-rgb";
+		reg = <0x21000000 0x1c>, <0x20000000 0x1d4c00>;
+		reg-names = "regs", "vram";
+		width = <480>;
+		height = <800>;
+		panel-width = <480>;
+		panel-height = <800>;
+		bits-per-pixel = <1>;
+		rotation = <90>;
+	};
+};

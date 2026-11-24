@@ -10,8 +10,9 @@
 
 The `esp32c3` machine of [Espressif's QEMU](https://github.com/espressif/qemu),
 which emulates the ESP32-C3 and its boot ROM. It runs the kernel and its
-samples, with UART0 for the console; there is no display, input device or
-Bluetooth.
+samples, with UART0 for the console and the machine's virtual framebuffer as an
+800 × 480 display, which stands in for the [](../xteink_x4/index.md) panel;
+there is no input device or Bluetooth.
 
 The firmware is the image the ROM boots straight from the flash: the code
 runs in place at 0x42000000 and the read-only data is read through
