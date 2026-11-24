@@ -19,14 +19,36 @@ class QemuEsp32Runner(Runner):
 
     name = "qemu-esp32"
 
+    def __init__(self, cfg, console_port=None):
+        super().__init__(cfg)
+        self.console_port = console_port
+
     @classmethod
     def capabilities(cls):
         return RunnerCaps(commands={"run"})
 
+    @classmethod
+    def do_add_parser(cls, parser):
+        parser.add_argument(
+            "--console-port",
+            type=int,
+            metavar="PORT",
+            help="Serve the console on this TCP port instead of the terminal, for "
+            "host tools speaking the Pebble protocol in console frames",
+        )
+
+    @classmethod
+    def do_create(cls, cfg, args):
+        return cls(cfg, console_port=getattr(args, "console_port", None))
+
     def do_run(self, command):
         build = self.cfg.build
         # A window for a display, as the Pebble QEMU runner opens one
-        argv = self._command_line(build, window=bool(build.config.CONFIG_DISPLAY))
+        argv = self._command_line(
+            build,
+            window=bool(build.config.CONFIG_DISPLAY),
+            console_port=self.console_port,
+        )
         return self.run_program(argv + list(self.cfg.extra_args), cwd=build.topdir)
 
     def console_command(self):
@@ -75,7 +97,7 @@ class QemuEsp32Runner(Runner):
                     dst.write(src.read())
         return image
 
-    def _command_line(self, build, window=False):
+    def _command_line(self, build, window=False, console_port=None):
         machine = build.board_spec.qemu.get("machine")
         if not machine:
             raise RunnerError(f"board {build.board} declares no QEMU machine")
@@ -85,12 +107,16 @@ class QemuEsp32Runner(Runner):
             display = ["-display", "sdl", "-monitor", f"unix:{monitor},server,nowait"]
         else:
             display = ["-display", "none", "-monitor", "none"]
+        if console_port:
+            serial = f"tcp:127.0.0.1:{console_port},server=on,wait=off,nodelay=on"
+        else:
+            # A plain stdio backend gets nothing through on this machine
+            serial = "mon:stdio"
         return [
             self._qemu(),
             "-machine", machine,
             *display,
-            # A plain stdio backend gets nothing through on this machine
-            "-serial", "mon:stdio",
+            "-serial", serial,
             "-no-reboot",
             # Instruction counting keeps the timers in step with the code
             "-icount", "3",
