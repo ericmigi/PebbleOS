@@ -36,6 +36,9 @@
 * - `qemu_gabbro`
   - Gabbro platform emulator (e.g. Pebble Round 2)
   -
+* - [`qemu_esp32c3`](qemu_esp32c3/index.md)
+  - Espressif ESP32-C3 emulator
+  -
 * - `native_flint`
   - Flint platform host/wasm simulator (e.g. Pebble 2 Duo)
   -
@@ -58,4 +61,5 @@ obelix/index.md
 getafix/index.md
 sf32lb57_dpi_hdk/index.md
 stm32h747i_disco/index.md
+qemu_esp32c3/index.md
 ```

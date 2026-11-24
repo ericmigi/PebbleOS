@@ -1,0 +1,46 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+
+/dts-v1/;
+
+// Espressif's QEMU esp32c3 machine, booting the flash image through the ESP32-C3 ROM, with
+// UART0 for the console
+
+#include "espressif/esp32c3.dtsi"
+
+/ {
+	model = "QEMU ESP32-C3";
+	compatible = "qemu,esp32c3", "esp,esp32c3";
+
+	chosen {
+		stdout-path = &uart0;
+	};
+
+	// The flash the ROM maps, an emulated SPI NOR
+	flash0: flash@0 {
+		compatible = "esp,esp32c3-flash";
+		reg = <0x0 0x400000>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			// Where the ROM boots from
+			partition@0 {
+				label = "code";
+				reg = <0x0 0x400000>;
+			};
+		};
+	};
+};
+
+// The machine counts cycles at 160 MHz whatever the clocks
+&cpu0 {
+	clock-frequency = <160000000>;
+};
+
+&uart0 {
+	current-speed = <115200>;
+	status = "okay";
+};
