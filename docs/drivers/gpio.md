@@ -16,6 +16,7 @@ levels. GPIO ports also provide interrupt lines, through the
 
 | Driver | Compatible | Kconfig |
 | --- | --- | --- |
+| Espressif ESP32-C3 | `esp,esp32c3-gpio` | `CONFIG_GPIO_ESP32C3` |
 | Nordic nRF5 | `nordic,nrf52832-gpio` | `CONFIG_GPIO_NRF5` |
 | SiFli SF32LB | `sifli,sf32lb57-gpio`, `sifli,sf32lb52-gpio` | `CONFIG_GPIO_SF32LB` |
 | ST STM32 | `st,stm32h743-pinctrl` | `CONFIG_GPIO_STM32` |

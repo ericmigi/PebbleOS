@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/gpio/esp,esp32c3-gpio.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif ESP32-C3 GPIO matrix
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+description:
+  The GPIO matrix of the ESP32-C3, with the levels, output enables and
+  interrupts of its 22 pins. Each pin is also an interrupt source, all on
+  the one GPIO interrupt.
+
+properties:
+  compatible:
+    const: esp,esp32c3-gpio
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  gpio-controller: true
+
+  '#gpio-cells':
+    const: 2
+
+  ngpios:
+    const: 22
+
+  esp,io-mux:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: IO_MUX, whose pads the pins are.
+
+  interrupt-controller: true
+
+  '#interrupt-cells':
+    const: 2
+
+required:
+  - compatible
+  - reg
+  - interrupts
+  - gpio-controller
+  - '#gpio-cells'
+  - ngpios
+  - esp,io-mux
+  - interrupt-controller
+  - '#interrupt-cells'
+
+additionalProperties: false
+
+examples:
+  - |
+    gpio@60004000 {
+        compatible = "esp,esp32c3-gpio";
+        reg = <0x60004000 0x1000>;
+        interrupts = <16>;
+        gpio-controller;
+        #gpio-cells = <2>;
+        ngpios = <22>;
+        esp,io-mux = <&io_mux>;
+        interrupt-controller;
+        #interrupt-cells = <2>;
+    };

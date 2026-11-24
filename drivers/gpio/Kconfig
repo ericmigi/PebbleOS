@@ -58,6 +58,22 @@ config GPIO_STM32_IRQ_PRIO
     help
       Priority of the EXTI interrupts.
 
+config GPIO_ESP32C3
+    bool "Espressif ESP32-C3"
+    default y
+    depends on DT_HAS_ESP_ESP32C3_GPIO_ENABLED
+    select INTC
+    help
+      Support for the GPIO matrix of the ESP32-C3, and the interrupts of
+      its pins.
+
+config GPIO_ESP32C3_IRQ_PRIO
+    int "Interrupt priority"
+    default 0
+    depends on GPIO_ESP32C3
+    help
+      Priority of the GPIO interrupt.
+
 config GPIO_QEMU
     bool "QEMU GPIO"
     default y
