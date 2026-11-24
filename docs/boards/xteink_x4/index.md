@@ -31,8 +31,10 @@ place at 0x42000000. The early init holds the power latch, sets the CPU to
   and a 40 MHz crystal
 - **Flash**: 16 MiB SPI NOR in DIO mode, of which the ROM maps the first
   4 MiB for the firmware
-- **Display**: 800 × 480 e-paper panel (SSD1677) on SPI: SCLK GPIO8, MOSI
-  GPIO10, CS GPIO21, DC GPIO4, RST GPIO5, BUSY GPIO6
+- **Display**: 800 × 480 e-paper panel (SSD1677) on SPI at 40 MHz: SCLK GPIO8,
+  MOSI GPIO10, CS GPIO21, DC GPIO4, RST GPIO5, BUSY GPIO6. A fast refresh takes
+  about 200 ms with the board's shortened waveform (`fast-frames`, 416 ms with
+  the panel's own), every 20th refresh is a 1.7 s clean one
 - **Storage**: microSD card slot on the same bus, MISO GPIO7 and CS GPIO12
 - **Keys**: two ADC ladders, on GPIO1 and GPIO2, and a power button on GPIO3
 - **Power**: battery on GPIO0 through a halving divider; GPIO13 latches the
