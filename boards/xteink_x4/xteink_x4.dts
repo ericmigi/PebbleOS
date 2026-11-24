@@ -9,6 +9,7 @@
 // are the panel's chip select (GPIO21) and the USB detect input (GPIO20).
 
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/esp32c3-pinctrl.h>
 
 #include "espressif/esp32c3.dtsi"
 
@@ -55,4 +56,44 @@
 
 &usb_serial_jtag {
 	status = "okay";
+};
+
+&io_mux {
+	spi2_default: spi2-default-state {
+		// FSPICLK and FSPID out, through the GPIO matrix
+		out-pins {
+			pinmux = <ESP32C3_PINMUX(8, ESP32C3_NOSIG, 63)>,
+				 <ESP32C3_PINMUX(10, ESP32C3_NOSIG, 65)>;
+		};
+
+		// FSPIQ in, the microSD card's only
+		in-pins {
+			pinmux = <ESP32C3_PINMUX(7, 64, ESP32C3_NOSIG)>;
+			bias-pull-up;
+		};
+	};
+};
+
+// The panel and the microSD card share the bus: the card's chip select (GPIO12, free with the
+// flash in DIO mode) is held high while there is no driver for it
+&spi2 {
+	pinctrl-0 = <&spi2_default>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpio 21 GPIO_ACTIVE_LOW>, <&gpio 12 GPIO_ACTIVE_LOW>;
+	status = "okay";
+
+	// GDEQ0426T82 800x480 e-paper, mounted a quarter turn: 480x800 portrait, keys at the bottom
+	display: display@0 {
+		compatible = "solomon,ssd1677";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+		dc-gpios = <&gpio 4 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio 5 GPIO_ACTIVE_LOW>;
+		busy-gpios = <&gpio 6 GPIO_ACTIVE_HIGH>;
+		width = <480>;
+		height = <800>;
+		panel-width = <480>;
+		panel-height = <800>;
+		rotation = <270>;
+	};
 };

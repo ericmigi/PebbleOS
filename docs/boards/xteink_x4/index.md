@@ -9,8 +9,8 @@
 :::
 
 The Xteink X4 is a pocket e-reader built on the ESP32-C3. PebbleOS runs the
-kernel and its samples on it, with the console on the chip's USB port; the
-e-paper display, the keys and the microSD card are not supported yet.
+kernel and its samples on it, with the console on the chip's USB port and the
+e-paper display; the keys and the microSD card are not supported yet.
 
 The firmware is the image the ROM boots straight from the flash, as on
 [](../qemu_esp32c3/index.md): no second-stage bootloader, the code running in
@@ -33,9 +33,10 @@ place at 0x42000000. The early init holds the power latch, sets the CPU to
 
 UART0's pins are the panel's chip select and the USB detect input, so the
 console is the USB-Serial-JTAG port. The ROM still prints its banner on
-GPIO21 before the firmware starts. GPIO12 and GPIO13, the flash's in quad
-mode, are free with the flash in DIO mode: GPIO13 is the power latch, held
-high.
+GPIO21 before the firmware starts; the firmware then drives the pin as the
+panel's chip select. GPIO12 and GPIO13, the flash's in quad mode, are free with
+the flash in DIO mode: GPIO12 is the microSD card's chip select, held high, and
+GPIO13 the power latch, held high.
 
 ## Flashing
 
