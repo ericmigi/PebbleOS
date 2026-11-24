@@ -20,6 +20,9 @@
 #include <kernel/events.h>
 
 static void (*s_update_complete_handler)(bool success);
+// From the start of a flush until its completion has run here, after the display's own: a flush
+// started in between would have its dirty rows reset by the previous one's completion
+static bool s_flush_pending;
 
 static uint64_t s_flush_start_ticks;
 static uint32_t s_flush_count;
@@ -100,6 +103,8 @@ static void prv_corners_apply(FrameBuffer *fb, bool mask) {
 static void prv_flush_finish(void *data) {
   bool success = (data == nullptr);
 
+  s_flush_pending = false;
+
 #ifdef CONFIG_BOARD_DISPLAY_CORNERS
   prv_corners_apply(compositor_get_framebuffer(), false);
 #endif
@@ -176,6 +181,7 @@ void compositor_display_update(void (*handle_update_complete_cb)(bool success)) 
   s_flush_y1 = fb->dirty_rect.origin.y + fb->dirty_rect.size.h - 1;
   s_update_complete_handler = handle_update_complete_cb;
   s_flush_start_ticks = pbl_uptime_ticks();
+  s_flush_pending = true;
 
 #ifdef CONFIG_BOARD_DISPLAY_CORNERS
   prv_corners_apply(fb, true);
@@ -192,7 +198,7 @@ void compositor_display_update(void (*handle_update_complete_cb)(bool success)) 
 }
 
 bool compositor_display_update_in_progress(void) {
-  return pbl_display_update_in_progress(DISPLAY);
+  return s_flush_pending;
 }
 
 static void prv_collect_display_stats(void) {
