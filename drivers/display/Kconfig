@@ -94,6 +94,13 @@ config DISPLAY_QEMU
     help
       Support for the QEMU framebuffer display peripheral.
 
+config DISPLAY_QEMU_ESP_RGB
+    bool "QEMU ESP RGB display"
+    default y
+    depends on DT_HAS_QEMU_ESP_RGB_ENABLED
+    help
+      Support for the RGB framebuffer of Espressif's QEMU machines.
+
 config DISPLAY_SDL
     bool "SDL window"
     default y if SOC_POSIX

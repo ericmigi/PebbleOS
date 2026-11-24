@@ -4,6 +4,8 @@
 set(sources display.c)
 if(CONFIG_DISPLAY_QEMU)
   list(APPEND sources qemu.c)
+elseif(CONFIG_DISPLAY_QEMU_ESP_RGB)
+  list(APPEND sources qemu_esp_rgb.c)
 elseif(CONFIG_DISPLAY_SDL)
   list(APPEND sources sdl/display_sdl.c)
   pbl_host_sources(sdl/display_sdl_bottom.c)

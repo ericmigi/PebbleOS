@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: qemu,esp-rgb
+config: DISPLAY_QEMU_ESP_RGB
+class: display
+define: PBL_DISPLAY_QEMU_ESP_RGB_DEFINE
+header: pbl/drivers/display/qemu_esp_rgb.h
+args:
+  - name: true
+  - reg: regs
+  - reg: vram
+  - size: vram
+  - prop: width
+  - prop: height
+  - prop: panel-width
+  - prop: panel-height
+  - prop: scale
+    default: 1
+  - prop: bits-per-pixel
+  - prop: rotation
+    default: 0
