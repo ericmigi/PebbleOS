@@ -7,3 +7,4 @@ pbl_library_sources(
   init.c
   intmatrix.c
 )
+pbl_library_sources_ifdef(CONFIG_CRC retained.c)
