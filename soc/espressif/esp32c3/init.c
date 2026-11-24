@@ -10,6 +10,7 @@
 #include <pbl/kernel/time.h>
 
 #include <devicetree/regs.h>
+#include <hardware/esp32c3_gpio.h>
 #include <hardware/esp32c3_system.h>
 #include <hardware/esp32c3_wdt.h>
 
@@ -35,6 +36,21 @@ static void prv_timg_wdt_disable(uintptr_t base) {
   pbl_writel(0U, base + ESP32C3_TIMG_WDTCONFIG0_OFFSET);
   pbl_writel(0U, base + ESP32C3_TIMG_WDTWPROTECT_OFFSET);
 }
+
+#ifdef CONFIG_SOC_ESP32C3_POWER_LATCH
+// The level first, then the GPIO matrix, the pad and the enable: the pin never goes low
+static void prv_power_latch_hold(void) {
+  const uint32_t pin = PBL_DT_PROP_POWER_LATCH_GPIOS;
+
+  pbl_writel(PBL_BIT(pin), PBL_DT_REG_GPIO + ESP32C3_GPIO_OUT_W1TS_OFFSET);
+  pbl_writel(GPIO_FUNC_OUT_GPIO, PBL_DT_REG_GPIO + ESP32C3_GPIO_FUNC_OUT_SEL_CFG_OFFSET(pin));
+  pbl_modifyl(IO_MUX_MCU_SEL_MASK, PBL_FIELD_PREP(IO_MUX_MCU_SEL_MASK, IO_MUX_FUNC_GPIO),
+              PBL_DT_REG_IO_MUX + ESP32C3_IO_MUX_GPIO_OFFSET(pin));
+  pbl_writel(PBL_BIT(pin), PBL_DT_REG_GPIO + ESP32C3_GPIO_ENABLE_W1TS_OFFSET);
+  // A pad held from before the reset keeps its old level until released
+  pbl_modifyl(PBL_BIT(pin), 0U, RTC_CNTL(DIG_PAD_HOLD));
+}
+#endif
 
 /*
  * The CPU clock the devicetree gives cpu0. The ROM leaves the CPU on the crystal halved, and the
@@ -64,6 +80,10 @@ static void prv_cpu_clock_set(void) {
 }
 
 void pbl_soc_early_init(void) {
+#ifdef CONFIG_SOC_ESP32C3_POWER_LATCH
+  prv_power_latch_hold();
+#endif
+
   // The ROM may leave the timer group and RTC watchdogs armed, and the super watchdog always is
   prv_timg_wdt_disable(PBL_DT_REG_TIMG0);
   prv_timg_wdt_disable(PBL_DT_REG_TIMG1);
