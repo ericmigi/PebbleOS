@@ -3,6 +3,8 @@
 
 if(CONFIG_ARCH_POSIX)
   add_subdirectory(posix)
+elseif(CONFIG_CPU_RISCV)
+  add_subdirectory(riscv)
 else()
   add_subdirectory(arm)
 endif()
