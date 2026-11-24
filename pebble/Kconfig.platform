@@ -159,3 +159,10 @@ config PLATFORM_ANIMATION_RENDER_INTERVAL_MS
     default PLATFORM_ANIMATION_FRAME_INTERVAL_MS
     help
       Interval at which animation frames are rendered.
+
+config PLATFORM_ANIMATION_INSTANT
+    bool "Animations end at once"
+    help
+      Finite animations, and the transitions built on them, show only their
+      last frame: for displays that take longer to refresh than an animation
+      lasts, such as e-paper. Repeating ones keep their timing.

@@ -167,6 +167,26 @@ inline static uint32_t prv_get_ms_since_system_start(void) {
 }
 
 // -------------------------------------------------------------------------------------------
+// A finite animation on a display slower to refresh than the animation lasts ends at once, so it
+// costs one frame; one repeating without end, or in a parent that does, keeps its duration, as a
+// zero one would replay without end
+static bool prv_is_instant(const AnimationPrivate *animation) {
+#ifdef CONFIG_PLATFORM_ANIMATION_INSTANT
+  if (animation->duration_ms == ANIMATION_DURATION_INFINITE) {
+    return false;
+  }
+  for (const AnimationPrivate *a = animation; a != nullptr; a = a->parent) {
+    if (a->play_count == ANIMATION_PLAY_COUNT_INFINITE_STORED) {
+      return false;
+    }
+  }
+  return true;
+#else
+  return false;
+#endif
+}
+
+// -------------------------------------------------------------------------------------------
 // Get the total duration of an animation, optionally considering the delay and play count.
 // This recurses into children of sequence or spawn animations
 static uint32_t prv_get_total_duration(AnimationState *state, AnimationPrivate *animation,
@@ -211,7 +231,7 @@ static uint32_t prv_get_total_duration(AnimationState *state, AnimationPrivate *
 
   } else {
     PBL_ASSERTN(animation->type == AnimationTypePrimitive);
-    duration += animation->duration_ms;
+    duration += prv_is_instant(animation) ? 0 : animation->duration_ms;
   }
 
   if (include_play_count) {
@@ -607,6 +627,9 @@ static bool prv_schedule_animation(AnimationState *state, const uint32_t now,
   } else {
     PBL_ASSERTN(animation->type == AnimationTypePrimitive);
     PBL_ASSERTN(animation->implementation->update != nullptr);
+    if (prv_is_instant(animation)) {
+      animation->duration_ms = 0;
+    }
   }
 
   if (now != earliest_start_time) {
