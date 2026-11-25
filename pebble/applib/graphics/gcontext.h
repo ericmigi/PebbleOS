@@ -36,6 +36,13 @@ typedef struct GContext {
   //! context are locked
   bool lock;
 
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+  //! The framebuffer at the display's size, while code outside the graphics routines has it
+  //! captured (graphics_capture_frame_buffer())
+  GBitmap scaled2_capture;
+  bool scaled2_captured;
+#endif
+
 #ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
   //! Drawing at the stored size of a framebuffer at twice its size
   //! (graphics_private_scaled2_begin()): dirty rectangles are halved

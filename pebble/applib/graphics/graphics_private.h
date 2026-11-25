@@ -24,6 +24,13 @@ void graphics_private_set_bit_1bit(GBitmap *bitmap, int x, int y, bool white);
 uint32_t graphics_private_double_bits16(uint16_t bits);
 #endif
 
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+//! The graphics routines capture a framebuffer at twice its size as it is stored; the public
+//! graphics_capture_frame_buffer() gives everyone else a bitmap of the display's size.
+GBitmap *graphics_private_capture_frame_buffer(GContext *ctx);
+#define graphics_capture_frame_buffer(ctx) graphics_private_capture_frame_buffer(ctx)
+#endif
+
 #ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
 //! What graphics_private_scaled2_begin() changed in a context
 typedef struct {
