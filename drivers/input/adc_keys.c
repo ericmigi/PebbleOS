@@ -8,7 +8,15 @@
 #include <pbl/devicetree.h>
 #include <pbl/drivers/input/adc_keys.h>
 #include <pbl/input/input.h>
+#include <pbl/util/math.h>
 #include <pbl/util/misc.h>
+
+#ifndef CONFIG_INPUT_ADC_KEYS_IDLE_POLL_MS
+#define CONFIG_INPUT_ADC_KEYS_IDLE_POLL_MS 0U
+#endif
+#ifndef CONFIG_INPUT_ADC_KEYS_IDLE_DELAY_MS
+#define CONFIG_INPUT_ADC_KEYS_IDLE_DELAY_MS 2000U
+#endif
 
 // Time the line must be quiet before it is read
 #define SETTLE_MS 20U
@@ -55,11 +63,27 @@ static void prv_report(struct pbl_adc_keys_state *state, const struct pbl_adc_ke
   state->pressed = key;
 }
 
+static uint32_t prv_poll_delay_ms(const struct pbl_adc_keys_state *state) {
+  if (CONFIG_INPUT_ADC_KEYS_IDLE_POLL_MS > state->keys->poll_ms &&
+      state->quiet_ms >= CONFIG_INPUT_ADC_KEYS_IDLE_DELAY_MS) {
+    return CONFIG_INPUT_ADC_KEYS_IDLE_POLL_MS;
+  }
+  return state->keys->poll_ms;
+}
+
 static void prv_poll(struct pbl_adc_keys_state *state, const struct pbl_adc_keys_key *key) {
-  uint32_t delay_ms = state->keys->poll_ms;
+  uint32_t delay_ms;
 
   if (key == state->pressed) {
     state->count = 0U;
+    if (state->pressed == nullptr) {
+      const uint32_t quiet = (uint32_t)state->quiet_ms + state->delay_ms;
+
+      state->quiet_ms = (uint16_t)PBL_MIN(quiet, (uint32_t)CONFIG_INPUT_ADC_KEYS_IDLE_DELAY_MS);
+    } else {
+      state->quiet_ms = 0U;
+    }
+    delay_ms = prv_poll_delay_ms(state);
   } else {
     if (state->count == 0U || key != state->candidate) {
       state->candidate = key;
@@ -69,11 +93,17 @@ static void prv_poll(struct pbl_adc_keys_state *state, const struct pbl_adc_keys
     if (state->count >= (key == nullptr ? RELEASE_POLLS : PRESS_POLLS)) {
       prv_report(state, key);
       state->count = 0U;
+      state->quiet_ms = 0U;
+      delay_ms = state->keys->poll_ms;
     } else if (key != nullptr) {
       delay_ms = CONFIRM_MS;
+    } else {
+      state->quiet_ms = 0U;
+      delay_ms = state->keys->poll_ms;
     }
   }
 
+  state->delay_ms = (uint16_t)delay_ms;
   (void)pbl_delayed_work_schedule(prv_workq(state->keys), &state->scan, PBL_MSEC(delay_ms));
 }
 
@@ -84,8 +114,10 @@ static void prv_scan(struct pbl_work *work) {
 
   if (pbl_adc_read(&keys->channel, &uv) != 0) {
     if (keys->poll_ms != 0U) {
-      (void)pbl_delayed_work_schedule(prv_workq(state->keys), &state->scan,
-                                      PBL_MSEC(keys->poll_ms));
+      const uint32_t delay_ms = prv_poll_delay_ms(state);
+
+      state->delay_ms = (uint16_t)delay_ms;
+      (void)pbl_delayed_work_schedule(prv_workq(state->keys), &state->scan, PBL_MSEC(delay_ms));
       return;
     }
     if (++state->failures < MAX_FAILURES) {
@@ -143,6 +175,8 @@ int pbl_adc_keys_init(const struct pbl_device *dev) {
   state->keys = keys;
   state->pressed = nullptr;
   state->count = 0U;
+  state->quiet_ms = 0U;
+  state->delay_ms = 0U;
   pbl_delayed_work_init(&state->scan, prv_scan);
 
   if (keys->poll_ms == 0U) {

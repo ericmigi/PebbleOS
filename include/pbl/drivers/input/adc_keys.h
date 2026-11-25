@@ -48,6 +48,10 @@ struct pbl_adc_keys_state {
   const struct pbl_adc_keys_key *candidate;
   /** Polled: polls in a row that read @ref candidate. */
   uint8_t count;
+  /** Polled: quiet time since the last key activity, in milliseconds, capped at idle delay. */
+  uint16_t quiet_ms;
+  /** Polled: last poll delay scheduled, in milliseconds. */
+  uint16_t delay_ms;
 };
 
 /** @brief ADC keys. */

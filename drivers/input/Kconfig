@@ -14,6 +14,27 @@ config INPUT_ADC_KEYS
       Keys on a resistor ladder read through an ADC channel, polled or on
       an interrupt that a press or release raises.
 
+if INPUT_ADC_KEYS
+
+config INPUT_ADC_KEYS_IDLE_POLL_MS
+    int "Idle poll period for polled ADC keys (ms)"
+    default 80
+    range 0 1000
+    help
+      Poll period in milliseconds for polled ladders once no key has been
+      pressed for INPUT_ADC_KEYS_IDLE_DELAY_MS, letting the CPU stay asleep
+      longer between scans. 0 keeps the devicetree's poll-interval.
+
+config INPUT_ADC_KEYS_IDLE_DELAY_MS
+    int "Quiet time before slowing polled ADC keys (ms)"
+    default 2000
+    range 0 60000
+    help
+      Milliseconds without key activity before a polled ladder slows to
+      INPUT_ADC_KEYS_IDLE_POLL_MS.
+
+endif # INPUT_ADC_KEYS
+
 config INPUT_GPIO_KEYS
     bool "GPIO keys"
     default y
