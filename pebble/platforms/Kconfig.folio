@@ -20,9 +20,9 @@ config APP_RAM_4X_SEGMENT_SIZE
 config APP_RAM_4X_RUNTIME_SIZE
     default 30720
 
-# Glyphs at panel resolution for the system UI's text are up to 4x larger
+# Glyphs at panel resolution, 2 bits per pixel, for the system UI's text are up to 8x larger
 
 config PLATFORM_MAX_FONT_GLYPH_SIZE
-    default 640
+    default 1088
 
 endif # PLATFORM_FOLIO
