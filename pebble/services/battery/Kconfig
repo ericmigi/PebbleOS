@@ -38,6 +38,22 @@ endchoice
 
 if SERVICE_BATTERY
 
+config SERVICE_BATTERY_LOG
+    bool "Discharge log"
+    depends on BATTERY_SOC_VOLTAGE && FS_PFS
+    help
+      Record the battery voltage, percent and USB presence once a minute in
+      the filesystem, where it survives reboots. The `battery log` shell
+      command prints it as CSV.
+
+config SERVICE_BATTERY_LOG_RECORDS
+    int "Discharge log records per file"
+    depends on SERVICE_BATTERY_LOG
+    default 2880
+    help
+      Records of 8 bytes, one a minute, in each of the two files the log
+      keeps: 2880 (two days per file) keeps between two and four days.
+
 config SERVICE_BATTERY_LOW_POWER_PERCENT
     int "Low power threshold (%)"
     range 1 100
