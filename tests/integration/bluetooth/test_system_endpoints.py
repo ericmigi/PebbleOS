@@ -107,6 +107,9 @@ def test_watch_version(phone, prompt, build):
     assert response.bootloader_timestamp == int(shown["Boot"], 16)
     assert response.board == shown["HW"]
     assert response.serial == shown["SN"]
+    if build.config.get("CONFIG_OTP_MCU"):
+        # The serial is the MCU's unique ID, the 12 hex digits ending it
+        assert response.serial == shown["MCU Serial"][-12:].upper()
     assert response.resource_crc == int(shown["CRC"], 16)
     address = ":".join(f"{b:02X}" for b in reversed(bytes(response.bt_address)))
     assert address.replace(":", "") in "".join(prompt("bt mac")).replace(":", "")

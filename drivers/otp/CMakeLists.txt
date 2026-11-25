@@ -4,6 +4,8 @@
 set(sources)
 if(CONFIG_OTP_FLASH)
   list(APPEND sources otp_flash.c)
+elseif(CONFIG_OTP_MCU)
+  list(APPEND sources otp_mcu.c)
 elseif(CONFIG_OTP_QEMU)
   list(APPEND sources otp_qemu.c)
 elseif(CONFIG_OTP_POSIX)
