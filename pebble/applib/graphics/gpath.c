@@ -10,6 +10,14 @@
 #define GPATH_SCALED2_MAX_POINTS 32
 #endif
 
+//! Points of the paths filled with buffers on the stack rather than the heap: on the X4, whose
+//! apps have 4 KiB stacks; not where legacy apps have 2 KiB
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+#define GPATH_STACK_POINTS 16
+#else
+#define GPATH_STACK_POINTS 0
+#endif
+
 #include <string.h>
 
 #include <pbl/util/math.h>
@@ -469,7 +477,13 @@ static void prv_fill_points_with_cb(GContext *ctx, const GPointUnaligned *points
     return;
   }
 
-  GPoint *rot_points = applib_malloc(num_points * sizeof(GPoint));
+  // Small paths (icons, hands) keep their buffers on the stack: three heap allocations a fill
+  // cost more than the fill itself
+  GPoint rot_stack[GPATH_STACK_POINTS ?: 1];
+  int16_t up_stack[GPATH_STACK_POINTS ?: 1];
+  int16_t down_stack[GPATH_STACK_POINTS ?: 1];
+  const bool on_stack = (num_points <= GPATH_STACK_POINTS);
+  GPoint *rot_points = on_stack ? rot_stack : applib_malloc(num_points * sizeof(GPoint));
   if (!rot_points) {
     APP_LOG(APP_LOG_LEVEL_ERROR, GPATH_ERROR);
     return;
@@ -524,9 +538,9 @@ static void prv_fill_points_with_cb(GContext *ctx, const GPointUnaligned *points
   }
 
   // x-intersections of path segments whose direction is up
-  intersections_up = applib_zalloc(num_points * sizeof(int16_t));
+  intersections_up = on_stack ? up_stack : applib_zalloc(num_points * sizeof(int16_t));
   // x-intersections of path segments whose direction is down
-  intersections_down = applib_zalloc(num_points * sizeof(int16_t));
+  intersections_down = on_stack ? down_stack : applib_zalloc(num_points * sizeof(int16_t));
 
   // If either malloc failed, log message and cleanup
   if (!intersections_up || !intersections_down) {
@@ -602,9 +616,11 @@ static void prv_fill_points_with_cb(GContext *ctx, const GPointUnaligned *points
     }
   }
 cleanup:
-  applib_free(rot_points);
-  applib_free(intersections_up);
-  applib_free(intersections_down);
+  if (!on_stack) {
+    applib_free(rot_points);
+    applib_free(intersections_up);
+    applib_free(intersections_down);
+  }
 }
 
 void gpath_draw_filled_with_cb(GContext *ctx, GPath *path, GPathDrawFilledCallback cb,
@@ -623,7 +639,9 @@ void gpath_fill_precise_internal(GContext *ctx, GPointPrecise *points, size_t nu
 
   // Convert precise points to normal points and draw filled path with converted points
   // (no real support for filled paths with GPointPrecise, yet)
-  GPoint *imprecise_points = applib_malloc(sizeof(GPoint) * num_points);
+  GPoint stack_points[GPATH_STACK_POINTS ?: 1];
+  const bool on_stack = (num_points <= GPATH_STACK_POINTS);
+  GPoint *imprecise_points = on_stack ? stack_points : applib_malloc(sizeof(GPoint) * num_points);
   if (!imprecise_points) {
     APP_LOG(APP_LOG_LEVEL_ERROR, GPATH_ERROR);
     return;
@@ -635,7 +653,9 @@ void gpath_fill_precise_internal(GContext *ctx, GPointPrecise *points, size_t nu
   GPath path = {.num_points = (uint32_t)num_points, .points = imprecise_points};
   gpath_draw_filled(ctx, &path);
 
-  applib_free(imprecise_points);
+  if (!on_stack) {
+    applib_free(imprecise_points);
+  }
 }
 
 void gpath_draw_outline_precise_internal(GContext *ctx, GPointPrecise *points, size_t num_points,
