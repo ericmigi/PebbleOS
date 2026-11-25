@@ -24,8 +24,9 @@ native watchapps, all under `build/`:
   pointers the trampolines use to find an exported function's address;
   compiled into the firmware image
 
-The headers and the library are those of the ABI, `armv7m`, not of the
-platform the firmware is built for: every board of the ABI generates the
+The headers and the library are those of the ABI (`armv7m`, or `riscv32`
+for Folio), not of the platform the firmware is built for: every board of
+the ABI generates the
 same ones. The few defines that differ between platforms, such as
 `PBL_IF_COLOR_ELSE` and `PBL_PLATFORM_TYPE_CURRENT`, are decided in the
 header by the defines the app build passes for the platform it builds for
@@ -93,7 +94,7 @@ sdk-core/
   package.json, requirements.txt, use_requirements.json
   pebble/
     cmake/, common/, waf   what the platforms share
-    armv7m/                include/, lib/: what the platforms of the ABI share
+    armv7m/, riscv32/      include/, lib/: what the platforms of each ABI share
     <platform>/            platform.json, qemu/, links to include/ and lib/
     <frozen platform>/     include/, lib/, qemu/
 ```

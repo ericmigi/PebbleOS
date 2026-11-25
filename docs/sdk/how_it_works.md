@@ -28,6 +28,20 @@ copies the app into the RAM reserved for it and prepares it:
 The app then runs as its own task, unprivileged, with the MPU limiting it
 to its own memory.
 
+A `riscv32` app (Folio) is loaded the same way, with two differences
+({doc}`xteink_x4`):
+
+- **Code and data addresses.** The ESP32-C3 fetches instructions from its
+  RAM 0x700000 above where it reads and writes it, so the app's code is
+  linked that far above the rest of the image. It reaches its data
+  pc-relative, and a relocated pointer to its code lands where the code
+  is fetched from.
+- **`lui` relocations.** The table also names the `lui` instructions of
+  absolute addresses, those of libgcc, which need the app loaded on a
+  4 KiB boundary.
+
+This port has no userspace: the app runs privileged.
+
 ## Calling the firmware
 
 An app calling an SDK function goes through three steps:
