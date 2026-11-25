@@ -198,7 +198,8 @@ static void prv_render_modal_over_app(void) {
 
 //! Whether two rows differ over the bytes [byte0, byte1], a word at a time once aligned.
 //! Nothing outside that range is read.
-static bool prv_rows_differ(const uint8_t *a, const uint8_t *b, size_t byte0, size_t byte1) {
+static SCALE2_HOT bool prv_rows_differ(const uint8_t *a, const uint8_t *b, size_t byte0,
+                                       size_t byte1) {
   const uint8_t byte_mask = PIXEL_COMPARE_MASK & 0xFFu;
   const uint8_t *pa = a + byte0;
   const uint8_t *pb = b + byte0;

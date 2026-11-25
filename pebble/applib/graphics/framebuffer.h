@@ -47,6 +47,15 @@ GBitmap framebuffer_get_as_bitmap(FrameBuffer *f, const GSize *size);
 //! Get the framebuffer size
 GSize framebuffer_get_size(FrameBuffer *f);
 
+//! The hot loops of drawing into framebuffers at twice their size: from RAM, where the code
+//! otherwise runs from flash through a small cache
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+#include <pbl/kernel/section.h>
+#define SCALE2_HOT PBL_SECTION_RAM
+#else
+#define SCALE2_HOT
+#endif
+
 //! Whether @p bitmap is a framebuffer at twice its size (BitmapInfo.is_scaled2)
 static inline bool gbitmap_is_scaled2(const GBitmap *bitmap) {
 #ifdef CONFIG_FRAMEBUFFER_SCALE2
