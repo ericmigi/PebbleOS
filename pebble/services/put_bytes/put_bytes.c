@@ -577,6 +577,16 @@ static bool prv_is_object_allowed(PutBytesObjectType type) {
       PBL_LOG_WRN("Can't update Object Type %u from PRF!", type);
       return false;
   }
+#elif !defined(CONFIG_FIRMWARE_UPDATE)
+  switch (type) {
+    case ObjectFirmware:
+    case ObjectRecovery:
+    case ObjectSysResources:
+      PBL_LOG_WRN("Can't update Object Type %u: no firmware updates on this board", type);
+      return false;
+    default:
+      return true;
+  }
 #else
   return true;
 #endif

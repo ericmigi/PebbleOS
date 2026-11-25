@@ -56,6 +56,7 @@ FIRMWARE_UPDATE_START_RESPONSE = 0x0A
 FIRMWARE_STATUS = 0x0B
 FIRMWARE_STATUS_RESPONSE = 0x0C
 UPDATE_STARTED = 0x01
+UPDATE_CANCELLED = 0x02
 PROGRESS_WINDOW = "Progress UI App"
 LAUNCHER_WINDOW = "Launcher Menu"
 # The failure is shown for 10 s before the progress app quits.
@@ -73,6 +74,8 @@ GET_BYTES_DOES_NOT_EXIST = 0x03
 PUT_BYTES_INIT = 0x01
 PUT_BYTES_NACK = 0x02
 OBJECT_FIRMWARE = 0x01
+OBJECT_RECOVERY = 0x02
+OBJECT_SYS_RESOURCES = 0x03
 OBJECT_FILE = 0x06
 
 RESET_NORMAL = 0x00
@@ -199,9 +202,26 @@ def _wait_windows(ui, predicate, timeout):
     return stack
 
 
-def test_firmware_update_cancelled(dut, phone):
+def _put_bytes_init(phone, object_type):
+    from libpebble2.protocol import transfers
+
+    return phone.pebble.send_and_read(
+        transfers.PutBytes(
+            command=PUT_BYTES_INIT,
+            data=transfers.PutBytesInit(
+                object_size=100, object_type=object_type, bank=0, filename="itest"
+            ),
+        ),
+        transfers.PutBytesResponse,
+        timeout=10,
+    ).result
+
+
+def test_firmware_update_cancelled(dut, phone, build):
     """Starting an update brings up its progress, a failure takes it down
     and lets a new one start."""
+    if not build.config.get("CONFIG_FIRMWARE_UPDATE"):
+        pytest.skip("the build takes no firmware updates")
     ui = Ui(dut)
     response = _system_message(
         phone,
@@ -228,6 +248,24 @@ def test_firmware_update_cancelled(dut, phone):
     assert response[2] == UPDATE_STARTED
     _system_message(phone, FIRMWARE_UPDATE_FAILED)
     _wait_windows(ui, lambda s: PROGRESS_WINDOW not in s, UPDATE_FAILED_SHOWN_S + 10)
+
+
+def test_firmware_update_refused(dut, phone, build):
+    """A board that takes no firmware updates answers the start as
+    cancelled, refuses the firmware objects and still installs apps."""
+    if build.config.get("CONFIG_FIRMWARE_UPDATE"):
+        pytest.skip("the build takes firmware updates")
+    ui = Ui(dut)
+    response = _system_message(
+        phone,
+        FIRMWARE_UPDATE_START,
+        *struct.pack("<II", 0, 1000),
+        response=FIRMWARE_UPDATE_START_RESPONSE,
+    )
+    assert response[2] == UPDATE_CANCELLED
+    assert PROGRESS_WINDOW not in ui.window_stack()
+    for object_type in (OBJECT_FIRMWARE, OBJECT_RECOVERY, OBJECT_SYS_RESOURCES):
+        assert _put_bytes_init(phone, object_type) == PUT_BYTES_NACK
 
 
 def test_watch_model(phone):
@@ -319,20 +357,9 @@ def test_get_bytes_coredump(phone):
 def test_put_bytes_refused(phone, build):
     """Firmware only goes in during an update, and PRF takes nothing but
     firmware."""
-    from libpebble2.protocol import transfers
 
     object_type = OBJECT_FILE if build.variant == "prf" else OBJECT_FIRMWARE
-    response = phone.pebble.send_and_read(
-        transfers.PutBytes(
-            command=PUT_BYTES_INIT,
-            data=transfers.PutBytesInit(
-                object_size=100, object_type=object_type, bank=0, filename="itest"
-            ),
-        ),
-        transfers.PutBytesResponse,
-        timeout=10,
-    )
-    assert response.result == PUT_BYTES_NACK
+    assert _put_bytes_init(phone, object_type) == PUT_BYTES_NACK
 
 
 # With the Bluetooth controller on a UART (emulator, native), the firmware

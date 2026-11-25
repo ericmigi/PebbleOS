@@ -145,7 +145,18 @@ static void prv_initialize_completion_status(PebbleSystemMessageEvent *event) {
 // 40s to give us some headroom.
 #define FIRMWARE_TIMEOUT_MS (1000 * 40)
 
+#ifdef CONFIG_FIRMWARE_UPDATE
+#define FIRMWARE_UPDATE_SUPPORTED true
+#else
+#define FIRMWARE_UPDATE_SUPPORTED false
+#endif
+
 static FirmwareUpdateStatus prv_firmware_update_start(PebbleSystemMessageEvent *event) {
+  if (!FIRMWARE_UPDATE_SUPPORTED) {
+    PBL_LOG_WRN("Firmware updates are not supported on this board");
+    return FirmwareUpdateCancelled;
+  }
+
   if (battery_monitor_critical_lockout()) {
     return FirmwareUpdateCancelled; // Disable firmware updates on low power
   }

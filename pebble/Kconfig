@@ -110,6 +110,17 @@ config SCREEN_COLOR_DEPTH_BITS
     default 8 if PLATFORM_COLOR
     default 1
 
+config FIRMWARE_UPDATE
+    bool "Firmware updates from the phone"
+    default n if SOC_ESP32C3
+    default y
+    help
+      Take a new firmware, recovery firmware or system resources from the
+      phone. Without it, a firmware update start is answered as cancelled
+      and those PutBytes objects are refused. Off where no bootloader can
+      install or fall back from an update, e.g. the ESP32-C3, whose ROM
+      boots the code partition directly.
+
 config RECOVERY_FW
     bool "Recovery firmware (PRF)"
     help
