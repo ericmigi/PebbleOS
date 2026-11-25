@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // The firmware partitions of the 16 MiB flash an ESP32-C3 boots from: a single slot, with the
-// code and the resource banks inside the 4 MiB the ROM maps.
+// code inside the 4 MiB the ROM maps. The resource banks take 1.5 MiB each, for the system UI's
+// fonts at panel resolution, out of the scratch area; the code, the safe firmware and the
+// filesystem keep their places.
 
 partition@0 {
 	label = "code";
@@ -16,17 +18,17 @@ partition@280000 {
 
 partition@300000 {
 	label = "system-resources-bank-0";
-	reg = <0x300000 0x100000>;
+	reg = <0x300000 0x180000>;
 };
 
-partition@400000 {
+partition@480000 {
 	label = "system-resources-bank-1";
-	reg = <0x400000 0x100000>;
+	reg = <0x480000 0x180000>;
 };
 
-partition@500000 {
+partition@600000 {
 	label = "scratch";
-	reg = <0x500000 0x280000>;
+	reg = <0x600000 0x180000>;
 };
 
 partition@780000 {
