@@ -97,6 +97,17 @@ config DISPLAY_SSD1677
       Support for the SSD1677 e-paper controller on SPI, with a
       data/command line and a BUSY input.
 
+config DISPLAY_SSD1677_FRAME_COPY
+    bool "SSD1677 keeps a copy of the frame shown"
+    depends on DISPLAY_SSD1677
+    default y
+    help
+      Keep the frame shown, and which of its pixels the fast refreshes
+      changed, in RAM: twice the framebuffer's size. Without, the driver
+      keeps a CRC per row, re-syncs the controller's planes from the
+      framebuffer after each refresh, and tops up whole rows; text
+      detail needs the copy.
+
 config DISPLAY_SSD1677_DETAIL_CELLS
     int "SSD1677 framebuffer pixels drawn at panel resolution"
     depends on DISPLAY_SSD1677
