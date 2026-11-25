@@ -10,6 +10,7 @@
 #include <pbl/kernel/irq.h>
 #include <pbl/kernel/syscall.h>
 #include <pbl/services/compositor/compositor.h>
+#include <pbl/util/math.h>
 
 #include <applib/graphics/framebuffer.h>
 #include <kernel/pebble_tasks.h>
@@ -152,6 +153,55 @@ void text_detail_add(int owner, int16_t x, int16_t y, uint8_t levels, bool white
     chunk->hdr += 1U << 13;
   }
   if (++s_used > s_peak) {
+    s_peak = s_used;
+  }
+}
+
+void text_detail_add_edges(int owner, GPoint origin, const GRect *clip, const uint8_t *edges,
+                           uint16_t count, bool white_ink) {
+  const int16_t x0 = PBL_MAX(clip->origin.x, 0);
+  const int16_t y0 = PBL_MAX(clip->origin.y, 0);
+  const int16_t x1 = PBL_MIN(clip->origin.x + clip->size.w, PBL_DISPLAY_WIDTH);
+  const int16_t y1 = PBL_MIN(clip->origin.y + clip->size.h, PBL_DISPLAY_HEIGHT);
+  const uint16_t flags = (owner ? HDR_OWNER : 0U) | (white_ink ? HDR_WHITE : 0U);
+  // Edges come a row at a time: keep the row's chunk while it has room
+  Chunk *chunk = nullptr;
+  int16_t chunk_y = -1;
+  for (const uint8_t *edge = edges; edge < edges + 3U * count; edge += 3) {
+    const int16_t x = origin.x + edge[0];
+    const int16_t y = origin.y + edge[1];
+    if (x < x0 || x >= x1 || y < y0 || y >= y1) {
+      continue;
+    }
+    if (y != chunk_y || HDR_COUNT(chunk->hdr) == CHUNK_CELLS) {
+      chunk = s_rows[y] ? &s_chunks[s_rows[y] - 1] : nullptr;
+      if (!chunk || (chunk->hdr & (HDR_OWNER | HDR_WHITE)) != flags ||
+          HDR_COUNT(chunk->hdr) == CHUNK_CELLS) {
+        if (!s_free) {
+          s_dropped++;
+          s_overflow[owner] = true;
+          break;
+        }
+        const uint16_t index = s_free;
+        chunk = &s_chunks[index - 1];
+        s_free = prv_next(chunk);
+        chunk->hdr = s_rows[y] | flags;
+        s_rows[y] = index;
+        chunk->x[0] = (uint8_t)x;
+        chunk->levels[0] = edge[2];
+        chunk_y = y;
+        s_used++;
+        continue;
+      }
+      chunk_y = y;
+    }
+    const uint8_t i = HDR_COUNT(chunk->hdr);
+    chunk->x[i] = (uint8_t)x;
+    chunk->levels[i] = edge[2];
+    chunk->hdr += 1U << 13;
+    s_used++;
+  }
+  if (s_used > s_peak) {
     s_peak = s_used;
   }
 }
