@@ -16,6 +16,7 @@
 
 #include <pbl/fs/fs.h>
 #include <pbl/kernel/compiler.h>
+#include <pbl/kernel/mutex.h>
 #include <pbl/logging/logging.h>
 
 #include <syscall/syscall.h>
@@ -37,6 +38,7 @@ typedef struct PBL_PACKED {
 
 static const char *const s_paths[2] = {"/batlog0", "/batlog1"};
 
+static PBL_MUTEX_DEFINE(s_lock);
 static int s_current = -1; // The file being filled; -1 until found after boot
 static int s_next;         // Its next record
 static uint32_t s_last_utc;
@@ -99,10 +101,11 @@ static int prv_open_current(struct pbl_fs_file *file) {
 }
 
 void battery_log_sample(uint16_t millivolts, uint8_t percent, bool usb) {
+  (void)pbl_mutex_lock(&s_lock, PBL_FOREVER);
   const uint32_t utc = (uint32_t)sys_get_time();
   // A clock set back starts the interval over
   if (s_logged && (utc >= s_last_utc) && (utc - s_last_utc < MIN_INTERVAL_S)) {
-    return;
+    goto out;
   }
   s_last_utc = utc;
 
@@ -119,7 +122,7 @@ void battery_log_sample(uint16_t millivolts, uint8_t percent, bool usb) {
   struct pbl_fs_file file;
   if (prv_open_current(&file) < 0) {
     PBL_LOG_WRN("Battery log %s could not be opened", s_paths[s_current]);
-    return;
+    goto out;
   }
   const BatteryLogRecord record = {
     .utc = utc,
@@ -133,6 +136,8 @@ void battery_log_sample(uint16_t millivolts, uint8_t percent, bool usb) {
     s_logged = true;
   }
   pbl_fs_close(&file);
+out:
+  pbl_mutex_unlock(&s_lock);
 }
 
 #if UNITTEST
@@ -171,10 +176,12 @@ static void prv_print_file(const struct pbl_shell *sh, int i) {
 }
 
 static int prv_cmd_log(const struct pbl_shell *sh, size_t argc, char **argv) {
+  (void)pbl_mutex_lock(&s_lock, PBL_FOREVER);
   if ((argc > 1) && !strcmp(argv[1], "clear")) {
     pbl_fs_unlink(s_paths[0]);
     pbl_fs_unlink(s_paths[1]);
     s_current = -1;
+    pbl_mutex_unlock(&s_lock);
     return 0;
   }
   if (s_current < 0) {
@@ -183,6 +190,7 @@ static int prv_cmd_log(const struct pbl_shell *sh, size_t argc, char **argv) {
   pbl_shell_print(sh, "utc,mv,percent,usb,boot");
   prv_print_file(sh, s_current ^ 1);
   prv_print_file(sh, s_current);
+  pbl_mutex_unlock(&s_lock);
   return 0;
 }
 
