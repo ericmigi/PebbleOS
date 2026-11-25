@@ -31,11 +31,11 @@ config NIMBLE_HCI_SF32LB
 
 config NIMBLE_HCI_UART
     bool "H4 over UART"
-    depends on QEMU || UART_POSIX_BT_HCI
+    depends on QEMU || UART_POSIX_BT_HCI || BOARD_QEMU_ESP32C3
     help
       Talk H4 HCI to an external controller over the board's BT_HCI_UART.
-      On QEMU this is the fourth serial port, on native boards the -b
-      option; either can be attached to a host controller such as an
+      On QEMU this is the fourth serial port (the second on
+      qemu_esp32c3), on native boards the -b option; either can be attached to a host controller such as an
       nRF52840 dongle running an H4 HCI firmware.
 
 config NIMBLE_HCI_ESP32C3

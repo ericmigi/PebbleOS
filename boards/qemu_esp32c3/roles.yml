@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 console_uart: uart0
+bt_hci_uart: uart1
 display: display
 flash: flash0
 backlight:

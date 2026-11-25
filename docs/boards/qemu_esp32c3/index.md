@@ -81,3 +81,18 @@ as the Flint emulator, so the host tools install a `.pbw`'s Flint binary,
 which runs in a 144 × 168 bezel. The integration harness's connection
 (`tests/integration/harness/connections.py`, `start_protocol` over
 `pblconsole`'s frame transport) carries libpebble2's app installer.
+
+## Bluetooth
+
+The firmware talks to an H4 controller on UART1, the machine's second
+`-serial`, when built with `CONFIG_NIMBLE_HCI_UART`, as the Pebble QEMU
+boards do on their fourth serial port. Without it the host runs on the fake
+controller. `pbl run --bt-hci` gives the controller as a QEMU chardev, and
+the integration harness launches the machine itself with Bumble's software
+controllers (`virtual`), so the Bluetooth tests run against the RISC-V image:
+
+```shell
+pbl configure -b build-hci --board qemu_esp32c3 -DCONFIG_NIMBLE_HCI_UART=y
+pbl build -b build-hci
+pbl itest -b build-hci bluetooth/
+```

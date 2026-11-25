@@ -25,9 +25,10 @@ class QemuEsp32Runner(Runner):
 
     name = "qemu-esp32"
 
-    def __init__(self, cfg, console_port=None):
+    def __init__(self, cfg, console_port=None, bt_hci=None):
         super().__init__(cfg)
         self.console_port = console_port
+        self.bt_hci = bt_hci
 
     @classmethod
     def capabilities(cls):
@@ -45,10 +46,23 @@ class QemuEsp32Runner(Runner):
 
     @classmethod
     def do_create(cls, cfg, args):
-        return cls(cfg, console_port=getattr(args, "console_port", None))
+        # --bt-hci is the qemu runner's, shared with this one: UART1's chardev
+        return cls(
+            cfg,
+            console_port=getattr(args, "console_port", None),
+            bt_hci=getattr(args, "bt_hci", None),
+        )
 
     def do_run(self, command):
         build = self.cfg.build
+        hci_uart = bool(build.config.CONFIG_NIMBLE_HCI_UART)
+        if hci_uart and not self.bt_hci:
+            raise RunnerError(
+                "the build uses CONFIG_NIMBLE_HCI_UART; pass --bt-hci with the "
+                "controller's chardev, e.g. tcp:127.0.0.1:PORT"
+            )
+        if self.bt_hci and not hci_uart:
+            raise RunnerError("--bt-hci needs a build with CONFIG_NIMBLE_HCI_UART=y")
         if build.config.CONFIG_DISPLAY:
             return self._run_with_view(build)
         argv = self._command_line(build, console_port=self.console_port)
@@ -167,6 +181,8 @@ class QemuEsp32Runner(Runner):
             "-machine", machine,
             *display,
             "-serial", serial,
+            # UART1: the Bluetooth controller of CONFIG_NIMBLE_HCI_UART
+            *(["-serial", self.bt_hci] if self.bt_hci else []),
             "-no-reboot",
             # Instruction counting keeps the timers in step with the code
             "-icount", "3",

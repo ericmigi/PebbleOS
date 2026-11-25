@@ -45,6 +45,12 @@
 	status = "okay";
 };
 
+// The H4 Bluetooth controller of CONFIG_NIMBLE_HCI_UART, the machine's second -serial
+&uart1 {
+	current-speed = <1000000>;
+	status = "okay";
+};
+
 / {
 	// The machine's virtual RGB framebuffer, emulating the 800x480 e-paper of the Xteink X4 mounted
 	// in portrait, so the window shows it sideways as its controller scans it
