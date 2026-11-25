@@ -21,15 +21,18 @@
 #define FEATURE_RLE4      (1 << 1)
 // glyph bodies are color glyphs, see docs/reference/formats/font.md
 #define FEATURE_COLOR (1 << 2)
+// glyph bitmaps, offsets and advances are at twice the font's resolution, for displays scaled by 2
+#define FEATURE_SCALE2 (1 << 3)
 
-// HACK ALERT: Store the v3 FontMetaDataV3 feature bits in the top three bits of FontMetaData
+// HACK ALERT: Store the v3 FontMetaDataV3 feature bits in the top four bits of FontMetaData
 // version field. We need this information at the lowest levels and can't extend FontMetaData
 // for legacy support reasons.
-#define FONT_VERSION(_version)          ((_version) & 0x1F)
+#define FONT_VERSION(_version)          ((_version) & 0x0F)
 #define HAS_FEATURE(_version, _feature) ((_version) & (_feature))
 #define VERSION_FIELD_FEATURE_OFFSET_16 (1 << 7)
 #define VERSION_FIELD_FEATURE_RLE4      (1 << 6)
 #define VERSION_FIELD_FEATURE_COLOR     (1 << 5)
+#define VERSION_FIELD_FEATURE_SCALE2    (1 << 4)
 
 // There are now three versions of the FontMetaData structure: V1 (formerly known as 'legacy'), V2
 // (still known as FontMetaData), and V3 (know as V3). We can't change the stack/memory usage
