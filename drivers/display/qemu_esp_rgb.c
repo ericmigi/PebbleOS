@@ -96,6 +96,40 @@ static uint16_t prv_pixel(const struct pbl_display *disp, const uint8_t *row, ui
   return ((const uint16_t *)row)[x];
 }
 
+// Panel levels 0 (white) to 3 (black) of a pixel's detail, as RGB565 greys
+static const uint16_t s_levels[4] = {RGB565_WHITE, 0xAD55U, 0x52AAU, RGB565_BLACK};
+
+// Draws each detailed pixel as its four panel pixels
+static void prv_draw_detail(const struct pbl_display_qemu_esp_rgb *rgb,
+                            const struct display_geometry *g, bool flip,
+                            const struct pbl_display_detail *detail, uint16_t y0, uint16_t y1) {
+  volatile uint16_t *vram = (volatile uint16_t *)rgb->vram;
+  const uint32_t win_width = display_geometry_scan_width(g);
+  static uint8_t cells[512];
+
+  if (g->width > sizeof(cells)) {
+    return;
+  }
+
+  for (uint16_t y = y0; y <= y1; y++) {
+    if (!detail->row(detail, y, cells)) {
+      continue;
+    }
+    for (uint16_t x = 0U; x < g->width; x++) {
+      if (cells[x] == 0U) {
+        continue;
+      }
+      for (uint32_t i = 0U; i < 4U; i++) {
+        uint32_t cx;
+        uint32_t cy;
+
+        display_geometry_scan_pos(g, flip, x, y, i % 2U, i / 2U, &cx, &cy);
+        vram[cy * win_width + cx] = s_levels[(cells[x] >> (2U * i)) & 3U];
+      }
+    }
+  }
+}
+
 static int prv_update(const struct pbl_display *disp, const struct pbl_display_buffer *buf,
                       uint16_t y0, uint16_t y1) {
   const struct pbl_display_qemu_esp_rgb *rgb = prv_rgb(disp);
@@ -128,6 +162,10 @@ static int prv_update(const struct pbl_display *disp, const struct pbl_display_b
         vram[wy * win_width + wx] = prv_pixel(disp, &buf->data[y * buf->pitch], x);
       }
     }
+  }
+
+  if (buf->detail != nullptr && g.scale == 2U && disp->props.format == PBL_DISPLAY_FORMAT_MONO) {
+    prv_draw_detail(rgb, &g, flip, buf->detail, y0, y1);
   }
 
   prv_refresh(rgb);

@@ -13,3 +13,6 @@ config DISPLAY_SDL_HEIGHT
 config DISPLAY_SDL_MONO
     default y
 
+
+config DISPLAY_SDL_PANEL_SCALE
+    default 2
