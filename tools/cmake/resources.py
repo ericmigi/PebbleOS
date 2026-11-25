@@ -125,13 +125,17 @@ def get_resources_dict(bld, variant, config=frozenset()):
                 return
         resources_dict["media"].append(item_dict)
 
+    def enabled(item):
+        return "config" not in item or item["config"] in config
+
+    # A disabled item must not override an enabled one of the same name
     for override in override_dicts:
         for item in override["media"]:
-            update_common_media_item(item)
+            if enabled(item):
+                update_common_media_item(item)
 
     resources_dict["media"] = [
-        item for item in resources_dict["media"]
-        if "config" not in item or item["config"] in config
+        item for item in resources_dict["media"] if enabled(item)
     ]
 
     # "files" and "timeline" cannot exist in the common resource map.
