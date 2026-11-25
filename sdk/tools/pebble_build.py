@@ -466,6 +466,10 @@ def configure(args):
         # Older phone apps read the keys from appKeys.
         info["appKeys"] = dict(message_keys)
 
+    classic = info.get("classicLayout", [])
+    if not isinstance(classic, list) or not all(isinstance(p, str) for p in classic):
+        raise ProjectError("classicLayout is a list of platform names")
+
     # Platforms.
     installed = _installed_platforms(sdk_root)
     # In the order they are asked for; an entry may ask for capabilities, and
@@ -623,7 +627,7 @@ def configure(args):
             ),
         )
 
-    from generate_appinfo import generate_appinfo_c
+    from generate_appinfo import CLASSIC_DISPLAY, generate_appinfo_c
 
     with open(os.path.join(SDK_COMMON, "pebble_app_init_arrays.ld")) as f:
         init_arrays = f.read()
@@ -698,9 +702,19 @@ def configure(args):
         emit(f"PEBBLE_{p}_ABI_FLAGS", ABI_TOOLCHAINS[pinfo["abi"]]["flags"])
         emit(f"PEBBLE_{p}_TOOLCHAIN_PREFIX", ABI_TOOLCHAINS[pinfo["abi"]]["prefix"])
         emit(f"PEBBLE_{p}_FROZEN", pinfo["frozen"])
+        defines = pinfo["defines"]
+        if p in info.get("classicLayout", []):
+            defines = [
+                d
+                for d in defines
+                if not d.startswith(("PBL_DISPLAY_WIDTH=", "PBL_DISPLAY_HEIGHT="))
+            ] + [
+                f"PBL_DISPLAY_WIDTH={CLASSIC_DISPLAY['width']}",
+                f"PBL_DISPLAY_HEIGHT={CLASSIC_DISPLAY['height']}",
+            ]
         emit(
             f"PEBBLE_{p}_DEFINES",
-            pinfo["defines"]
+            defines
             + ["PBL_SDK_2" if sdk_version <= LAST_2X_SDK_VERSION else "PBL_SDK_3"],
         )
         # pebble.h declares the time API with a 32-bit time_t, which libc's

@@ -46,9 +46,14 @@ The X4 has the xteinkx4 platform's display, 240 × 400 black and white.
 - **Watchfaces** built for xteinkx4 get the whole 240 × 400, as apps do.
   The X4's own watchfaces, and those of classic watches, are shown at
   144 × 168, framed in black.
-  One that places things at fixed coordinates for 144 × 168, rather than
-  from its window's bounds, draws them in the top left corner: such a
-  watchface needs its layout taken from the bounds to build for xteinkx4.
+  One laid out at fixed coordinates for 144 × 168 draws them in the top
+  left corner. Until its layout is redone, say so in `package.json`, and it
+  is framed like a classic face, with `PBL_DISPLAY_WIDTH` and
+  `PBL_DISPLAY_HEIGHT` of 144 and 168:
+
+  ```json
+  "classicLayout": ["xteinkx4"]
+  ```
 - **Code that is ARM:** inline assembly, ARM intrinsics and `__attribute__`s
   specific to ARM do not compile. Prebuilt static libraries, including
   Pebble packages that ship only ARM archives, do not link: a package needs
