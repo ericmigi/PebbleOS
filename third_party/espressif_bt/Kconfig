@@ -58,6 +58,16 @@ config ESP32C3_BT_CONFIRM_TIMEOUT_S
       The RTC watchdog resets the chip this long after a bring-up starts
       unless btc confirm stops it.
 
+config ESP32C3_BT_REQUIRE_CONFIRM
+    bool "Require a confirmation of every bring-up"
+    default y
+    help
+      Keep the RTC watchdog armed after a bring-up until btc confirm,
+      typed on the console, proves the USB console alive; without it,
+      the chip resets. Turn it off once the radio is proven on a board,
+      e.g. for test runs that restart the watch: the watchdog then only
+      covers the bring-up itself.
+
 config ESP32C3_BT_SHELL
     bool "Shell commands"
     default y

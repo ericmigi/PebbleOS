@@ -139,6 +139,11 @@ int esp32c3_bt_start(void) {
   PBL_LOG_INFO("Bluetooth controller enabled, %u bytes of kernel heap",
                (unsigned int)(pbl_heap_used(pbl_malloc_heap()) - heap_before));
 
+#ifndef CONFIG_ESP32C3_BT_REQUIRE_CONFIRM
+  // The console's survival is taken as given: only a hang in the bring-up resets the chip
+  esp32c3_bt_confirm();
+#endif
+
   return 0;
 }
 
