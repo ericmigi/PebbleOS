@@ -46,24 +46,27 @@ limits are those of the other platforms: 64 KiB for an app's code and heap.
 
 - **Watchfaces** are shown at the classic 144 × 168, framed in black, like
   the X4's own watchfaces. Watchface code written for 144 × 168 works as it
-  is.
+  is. `PBL_DISPLAY_WIDTH` and `PBL_DISPLAY_HEIGHT` are still Folio's 240
+  and 400, so a watchface laid out from them draws past its window and is
+  cut off: lay it out from the window's bounds.
 - **Apps** get the whole 240 × 400. An app that lays itself out from its
   window's bounds fills it. One that places things at fixed coordinates for
   144 × 168 draws them in the top left corner.
 - **Code that is ARM:** inline assembly, ARM intrinsics and `__attribute__`s
   specific to ARM do not compile. Prebuilt static libraries, including
   Pebble packages that ship only ARM archives, do not link: a package needs
-  a Folio library, built from its source.
+  a Folio library, built from its source (not tried yet).
 - **Floating point** is software, as on the other watches, but RISC-V's
   (libgcc of the RISC-V toolchain).
 - **Code size:** RISC-V code is somewhat larger than Thumb: count on 10–30 % more
   binary for the same source.
-- **The stack** of an app and of a worker is 4 KiB, which the firmware's
-  own functions share when the app calls them. A worker has 2.6 KiB less
-  for its code and heap than on a watch.
+- **Memory:** the stack of an app and of a worker is 4 KiB, which the
+  firmware's own functions share when the app calls them. That leaves an
+  app 62 KiB for its code and heap (63,488 bytes) and a worker 7,552 bytes,
+  less than on a watch, which the build checks.
 - **No protection:** an app runs with nothing between it and the system.
-  A bug that writes outside the app's memory can crash the watch rather than
-  just the app.
+  A bug that writes outside the app's memory can corrupt the system, and a
+  fault in an app stops the whole watch rather than just the app.
 - **PebbleKit JS** is unchanged: it runs on the phone.
 
 ## Trying it in the emulator
@@ -100,6 +103,8 @@ launched, with "This app was not built for this watch".
 ## Limitations
 
 - An app crash is not contained, as said above.
+- Folio is only built for when `targetPlatforms` names it, and only by the
+  CMake build: the deprecated waf build leaves it out.
 - Workers run as apps do, but have only been tried in the emulator.
 - The phone app and the app store do not yet offer Folio binaries to the
   X4.
