@@ -1228,7 +1228,9 @@ static int prv_update_nocopy(const struct pbl_display_ssd1677 *epd,
     ret = prv_write_plane(epd, CMD_WRITE_RAM_BW, &w, &(struct plane_src){.frame = buf->data});
   }
   if (epd->touched_rows != nullptr) {
-    prv_rows_set(epd->touched_rows, (uint32_t)first, (uint32_t)last, !large);
+    // Large changes too: the top up evens out the pixels they left undriven, ghosts of the frame
+    // before
+    prv_rows_set(epd->touched_rows, (uint32_t)first, (uint32_t)last, true);
   }
   state->resync_lo = (uint16_t)first;
   state->resync_hi = (uint16_t)last;
