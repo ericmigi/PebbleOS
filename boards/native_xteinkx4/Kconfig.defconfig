@@ -5,9 +5,11 @@ config RESOURCES_BOARD
     default "qemu_flint"
 
 config DISPLAY_SDL_WIDTH
+    default 480 if FRAMEBUFFER_SCALE2
     default 240
 
 config DISPLAY_SDL_HEIGHT
+    default 800 if FRAMEBUFFER_SCALE2
     default 400
 
 config DISPLAY_SDL_MONO
@@ -15,4 +17,5 @@ config DISPLAY_SDL_MONO
 
 
 config DISPLAY_SDL_PANEL_SCALE
+    default 1 if FRAMEBUFFER_SCALE2
     default 2

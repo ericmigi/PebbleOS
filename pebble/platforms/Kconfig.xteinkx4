@@ -29,7 +29,11 @@ config PLATFORM_MAX_WORKER_MEMORY_SIZE
 config APP_RAM_4X_SEGMENT_SIZE
     default 67584
 
+# With FRAMEBUFFER_SCALE2 the app's framebuffer in its runtime is 4x larger (48,000 B, so
+# AppState is 53,620 B on RV32), and Samsa takes 8 KiB of the runtime for its host stack
 config APP_RAM_4X_RUNTIME_SIZE
+    default 66560 if FRAMEBUFFER_SCALE2 && SAMSA
+    default 55296 if FRAMEBUFFER_SCALE2
     default 30720
 
 # The system UI's glyphs stored with their edges: up to 778 bytes (36 px, the local Bookerly set);

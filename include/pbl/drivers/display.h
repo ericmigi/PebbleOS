@@ -44,6 +44,19 @@
  * @{
  */
 
+/**
+ * @brief Framebuffer pixels per pixel of the size a display's devicetree node describes, in each
+ * direction.
+ *
+ * With @c CONFIG_FRAMEBUFFER_SCALE2 the firmware draws at twice that size: a display node of
+ * width W, height H and scale S takes framebuffers of 2W by 2H and shows them at S / 2.
+ */
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+#define PBL_DISPLAY_FRAMEBUFFER_SCALE 2
+#else
+#define PBL_DISPLAY_FRAMEBUFFER_SCALE 1
+#endif
+
 /** @brief Pixel formats of the framebuffer. */
 enum pbl_display_format {
   /** 1 bit per pixel, leftmost pixel in the least significant bit, set for white. */

@@ -60,16 +60,26 @@ extern const struct pbl_display_ops pbl_display_qemu_esp_rgb_ops;
  * @param _base Register base address.
  * @param _vram Video memory base address.
  * @param _vram_size Video memory size, in bytes.
- * @param _width Framebuffer width, in pixels.
- * @param _height Framebuffer height, in pixels.
+ * @param _width Framebuffer width, in pixels, before @ref PBL_DISPLAY_FRAMEBUFFER_SCALE.
+ * @param _height Framebuffer height, in pixels, before @ref PBL_DISPLAY_FRAMEBUFFER_SCALE.
  * @param _panel_width Panel width as mounted, in pixels.
  * @param _panel_height Panel height as mounted, in pixels.
- * @param _scale Panel pixels per framebuffer pixel, in each direction.
+ * @param _scale Panel pixels per framebuffer pixel, in each direction, before
+ *               @ref PBL_DISPLAY_FRAMEBUFFER_SCALE (a multiple of it).
  * @param _bpp Bits per pixel: 1 for monochrome, 16 for RGB565.
  * @param _rotation Panel mounting rotation, counter-clockwise: 0, 90, 180 or 270 degrees.
  */
-#define PBL_DISPLAY_QEMU_ESP_RGB_DEFINE(sym, _name, _base, _vram, _vram_size, _width, _height,    \
-                                        _panel_width, _panel_height, _scale, _bpp, _rotation)     \
+#define PBL_DISPLAY_QEMU_ESP_RGB_DEFINE(sym, _name, _base, _vram, _vram_size, _width, _height, \
+                                        _panel_width, _panel_height, _scale, _bpp, _rotation)  \
+  static_assert((_scale) % PBL_DISPLAY_FRAMEBUFFER_SCALE == 0,                                 \
+                "scale not a multiple of the framebuffer's");                                  \
+  PBL_DISPLAY_QEMU_ESP_RGB_DEFINE_(                                                            \
+      sym, _name, _base, _vram, _vram_size, (_width) * PBL_DISPLAY_FRAMEBUFFER_SCALE,          \
+      (_height) * PBL_DISPLAY_FRAMEBUFFER_SCALE, _panel_width, _panel_height,                  \
+      (_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE, _bpp, _rotation)
+/** @cond INTERNAL_HIDDEN */
+#define PBL_DISPLAY_QEMU_ESP_RGB_DEFINE_(sym, _name, _base, _vram, _vram_size, _width, _height,   \
+                                         _panel_width, _panel_height, _scale, _bpp, _rotation)    \
   static_assert((_bpp) == 1 || (_bpp) == 16, "1 or 16 bits per pixel");                           \
   static_assert((_rotation) % 90 == 0 && (_rotation) < 360, "rotation of 0, 90, 180 or 270");     \
   static_assert((_scale) >= 1 && (_width) * (_scale) <= (_panel_width) &&                         \
@@ -89,5 +99,6 @@ extern const struct pbl_display_ops pbl_display_qemu_esp_rgb_ops;
     .state = &sym##_state, .base = (_base), .vram = (_vram), .panel_width = (_panel_width),       \
     .panel_height = (_panel_height), .scale = (_scale), .quarter = ((_rotation) % 180) != 0,      \
   }
+/** @endcond */
 
 /** @} */
