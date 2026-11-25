@@ -10,6 +10,9 @@
 
 #include <applib/graphics/gtypes.h>
 
+//! Framebuffer pixels per display pixel, in each direction
+#define FRAMEBUFFER_SCALE 1
+
 #define FRAMEBUFFER_BYTES_PER_ROW PBL_DISPLAY_WIDTH
 #define FRAMEBUFFER_SIZE_BYTES    DISPLAY_FRAMEBUFFER_BYTES
 

@@ -4,6 +4,7 @@
 #include "graphics_private.h"
 
 #include "bitblt_private.h"
+#include "framebuffer.h"
 #include "graphics.h"
 #include "gtypes.h"
 
@@ -44,8 +45,30 @@ static inline void set_pixel_raw_2bit(GContext *ctx, GPoint point) {
   }
   bool black = (gcolor_equal(ctx->draw_state.stroke_color, GColorBlack));
 
-  uint8_t *line = ((uint8_t *)ctx->dest_bitmap.addr) + (ctx->dest_bitmap.row_size_bytes * point.y);
-  pbl_bitset8_update(line, point.x, !black);
+  graphics_private_set_bit_1bit(&ctx->dest_bitmap, point.x, point.y, !black);
+}
+
+void graphics_private_set_bit_1bit(GBitmap *bitmap, int x, int y, bool white) {
+  if (gbitmap_is_scaled2(bitmap)) {
+    // Both rows of the 2x2 block: two adjacent bits, in one byte as x is even
+    const uint8_t mask = (uint8_t)(3U << ((2 * x) % 8));
+    for (int row = 2 * y; row < 2 * y + 2; row++) {
+      uint8_t *byte = (uint8_t *)bitmap->addr + bitmap->row_size_bytes * row + (2 * x) / 8;
+      *byte = white ? (*byte | mask) : (*byte & ~mask);
+    }
+    return;
+  }
+  uint8_t *line = ((uint8_t *)bitmap->addr) + (bitmap->row_size_bytes * y);
+  pbl_bitset8_update(line, x, white);
+}
+
+uint32_t graphics_private_double_bits16(uint16_t bits) {
+  uint32_t v = bits;
+  v = (v | (v << 8)) & 0x00FF00FFU;
+  v = (v | (v << 4)) & 0x0F0F0F0FU;
+  v = (v | (v << 2)) & 0x33333333U;
+  v = (v | (v << 1)) & 0x55555555U;
+  return v | (v << 1);
 }
 #endif
 
@@ -315,8 +338,7 @@ void graphics_private_plot_pixel(GBitmap *framebuffer, GRect *clip_box, int x, i
 #else
   if (opacity <= (MAX_PLOT_BRIGHTNESS / 2)) {
     bool black = (gcolor_equal(color, GColorBlack));
-    uint8_t *line = ((uint8_t *)framebuffer->addr) + (framebuffer->row_size_bytes * y);
-    pbl_bitset8_update(line, x, !black);
+    graphics_private_set_bit_1bit(framebuffer, x, y, !black);
   }
 #endif // PBL_COLOR
 }

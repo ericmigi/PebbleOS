@@ -29,8 +29,18 @@ GBitmap framebuffer_get_as_bitmap(FrameBuffer *fb, const GSize *size) {
 
   return (GBitmap){
     .addr = fb->buffer,
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+    .row_size_bytes = gbitmap_format_get_row_size_bytes(size->w * 2, GBITMAP_NATIVE_FORMAT),
+    .info =
+        (BitmapInfo){
+          .format = GBITMAP_NATIVE_FORMAT,
+          .is_scaled2 = true,
+          .version = GBITMAP_VERSION_CURRENT
+        },
+#else
     .row_size_bytes = gbitmap_format_get_row_size_bytes(size->w, GBITMAP_NATIVE_FORMAT),
     .info = (BitmapInfo){.format = GBITMAP_NATIVE_FORMAT, .version = GBITMAP_VERSION_CURRENT},
+#endif
     .bounds = (GRect){GPointZero, *size},
     .data_row_infos = data_row_infos,
   };

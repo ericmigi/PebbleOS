@@ -46,3 +46,23 @@ GBitmap framebuffer_get_as_bitmap(FrameBuffer *f, const GSize *size);
 
 //! Get the framebuffer size
 GSize framebuffer_get_size(FrameBuffer *f);
+
+//! Whether @p bitmap is a framebuffer at twice its size (BitmapInfo.is_scaled2)
+static inline bool gbitmap_is_scaled2(const GBitmap *bitmap) {
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+  return bitmap->info.is_scaled2;
+#else
+  return false;
+#endif
+}
+
+//! The pixels of a framebuffer at twice its size, as stored: a bitmap of twice its bounds
+static inline GBitmap gbitmap_scaled2_get_stored(const GBitmap *bitmap) {
+  GBitmap stored = *bitmap;
+  stored.info.is_scaled2 = false;
+  stored.bounds = (GRect){
+    {bitmap->bounds.origin.x * 2, bitmap->bounds.origin.y * 2},
+    {bitmap->bounds.size.w * 2, bitmap->bounds.size.h * 2},
+  };
+  return stored;
+}

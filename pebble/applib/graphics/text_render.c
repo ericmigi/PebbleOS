@@ -3,8 +3,12 @@
 
 #include "text_render.h"
 
+#include "framebuffer.h"
 #include "gcontext.h"
+#include "graphics_private.h"
 #include "text_resources.h"
+
+#include <string.h>
 
 #include <pbl/kernel/assert.h>
 #include <pbl/util/bitops.h>
@@ -335,6 +339,112 @@ static PBL_NOINLINE void prv_record_edges(GContext *ctx, const GlyphData *glyph,
 }
 #endif
 
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+// Mask words per row of a glyph drawn at twice its size: glyphs up to 128 pixels wide
+#define SCALED2_GLYPH_WORDS 8
+
+// n (up to 8) bits of a glyph bitmap from bit p, LSB first
+static PBL_ALWAYS_INLINE unsigned prv_glyph_bits(const uint8_t *bits, uint32_t p, unsigned n) {
+  unsigned v = bits[p / 8];
+  if ((p % 8) + n > 8) {
+    v |= (unsigned)bits[p / 8 + 1] << 8;
+  }
+  return (v >> (p % 8)) & ((1U << n) - 1U);
+}
+
+// Writes the set bits of a mask row whose bit 0 is native column x0 into native row y, within
+// native columns [cx0, cx1)
+static void prv_write_scaled2_row(GBitmap *dest, int y, int x0, int cx0, int cx1,
+                                  const uint32_t *mask, int words, bool white) {
+  uint32_t *row = (uint32_t *)((uint8_t *)dest->addr + y * dest->row_size_bytes);
+  for (int k = 0; k < words; k++) {
+    uint32_t v = mask[k];
+    const int bx = x0 + 32 * k;
+    if (v == 0 || bx >= cx1 || bx + 32 <= cx0) {
+      continue;
+    }
+    if (cx0 > bx) {
+      v &= ~0U << (cx0 - bx);
+    }
+    if (cx1 - bx < 32) {
+      v &= (1U << (cx1 - bx)) - 1U;
+    }
+    // Arithmetic floor for columns left of 0, whose bits are clipped off by now
+    const int sh = ((bx % 32) + 32) % 32;
+    const int wi = (bx - sh) / 32;
+    const uint32_t lo = v << sh;
+    const uint32_t hi = sh ? (v >> (32 - sh)) : 0U;
+    if (wi >= 0) {
+      row[wi] = white ? (row[wi] | lo) : (row[wi] & ~lo);
+    }
+    if (hi) {
+      row[wi + 1] = white ? (row[wi + 1] | hi) : (row[wi + 1] & ~hi);
+    }
+  }
+}
+
+// Draws a 1-bit glyph into a framebuffer at twice its size: each pixel as 2x2, except the edge
+// pixels of a FEATURE_EDGES glyph, whose four are inked from their own coverage (at least half)
+static PBL_NOINLINE void prv_render_glyph_scaled2(GContext *ctx, const GlyphData *glyph,
+                                                  bool has_edges, const GRect *target,
+                                                  const GRect *clipped) {
+  const int w = glyph->header.width_px;
+  const int h = glyph->header.height_px;
+  if (w == 0 || h == 0 || w > SCALED2_GLYPH_WORDS * 16) {
+    return;
+  }
+  GBitmap *dest = graphics_context_get_bitmap(ctx);
+  const bool white = !gcolor_equal(ctx->draw_state.text_color, GColorBlack);
+  const uint8_t *bits = (const uint8_t *)glyph->data;
+  const uint8_t *edges = bits + ((w * h + 31) / 32) * 4;
+  const unsigned count = has_edges ? (unsigned)(edges[0] | (edges[1] << 8)) : 0U;
+  edges += 2;
+  unsigned e = 0;
+  const int words = (2 * w + 31) / 32;
+  const int x0 = 2 * target->origin.x;
+  const int cx0 = 2 * clipped->origin.x;
+  const int cx1 = 2 * grect_get_max_x(clipped);
+  for (int gy = 0; gy < h; gy++) {
+    const int y = target->origin.y + gy;
+    if (y >= grect_get_max_y(clipped)) {
+      break;
+    }
+    if (y < clipped->origin.y) {
+      while (e < count && edges[3 * e + 1] == gy) {
+        e++;
+      }
+      continue;
+    }
+    uint32_t mask[2][SCALED2_GLYPH_WORDS] = {};
+    for (int gx = 0; gx < w; gx += 8) {
+      const unsigned n = (unsigned)PBL_MIN(8, w - gx);
+      const unsigned v = prv_glyph_bits(bits, (uint32_t)(gy * w + gx), n);
+      if (v) {
+        const uint32_t doubled = graphics_private_double_bits16((uint16_t)v);
+        // gx is a multiple of 8: the 16 bits never straddle a word
+        mask[0][gx / 16] |= doubled << (2 * gx % 32);
+      }
+    }
+    memcpy(mask[1], mask[0], sizeof(mask[0]));
+    for (; e < count && edges[3 * e + 1] == gy; e++) {
+      const int ex = edges[3 * e];
+      const unsigned levels = edges[3 * e + 2];
+      for (int i = 0; i < 4; i++) {
+        const int c = 2 * ex + (i & 1);
+        const uint32_t bit = 1U << (c % 32);
+        if (((levels >> (2 * i)) & 3U) >= 2U) {
+          mask[i >> 1][c / 32] |= bit;
+        } else {
+          mask[i >> 1][c / 32] &= ~bit;
+        }
+      }
+    }
+    prv_write_scaled2_row(dest, 2 * y, x0, cx0, cx1, mask[0], words, white);
+    prv_write_scaled2_row(dest, 2 * y + 1, x0, cx0, cx1, mask[1], words, white);
+  }
+}
+#endif
+
 // PRO TIP: if you have to modify this function, expect to waste the rest of your day on it
 void render_glyph(GContext *const ctx, const uint32_t codepoint, FontInfo *const font,
                   const GRect cursor) {
@@ -378,6 +488,18 @@ void render_glyph(GContext *const ctx, const uint32_t codepoint, FontInfo *const
   if (text_resources_glyph_is_color(&location)) {
     if (clipped_glyph_target.size.h > 0 && clipped_glyph_target.size.w > 0) {
       prv_render_color_glyph(ctx, glyph, &location, &glyph_target, &clipped_glyph_target);
+      graphics_context_mark_dirty_rect(ctx, clipped_glyph_target);
+    }
+    return;
+  }
+#endif
+
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+  if (gbitmap_is_scaled2(dest_bitmap)) {
+    if (!text_resources_glyph_is_scale2(&location) && clipped_glyph_target.size.w > 0 &&
+        clipped_glyph_target.size.h > 0) {
+      prv_render_glyph_scaled2(ctx, glyph, text_resources_glyph_has_edges(&location), &glyph_target,
+                               &clipped_glyph_target);
       graphics_context_mark_dirty_rect(ctx, clipped_glyph_target);
     }
     return;

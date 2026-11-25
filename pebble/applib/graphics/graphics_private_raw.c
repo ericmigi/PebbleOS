@@ -3,6 +3,7 @@
 
 #include "graphics_private_raw.h"
 
+#include "framebuffer.h"
 #include "graphics.h"
 #include "graphics_private.h"
 #include "graphics_row_ops.h"
@@ -35,10 +36,26 @@ static PBL_ALWAYS_INLINE void prv_set_color(const GContext *ctx, GColor *dst_col
 }
 
 #if !PBL_COLOR
+static void prv_fill_row_1bit(GBitmap *framebuffer, int16_t y, int16_t x, int32_t width,
+                              uint32_t pattern);
+
 // Plots row at given starting position and width, dithers grayscale colors
 static void prv_assign_row_with_pattern_1bit(GBitmap *framebuffer, int16_t y, int16_t x,
                                              int32_t width, GColor color) {
   const uint32_t pattern = graphics_private_get_1bit_grayscale_pattern(color, (uint8_t)y);
+  if (gbitmap_is_scaled2(framebuffer)) {
+    // The row as 2x2 blocks: each pattern bit twice, on two rows
+    GBitmap stored = gbitmap_scaled2_get_stored(framebuffer);
+    const uint32_t doubled = graphics_private_double_bits16((uint16_t)pattern);
+    prv_fill_row_1bit(&stored, 2 * y, 2 * x, 2 * width, doubled);
+    prv_fill_row_1bit(&stored, 2 * y + 1, 2 * x, 2 * width, doubled);
+    return;
+  }
+  prv_fill_row_1bit(framebuffer, y, x, width, pattern);
+}
+
+static void prv_fill_row_1bit(GBitmap *framebuffer, int16_t y, int16_t x, int32_t width,
+                              uint32_t pattern) {
   uint32_t left_edge_block, right_edge_block, mask;
   const uint32_t left_edge_bits_count = x % 32;
   const uint32_t right_edge_bits_count = (x + width) % 32;
@@ -210,8 +227,7 @@ PBL_T_STATIC void prv_blend_vertical_line_raw(GContext *ctx, int16_t x, int16_t 
   bool black = (gcolor_equal(color, GColorBlack));
 
   for (int i = y1; i < y2; i++) {
-    uint8_t *line = ((uint8_t *)framebuffer->addr) + (framebuffer->row_size_bytes * i);
-    pbl_bitset8_update(line, x, !black);
+    graphics_private_set_bit_1bit(framebuffer, x, i, !black);
   }
 #endif // CONFIG_SCREEN_COLOR_DEPTH_BITS == 8
 }

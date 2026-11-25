@@ -15,6 +15,15 @@
 //! @param point Point to set pixel at using draw state's stroke color
 void graphics_private_set_pixel(GContext *ctx, GPoint point);
 
+#if PBL_BW
+//! Sets pixel (x, y) of a 1-bit bitmap white or black, a 2x2 block in a framebuffer at twice its
+//! size. No bounds checks.
+void graphics_private_set_bit_1bit(GBitmap *bitmap, int x, int y, bool white);
+
+//! Each of the 16 bits twice, bit 0 into bits 0 and 1
+uint32_t graphics_private_double_bits16(uint16_t bits);
+#endif
+
 //! Draws horizontal line with antialiased starting and ending pixel
 //! Will adjust to the drawing_box and clip_box
 //! Note: this only works for lines where x1 < x2

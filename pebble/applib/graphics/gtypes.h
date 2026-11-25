@@ -785,7 +785,11 @@ typedef struct BitmapInfo {
 
   bool is_palette_heap_allocated : 1;
 
-  uint16_t reserved : 7;
+  //! Each pixel within .bounds is 2x2 pixels at .addr, whose rows are .row_size_bytes apart
+  //! (a framebuffer with CONFIG_FRAMEBUFFER_SCALE2)
+  bool is_scaled2 : 1;
+
+  uint16_t reserved : 6;
   //! Version of bitmap structure and image data.
   uint8_t version : 4;
 } BitmapInfo;

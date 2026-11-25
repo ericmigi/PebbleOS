@@ -143,6 +143,7 @@ void gbitmap_init_with_data(GBitmap *bitmap, const uint8_t *data) {
   bitmap->info_flags = bitmap_data->info_flags;
   // Force this to false, just in case someone passes us some funny looking data.
   bitmap->info.is_bitmap_heap_allocated = false;
+  bitmap->info.is_scaled2 = false;
 
   // Note that our container contains values for the origin, but we want to ignore them.
   // This is because originally we just serialized GBitmap to disk,

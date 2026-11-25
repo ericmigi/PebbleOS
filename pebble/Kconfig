@@ -269,10 +269,20 @@ config SYSTEM_UI_FONT_SCALE2
       The UI_SANS_* fonts are stored at twice their resolution, for a
       display scaled by two.
 
+config FRAMEBUFFER_SCALE2
+    bool "Framebuffers at twice the display's resolution"
+    depends on SCREEN_COLOR_DEPTH_BITS = 1
+    help
+      Each pixel of the display's size (PBL_DISPLAY_WIDTH by
+      PBL_DISPLAY_HEIGHT, the size layouts use) is 2x2 pixels in every
+      framebuffer, and the display gets the framebuffer at that resolution.
+      Text in fonts stored at panel resolution is drawn at it; everything
+      else is drawn as 2x2 blocks.
+
 config TEXT_DETAIL
     bool "Text edges at panel resolution and in grey"
     default y
-    depends on SYSTEM_UI_FONT_SCALE2 && !RECOVERY_FW
+    depends on SYSTEM_UI_FONT_SCALE2 && !RECOVERY_FW && !FRAMEBUFFER_SCALE2
     help
       Record the edge pixels of the system UI's text, so a display that
       shows each pixel as 2x2 panel pixels can draw them at panel
