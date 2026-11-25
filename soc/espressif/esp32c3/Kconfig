@@ -20,4 +20,5 @@ config SOC_ESP32C3_FLASH_CLOCK_DIV
       The flash's clock, and so the speed of code and data run in place,
       is the 80 MHz of the PLL divided by this: 4 is the 20 MHz the boot
       leaves, 2 is 40 MHz and 1 is 80 MHz. Applies with the CPU on the
-      PLL only.
+      PLL only. The early init reads the image's first 16 KiB back at the
+      new clock and returns to the old one if it reads differently.
