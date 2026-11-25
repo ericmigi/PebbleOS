@@ -24,6 +24,7 @@
 #include <pbl/drivers/rng.h>
 #include <pbl/kernel/assert.h>
 #include <pbl/kernel/fatal.h>
+#include <pbl/kernel/idle.h>
 #include <pbl/kernel/irq.h>
 #include <pbl/kernel/malloc.h>
 #include <pbl/kernel/mmio.h>
@@ -33,6 +34,7 @@
 #include <pbl/kernel/thread.h>
 #include <pbl/kernel/time.h>
 #include <pbl/logging/logging.h>
+#include <pbl/soc/esp32c3/idle.h>
 
 #include <devicetree/regs.h>
 #include <esp32c3_bt.h>
@@ -799,6 +801,24 @@ int esp32c3_bt_controller_init(void) {
   return 0;
 }
 
+static void prv_light_sleep_set_blocked(bool block) {
+#ifdef CONFIG_SOC_ESP32C3_LIGHT_SLEEP
+  static bool s_blocked;
+
+  if (block == s_blocked) {
+    return;
+  }
+  if (block) {
+    pbl_idle_state_block(SOC_ESP32C3_IDLE_LIGHT_SLEEP);
+  } else {
+    pbl_idle_state_release(SOC_ESP32C3_IDLE_LIGHT_SLEEP);
+  }
+  s_blocked = block;
+#else
+  (void)block;
+#endif
+}
+
 int esp32c3_bt_controller_enable(void) {
   if (btdm_controller_status != BTDM_STATUS_INITED) {
     return -EINVAL;
@@ -809,6 +829,9 @@ int esp32c3_bt_controller_enable(void) {
     return -EINVAL;
   }
 
+  // Modem sleep is off (XTAL LP clock): stopping digital clocks in light sleep breaks active BLE
+  prv_light_sleep_set_blocked(true);
+
   /* Notice the init order: esp_phy_enable() -> bt_bb_v2_init_cmplx() -> coex_pti_v2() */
   esp_phy_enable(PHY_MODEM_BT);
 
@@ -816,6 +839,7 @@ int esp32c3_bt_controller_enable(void) {
   sdk_config_extend_set_pll_track(false);
 
   if (btdm_controller_enable(ESP_BT_MODE_BLE) != 0) {
+    prv_light_sleep_set_blocked(false);
     return -EIO;
   }
 
