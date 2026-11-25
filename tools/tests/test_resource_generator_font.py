@@ -29,7 +29,7 @@ def warning_for(name):
 
 
 def font_definition(
-    name, pixel_height=None, extended=False, regex="[0]", render_height=None
+    name, pixel_height=None, extended=False, regex="[0]", render_height=None, scale=1
 ):
     definition = ResourceDefinition("font", name, TTF_PATH)
     definition.max_glyph_size = 256
@@ -41,10 +41,13 @@ def font_definition(
     definition.tracking_adjust = None
     definition.pixel_height = pixel_height
     definition.render_height = render_height
+    definition.scale = scale
     return definition
 
 
-def build_font(name, pixel_height=None, extended=False, regex="[0]", render_height=None):
+def build_font(
+    name, pixel_height=None, extended=False, regex="[0]", render_height=None
+):
     """Build a few glyphs of the font, returning the stored height and anything printed."""
     definition = font_definition(name, pixel_height, extended, regex, render_height)
     out = io.StringIO()
@@ -164,6 +167,24 @@ class TestBuildFontData(unittest.TestCase):
         self.assertEqual(data[1], 24)
         self.assertEqual(expected[1], 20)
         self.assertEqual(data[:1] + data[2:], expected[:1] + expected[2:])
+
+    def test_scale_2_keeps_the_height_and_doubles_the_glyphs(self):
+        render = font_definition("UI_24", extended=True, regex="[H]", render_height=20)
+        double = font_definition(
+            "UI_24", extended=True, regex="[H]", render_height=20, scale=2
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            one = FontResourceGenerator.build_font_data(TTF_PATH, render)
+            two = FontResourceGenerator.build_font_data(TTF_PATH, double)
+        # Same stored height, the scale feature set, and glyphs about twice as wide
+        self.assertEqual(two[1], 24)
+        self.assertEqual(two[9] & 0x08, 0x08)
+        self.assertEqual(one[9] & 0x08, 0)
+        self.assertGreater(len(two), len(one))
+        with self.assertRaisesRegex(ValueError, "scale 2 needs renderHeight"):
+            FontResourceGenerator.build_font_data(
+                TTF_PATH, font_definition("UI_24", 20, extended=True, scale=2)
+            )
 
     def test_pixel_height_refuses_a_boolean(self):
         # int() would turn true into a 1 pixel font

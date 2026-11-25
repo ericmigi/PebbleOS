@@ -79,6 +79,8 @@ ELLIPSIS_CODEPOINT = 0x2026
 # Features
 FEATURE_OFFSET_16 = 0x01
 FEATURE_RLE4 = 0x02
+# Glyph bitmaps, offsets and advances are at twice the resolution of the font's height
+FEATURE_SCALE2 = 0x08
 
 
 HASH_TABLE_SIZE = 255
@@ -123,7 +125,9 @@ class Font:
         # font's baseline so both align on a mixed line.
         self.baseline = int(baseline) if baseline is not None else self.max_height
         # Height stored in the font, which lays out its lines; defaults to the render size
-        self.line_height = int(line_height) if line_height is not None else self.max_height
+        self.line_height = (
+            int(line_height) if line_height is not None else self.max_height
+        )
         self.legacy = legacy
         self.face = freetype.Face(self.ttf_path)
         self.face.set_pixel_sizes(0, self.max_height)
@@ -142,6 +146,8 @@ class Font:
         self.offset_tables = [[] for i in range(self.table_size)]
         self.offset_size_bytes = 4
         self.features = 0
+        self.scale = 1
+        self.autohint = False
 
         self.glyph_header = "<BBbbb"
 
@@ -156,6 +162,15 @@ class Font:
             raise RuntimeError(
                 f"Unsupported compression engine: '{engine}'. Font {self.ttf_path}"
             )
+
+    def set_autohint(self):
+        """Use FreeType's auto-hinter, for fonts whose own hinting gives uneven stems."""
+        self.autohint = True
+
+    def set_scale2(self):
+        """Store glyphs at twice the resolution; the stored height stays the font's own."""
+        self.scale = 2
+        self.features |= FEATURE_SCALE2
 
     def set_version(self, version):
         self.version = version
@@ -308,13 +323,18 @@ class Font:
             | freetype.FT_LOAD_MONOCHROME
             | freetype.FT_LOAD_TARGET_MONO
         )
+        if self.autohint:
+            flags |= freetype.FT_LOAD_FORCE_AUTOHINT
         self.face.load_glyph(gindex, flags)
         # Font metrics
         bitmap = self.face.glyph.bitmap
         advance = (
             self.face.glyph.advance.x // 64
         )  # Convert 26.6 fixed float format to px
-        advance += self.tracking_adjust
+        if self.scale == 2:
+            # Whole pixels of the font's own resolution, so text stays on its pixel grid
+            advance = 2 * ((self.face.glyph.advance.x + 64) // 128)
+        advance += self.tracking_adjust * self.scale
         width = bitmap.width
         height = bitmap.rows
         left = self.face.glyph.bitmap_left
