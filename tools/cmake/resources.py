@@ -171,12 +171,11 @@ def get_resources_dict(bld, variant, config=frozenset(), strings=None):
         if key in specific_dict:
             resources_dict[key] = specific_dict[key]
 
-    # The font scripts want an absolute characterList path.
+    # The font scripts want absolute characterList and fallback paths.
     for item in resources_dict["media"]:
-        if "characterList" in item:
-            item["characterList"] = os.path.abspath(
-                os.path.join("resources", item["characterList"])
-            )
+        for key in ("characterList", "fallback"):
+            if key in item:
+                item[key] = os.path.abspath(os.path.join("resources", item[key]))
 
     if is_recovery:
         # PRF needs every media item built into the firmware image.
@@ -191,6 +190,9 @@ def get_resources_dict(bld, variant, config=frozenset(), strings=None):
 def definition_deps(definition):
     """Everything a resource is built from."""
     deps = [os.path.join(RESOURCES_DIR, s) for s in definition.sources]
+    fallback = getattr(definition, "fallback", None)
+    if fallback:
+        deps.append(fallback)
     character_list = getattr(definition, "character_list", None)
     # Some resource maps name a codepoint list that does not exist; the font
     # generator only reads one for the formats that need it.

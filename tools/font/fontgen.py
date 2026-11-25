@@ -151,6 +151,7 @@ class Font:
         self.scale = 1
         self.autohint = False
         self.bits = 1
+        self.fallback_face = None
 
         self.glyph_header = "<BBbbb"
 
@@ -165,6 +166,37 @@ class Font:
             raise RuntimeError(
                 f"Unsupported compression engine: '{engine}'. Font {self.ttf_path}"
             )
+
+    def set_fallback(self, path):
+        """Draw the codepoints the font lacks from another one, at the same capital height."""
+        self.fallback_face = freetype.Face(path)
+
+    def _load_flags(self):
+        if self.bits == 2:
+            flags = freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_LIGHT
+        elif self.legacy:
+            flags = freetype.FT_LOAD_RENDER
+        else:
+            flags = (
+                freetype.FT_LOAD_RENDER
+                | freetype.FT_LOAD_MONOCHROME
+                | freetype.FT_LOAD_TARGET_MONO
+            )
+        return flags
+
+    def _cap_height(self, face):
+        face.load_char("H", self._load_flags())
+        return face.glyph.bitmap.rows
+
+    def _size_fallback(self):
+        """The largest size of the fallback font whose capitals are no taller than ours."""
+        target = self._cap_height(self.face)
+        best = 1
+        for size in range(1, 4 * self.max_height):
+            self.fallback_face.set_pixel_sizes(0, size)
+            if self._cap_height(self.fallback_face) <= target:
+                best = size
+        self.fallback_face.set_pixel_sizes(0, best)
 
     def set_bits2(self):
         """Store 2 bits of coverage per pixel, rasterised antialiased."""
@@ -527,6 +559,30 @@ class Font:
                 glyph_entries.append((codepoint, offset))
 
             codepoint, gindex = self.face.get_next_char(codepoint, gindex)
+
+        if self.fallback_face is not None:
+            # Codepoints the font lacks, from the fallback font, which has its own glyph indices
+            self._size_fallback()
+            have = {entry[0] for entry in glyph_entries}
+            primary = self.face
+            self.face = self.fallback_face
+            fallback_lookup = {}
+            try:
+                for codepoint in sorted(set(self.codepoints)):
+                    gindex = self.face.get_char_index(codepoint)
+                    if (
+                        codepoint in have
+                        or not gindex
+                        or not codepoint_is_in_subset(codepoint)
+                        or self.number_of_glyphs > self.max_glyphs
+                    ):
+                        continue
+                    offset, next_offset, fallback_lookup = add_glyph(
+                        codepoint, next_offset, gindex, fallback_lookup
+                    )
+                    glyph_entries.append((codepoint, offset))
+            finally:
+                self.face = primary
 
         # Decide if we need 2 byte or 4 byte offsets
         glyph_data_bytes = sum(len(glyph) for glyph in self.glyph_table)
