@@ -527,6 +527,7 @@ static void prv_end(const struct pbl_display *disp, int status) {
     state->need_half = true;
   }
   state->idle_since_ms = (uint32_t)pbl_uptime_ms();
+  state->last_refresh_ms = (uint16_t)(state->idle_since_ms - state->refresh_start_ms);
   // Without a frame copy the planes are re-synced first, from the framebuffer
   if (prv_epd(disp)->shadow == nullptr) {
     state->post_status = status;
@@ -916,6 +917,7 @@ static int prv_refresh(const struct pbl_display *disp, enum refresh_mode mode, b
   // The interrupt is armed before the refresh starts, so its end cannot be missed; the deadline
   // runs from the activation, however late that comes
   state->post_pending = epd->shadow == nullptr;
+  state->refresh_start_ms = (uint32_t)pbl_uptime_ms();
   state->refreshing = true;
   ret = pbl_intc_enable(&state->busy_irq);
   if (ret == 0) {
@@ -1116,6 +1118,7 @@ static void prv_post(struct pbl_work *work) {
   const struct pbl_display *disp = state->disp;
   const struct pbl_display_ssd1677 *epd = prv_epd(disp);
   int status = state->post_status;
+  uint32_t t0 = (uint32_t)pbl_uptime_ms();
 
   if (status == 0 && state->resync_valid) {
     uint32_t lo = state->resync_lo;
@@ -1126,14 +1129,19 @@ static void prv_post(struct pbl_work *work) {
     // The driver's own refresh: a new frame may be in the framebuffer already
     if (state->own && !prv_frame_shown(epd, lo, hi)) {
       prv_rows_set(epd->unsynced_rows, lo, hi, true);
-    } else if (prv_write_plane(epd, CMD_WRITE_RAM_RED, &w, &src) != 0 ||
-               prv_write_plane(epd, CMD_WRITE_RAM_BW, &w, &src) != 0) {
+    } else if ((state->resync_planes != 2U &&
+                prv_write_plane(epd, CMD_WRITE_RAM_RED, &w, &src) != 0) ||
+               (state->resync_planes != 1U &&
+                prv_write_plane(epd, CMD_WRITE_RAM_BW, &w, &src) != 0)) {
       state->need_half = true;
     } else if (state->own && !prv_frame_shown(epd, lo, hi)) {
       prv_rows_set(epd->unsynced_rows, lo, hi, true);
     }
   }
   state->resync_valid = false;
+  if (!state->own) {
+    state->last_post_ms = (uint16_t)((uint32_t)pbl_uptime_ms() - t0);
+  }
   state->post_pending = false;
 
   if (prv_has_idle_work(epd)) {
@@ -1243,6 +1251,7 @@ static int prv_update_nocopy(const struct pbl_display_ssd1677 *epd,
     return ret;
   }
 
+  uint32_t t0 = (uint32_t)pbl_uptime_ms();
   struct pbl_display_ssd1677_window w = prv_window(epd, (uint16_t)first, (uint16_t)last);
   uint32_t lo;
   uint32_t hi;
@@ -1285,6 +1294,7 @@ static int prv_update_nocopy(const struct pbl_display_ssd1677 *epd,
   state->resync_lo = (uint16_t)first;
   state->resync_hi = (uint16_t)last;
   state->resync_valid = true;
+  state->last_write_ms = (uint16_t)((uint32_t)pbl_uptime_ms() - t0);
   if (ret == 0) {
     ret = prv_refresh(state->disp, REFRESH_FAST, false, large ? state->wave.large_frames : 0U);
   }
@@ -1769,5 +1779,93 @@ const struct pbl_display_ops pbl_display_ssd1677_ops = {
   .set_rotated = prv_set_rotated,
   .update = prv_update,
 };
+
+#ifdef CONFIG_SHELL
+#include <pbl/shell/shell.h>
+
+// Timing and tuning of the first SSD1677, for measurements on the panel
+static const struct pbl_display_ssd1677 *prv_first(void) {
+  const struct pbl_device *dev;
+
+  PBL_DEVICE_CLASS_FOREACH(&pbl_display_class, dev) {
+    const struct pbl_display *disp = PBL_CONTAINER_OF(dev, const struct pbl_display, dev);
+
+    if (disp->ops == &pbl_display_ssd1677_ops) {
+      return prv_epd(disp);
+    }
+  }
+
+  return nullptr;
+}
+
+static int prv_cmd_stat(const struct pbl_shell *sh, size_t argc, char **argv) {
+  const struct pbl_display_ssd1677 *epd = prv_first();
+
+  if (epd == nullptr) {
+    return -ENODEV;
+  }
+  pbl_shell_print(sh, "last update: write %u ms, refresh %u ms, re-sync %u ms",
+                  epd->state->last_write_ms, epd->state->last_refresh_ms, epd->state->last_post_ms);
+  pbl_shell_print(sh, "fast %u frames, large +%u, top up %u, frame rate 0x%02x",
+                  epd->state->wave.phases[1], epd->state->wave.large_frames,
+                  epd->state->wave.topup_frames, epd->state->wave.frame_rate);
+
+  return 0;
+}
+
+// tune <fast frames> <large extra frames> <top up frames> [frame rate code]
+static int prv_cmd_tune(const struct pbl_shell *sh, size_t argc, char **argv) {
+  const struct pbl_display_ssd1677 *epd = prv_first();
+  unsigned long v[4];
+
+  if (epd == nullptr) {
+    return -ENODEV;
+  }
+  for (size_t i = 1U; i < argc; i++) {
+    if (pbl_shell_strtoul(argv[i], &v[i - 1U]) != 0 || v[i - 1U] > 255U) {
+      pbl_shell_error(sh, "invalid '%s'", argv[i]);
+      return -EINVAL;
+    }
+  }
+  (void)pbl_mutex_lock(&epd->state->lock, PBL_FOREVER);
+  epd->state->wave.phases[1] = (uint8_t)v[0];
+  epd->state->wave.large_frames = (uint8_t)v[1];
+  epd->state->wave.topup_frames = (uint8_t)v[2];
+  if (argc > 4U) {
+    epd->state->wave.frame_rate = (uint8_t)v[3];
+  }
+  pbl_mutex_unlock(&epd->state->lock);
+
+  return prv_cmd_stat(sh, 0U, nullptr);
+}
+
+// resync <0 both | 1 old plane only | 2 new plane only>, to find which the controller keeps
+static int prv_cmd_resync(const struct pbl_shell *sh, size_t argc, char **argv) {
+  const struct pbl_display_ssd1677 *epd = prv_first();
+  unsigned long v;
+
+  if (epd == nullptr) {
+    return -ENODEV;
+  }
+  if (pbl_shell_strtoul(argv[1], &v) != 0 || v > 2U) {
+    pbl_shell_error(sh, "0, 1 or 2");
+    return -EINVAL;
+  }
+  epd->state->resync_planes = (uint8_t)v;
+
+  return 0;
+}
+
+static const struct pbl_shell_cmd sub_epd[] = {
+  PBL_SHELL_CMD_ARG(resync, nullptr, "Planes re-synced after a refresh: 0 both, 1 old, 2 new",
+                    prv_cmd_resync, 2, 0),
+  PBL_SHELL_CMD(stat, nullptr, "Times of the last update and the waveform", prv_cmd_stat),
+  PBL_SHELL_CMD_ARG(tune, nullptr, "Set <fast> <large extra> <top up> frames [frame rate]",
+                    prv_cmd_tune, 4, 1),
+  PBL_SHELL_SUBCMD_SET_END,
+};
+
+PBL_SHELL_CMD_REGISTER(epd, sub_epd, "SSD1677 e-paper timing and waveform", nullptr);
+#endif
 
 #include PBL_DT_INSTANCES(solomon_ssd1677)
