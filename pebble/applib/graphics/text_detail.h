@@ -17,6 +17,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <applib/fonts/fonts_private.h>
 #include <applib/graphics/gtypes.h>
 
 typedef enum {
@@ -77,6 +78,24 @@ bool text_detail_wants_grey(void);
 
 TextDetailMode text_detail_get_mode(void);
 void text_detail_set_mode(TextDetailMode mode);
+
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+// At twice the display's size (text_grey.c) the framebuffer has the text at panel resolution, and
+// the records are the glyphs drawn, for the grey pass; text_detail_row() fills a row of the stored
+// size with 2 bits per pixel (see struct pbl_display_detail)
+
+//! Whether text is inked from a quarter coverage, for the grey pass to lighten (a grey mode)
+bool text_detail_ink_light(void);
+
+//! Records a glyph of a font stored with its edges, drawn in black into @p dest: its bitmap's top
+//! left @p origin, its @p height and the @p clip it was drawn in, in display pixels
+void text_detail_add_glyph(const GBitmap *dest, const FontInfo *font, uint32_t codepoint,
+                           GPoint origin, uint8_t height, const GRect *clip);
+
+//! Makes the next grey pass draw a fixed test pattern rather than the text's levels, until the
+//! next frame
+void text_detail_test(void);
+#endif
 
 //! Records in use and the most ever used, and records dropped since boot
 void text_detail_get_stats(uint32_t *used, uint32_t *peak, uint32_t *dropped);

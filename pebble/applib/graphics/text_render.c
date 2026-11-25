@@ -263,7 +263,7 @@ static PBL_NOINLINE void prv_render_scale2_glyph(GContext *ctx, const GlyphData 
   const bool white = !gcolor_equal(ctx->draw_state.text_color, GColorBlack);
   const GlyphBlock *bits = (const GlyphBlock *)glyph->data;
   const bool aa2 = text_resources_glyph_is_aa2(location);
-#ifdef CONFIG_TEXT_DETAIL
+#if defined(CONFIG_TEXT_DETAIL) && !defined(CONFIG_FRAMEBUFFER_SCALE2)
   const int owner = text_detail_glyph_begin(dest);
 #endif
   for (int cy = cells.origin.y; cy < cells.origin.y + cells.size.h; cy++) {
@@ -307,21 +307,21 @@ static PBL_NOINLINE void prv_render_scale2_glyph(GContext *ctx, const GlyphData 
           row.data[cx / 8] &= (uint8_t)~(1U << (cx % 8));
         }
       }
-#ifdef CONFIG_TEXT_DETAIL
+#if defined(CONFIG_TEXT_DETAIL) && !defined(CONFIG_FRAMEBUFFER_SCALE2)
       if (levels != 0xFF && owner >= 0) {
         text_detail_add(owner, cx, cy, levels, white);
       }
 #endif
     }
   }
-#ifdef CONFIG_TEXT_DETAIL
+#if defined(CONFIG_TEXT_DETAIL) && !defined(CONFIG_FRAMEBUFFER_SCALE2)
   text_detail_glyph_end(owner);
 #endif
   graphics_context_mark_dirty_rect(ctx, cells);
 }
 #endif
 
-#ifdef CONFIG_TEXT_DETAIL
+#if defined(CONFIG_TEXT_DETAIL) && !defined(CONFIG_FRAMEBUFFER_SCALE2)
 // Records the edges a glyph of a FEATURE_EDGES font carries after its bitmap, those in the clip
 static PBL_NOINLINE void prv_record_edges(GContext *ctx, const GlyphData *glyph,
                                           const GRect *target) {
@@ -359,9 +359,14 @@ static const uint16_t s_doubled[256] = {
 #undef D1
 };
 
-// The panel pixels an edge cell's levels ink (at least half covered): bits 1:0 the top pair,
-// left first, bits 3:2 the bottom pair
-static PBL_ALWAYS_INLINE unsigned prv_edge_ink(unsigned levels) {
+// The panel pixels an edge cell's levels ink: bits 1:0 the top pair, left first, bits 3:2 the
+// bottom pair. Half covered, or, for a grey pass to lighten, a quarter.
+static PBL_ALWAYS_INLINE unsigned prv_edge_ink(unsigned levels, bool light) {
+  if (light) {
+    levels |= levels >> 1;
+    return (levels & 0x01U) | ((levels & 0x04U) >> 1) | ((levels & 0x10U) >> 2) |
+           ((levels & 0x40U) >> 3);
+  }
   return ((levels & 0x02U) >> 1) | ((levels & 0x08U) >> 2) | ((levels & 0x20U) >> 3) |
          ((levels & 0x80U) >> 4);
 }
@@ -426,6 +431,11 @@ static SCALE2_HOT PBL_NOINLINE void prv_render_glyph_scaled2(GContext *ctx, cons
   const unsigned count = has_edges ? (unsigned)(edges[0] | (edges[1] << 8)) : 0U;
   edges += 2;
   unsigned e = 0;
+#ifdef CONFIG_TEXT_DETAIL
+  const bool light = !white && text_detail_ink_light();
+#else
+  const bool light = false;
+#endif
   // One mask word per 16 glyph pixels
   const int words = (w + 15) / 16;
   const int x0 = 2 * target->origin.x;
@@ -466,7 +476,7 @@ static SCALE2_HOT PBL_NOINLINE void prv_render_glyph_scaled2(GContext *ctx, cons
         // Not in the glyph: the font is malformed
         continue;
       }
-      const unsigned ink = prv_edge_ink(edges[3 * e + 2]);
+      const unsigned ink = prv_edge_ink(edges[3 * e + 2], light);
       const unsigned sh = (2 * ex) % 32;
       uint32_t *m0 = &mask[0][ex / 16];
       uint32_t *m1 = &mask[1][ex / 16];
@@ -531,9 +541,16 @@ void render_glyph(GContext *const ctx, const uint32_t codepoint, FontInfo *const
   if (gbitmap_is_scaled2(dest_bitmap)) {
     if (!text_resources_glyph_is_scale2(&location) && clipped_glyph_target.size.w > 0 &&
         clipped_glyph_target.size.h > 0) {
-      prv_render_glyph_scaled2(ctx, glyph, text_resources_glyph_has_edges(&location), &glyph_target,
-                               &clipped_glyph_target);
+      const bool edges = text_resources_glyph_has_edges(&location);
+      prv_render_glyph_scaled2(ctx, glyph, edges, &glyph_target, &clipped_glyph_target);
       graphics_context_mark_dirty_rect(ctx, clipped_glyph_target);
+#ifdef CONFIG_TEXT_DETAIL
+      if (edges && gcolor_equal(ctx->draw_state.text_color, GColorBlack)) {
+        text_detail_add_glyph(dest_bitmap, font, codepoint, glyph_target.origin,
+                              (uint8_t)PBL_MIN(glyph->header.height_px, UINT8_MAX),
+                              &clipped_glyph_target);
+      }
+#endif
     }
     return;
   }
@@ -546,7 +563,7 @@ void render_glyph(GContext *const ctx, const uint32_t codepoint, FontInfo *const
   }
 #endif
 
-#ifdef CONFIG_TEXT_DETAIL
+#if defined(CONFIG_TEXT_DETAIL) && !defined(CONFIG_FRAMEBUFFER_SCALE2)
   // An empty glyph (a space) has no body to carry edges
   if (text_resources_glyph_has_edges(&location) && glyph_target.size.w && glyph_target.size.h) {
     prv_record_edges(ctx, glyph, &glyph_target);

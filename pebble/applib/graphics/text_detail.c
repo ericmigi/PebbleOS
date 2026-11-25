@@ -3,7 +3,7 @@
 
 #include "text_detail.h"
 
-#ifdef CONFIG_TEXT_DETAIL
+#if defined(CONFIG_TEXT_DETAIL) && !defined(CONFIG_FRAMEBUFFER_SCALE2)
 
 #include <string.h>
 
