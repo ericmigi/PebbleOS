@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config CPU_XTENSA
+	bool
+	help
+	  Xtensa core running with the windowed ABI. Selected through the CPU
+	  the SoC selects.
+
+config CPU_XTENSA_LX7
+	bool
+	select CPU_XTENSA
+	help
+	  Xtensa LX7 core with 64 windowed address registers, zero-overhead
+	  loops, single-precision FPU and CCOUNT cycle counter.
+
+config XTENSA_CODE_ALIAS_OFFSET
+	hex
+	default 0x0
+	help
+	  Offset from the FLASH addresses the code is loaded at to those it
+	  runs at, for SoCs whose data bus cannot read the instruction-bus
+	  window of the flash, nor fetch from the data-bus one.

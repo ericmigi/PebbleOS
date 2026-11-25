@@ -17,6 +17,8 @@
     .ramfunc RAMFUNC_VMA : {
         . = ALIGN(32);
         __ramfunc_start = .;
+        KEEP(*(.vectors))
+        *(.ramfunc.literal .ramfunc.literal.*)
         *(.ramfunc.text .ramfunc.text.*)
         *(.ramfunc.rodata .ramfunc.rodata.*)
 #include <ramfunc-objects.ld>
