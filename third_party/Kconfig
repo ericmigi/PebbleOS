@@ -4,6 +4,7 @@
 menu "Third-party"
 
 rsource "cmsis_core/Kconfig"
+rsource "espressif_bt/Kconfig"
 rsource "hal_nordic/Kconfig"
 rsource "nimble/Kconfig"
 

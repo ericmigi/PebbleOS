@@ -9,3 +9,4 @@ tools/clar/*
 tests/fixtures/**
 third_party/nimble/port/include/syscfg/syscfg.h
 tests/vendor/duma/*
+third_party/espressif_bt/esp32c3/phy_init_data.c
