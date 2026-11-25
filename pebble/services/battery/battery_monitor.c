@@ -122,12 +122,16 @@ static void prv_begin_standby_timer(void) {
 }
 
 static void sys_work_handle_battery_critical(void *data) {
+#ifdef CONFIG_SERVICE_BATTERY_CRITICAL_POWER_OFF
   PBL_LOG_INFO("Battery critical: go to standby mode");
   if (low_power_is_active()) {
     low_power_standby();
   } else {
     pbl_power_off();
   }
+#else
+  PBL_LOG_WRN("Battery critical: staying on, critical power-off disabled");
+#endif
 }
 
 static void prv_enter_standby(void) {

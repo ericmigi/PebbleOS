@@ -104,6 +104,7 @@ pbl_clar_test(test_battery_monitor
     tests/fakes/fake_battery.c
     tests/fakes/fake_rtc.c
   DEFINES CONFIG_SERVICE_BATTERY_LOW_POWER_PERCENT=5 CONFIG_SERVICE_BATTERY_CAPACITY_HOURS=144
+          CONFIG_SERVICE_BATTERY_CRITICAL_POWER_OFF=1
   OVERRIDES dummy_board
 )
 
