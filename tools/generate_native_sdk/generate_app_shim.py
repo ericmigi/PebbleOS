@@ -56,16 +56,58 @@ pbl_table_addr:
 """
 
 
-def gen_shim_asm(functions):
+# riscv32: the same two parts. t0 and t1 are temporaries the caller does not
+# expect kept, so the arguments in a0-a7 and on the stack go through untouched.
+# The table address is data: code runs from the instruction-bus window of the
+# RAM, which cannot be read, so it is in .data, which the code reaches at the
+# data addresses.
+RISCV32_SHIM_PREAMBLE = """
+.option norelax
+"""
+
+RISCV32_SHIM_TEMPLATE = """
+.section ".text.%(function_name)s","ax",@progbits
+.align 1
+.global %(function_name)s
+.type %(function_name)s, @function
+%(function_name)s:
+        li t1, %(offset)d
+        j jump_to_pbl_function
+"""
+
+RISCV32_SHIM_FOOTER = """
+.section ".text.jump_to_pbl_function","ax",@progbits
+.align 1
+.type jump_to_pbl_function, @function
+jump_to_pbl_function:
+1:      auipc t0, %pcrel_hi(pbl_table_addr)
+        lw t0, %pcrel_lo(1b)(t0)
+        add t0, t0, t1
+        lw t0, 0(t0)
+        jr t0
+
+.section ".data.pbl_table_addr","aw",@progbits
+.align 2
+.global pbl_table_addr
+pbl_table_addr:
+.word 0xA8A8A8A8
+"""
+
+SHIMS = {
+    "armv7m": (SHIM_PREAMBLE, SHIM_TEMPLATE, SHIM_FOOTER),
+    "riscv32": (RISCV32_SHIM_PREAMBLE, RISCV32_SHIM_TEMPLATE, RISCV32_SHIM_FOOTER),
+}
+
+
+def gen_shim_asm(functions, abi="armv7m"):
+    preamble, template, footer = SHIMS[abi]
     output = []
 
-    output.append(SHIM_PREAMBLE)
+    output.append(preamble)
     for idx, fun in enumerate(functions):
         if not fun.removed:
-            output.append(
-                SHIM_TEMPLATE % {"function_name": fun.name, "offset": idx * 4}
-            )
-    output.append(SHIM_FOOTER)
+            output.append(template % {"function_name": fun.name, "offset": idx * 4})
+    output.append(footer)
 
     return "\n".join(output)
 
@@ -91,12 +133,21 @@ class CompilationFailedError(Exception):
     pass
 
 
-def _compile(src, obj, flags):
+def _toolchain(abi):
+    import sys
+
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from pebble_sdk_platform import ABI_TOOLCHAINS
+
+    return ABI_TOOLCHAINS[abi]
+
+
+def _compile(src, obj, flags, abi):
+    toolchain = _toolchain(abi)
     gcc_process = subprocess.Popen(
         [
-            "arm-none-eabi-gcc",
-            "-mcpu=cortex-m3",
-            "-mthumb",
+            toolchain["prefix"] + "gcc",
+            *[f for f in toolchain["flags"] if f != "-fPIE"],
             *flags,
             "-c",
             "-o",
@@ -112,21 +163,26 @@ def _compile(src, obj, flags):
         raise CompilationFailedError()
 
 
-def build_shim(shim_s, dest_dir):
+def build_shim(shim_s, dest_dir, abi="armv7m"):
     shim_a = os.path.join(dest_dir, "libpebble.a")
     # Delete any existing archive, otherwise `ar` will append/insert to it:
     if os.path.exists(shim_a):
         os.remove(shim_a)
 
+    # The shims are position independent by construction on riscv32, whose
+    # apps are not PIC.
+    entry_cflags = (
+        ENTRY_CFLAGS if abi == "armv7m" else [f for f in ENTRY_CFLAGS if f != "-fPIE"]
+    )
     with tempfile.TemporaryDirectory() as obj_dir:
         objs = [os.path.join(obj_dir, "pebble.o"), os.path.join(obj_dir, "entry.o")]
-        _compile(shim_s, objs[0], ["-fPIC"])
-        _compile(ENTRY_SRC, objs[1], ENTRY_CFLAGS)
+        _compile(shim_s, objs[0], ["-fPIC"] if abi == "armv7m" else [], abi)
+        _compile(ENTRY_SRC, objs[1], entry_cflags, abi)
 
         ar_process = subprocess.Popen(
             # D: no timestamps or owners, the library is the same wherever
             # and whenever it is built.
-            ["arm-none-eabi-ar", "rcsD", shim_a, *objs],
+            [_toolchain(abi)["prefix"] + "ar", "rcsD", shim_a, *objs],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
@@ -136,10 +192,10 @@ def build_shim(shim_s, dest_dir):
             raise CompilationFailedError()
 
 
-def make_app_shim_lib(functions, sdk_lib_dir):
+def make_app_shim_lib(functions, sdk_lib_dir, abi="armv7m"):
     temp_asm_fd, temp_asm_file = tempfile.mkstemp(suffix="pbl_shim.s")
     os.close(temp_asm_fd)
     with open(temp_asm_file, "w") as shim_s:
-        shim_s.write(gen_shim_asm(functions))
+        shim_s.write(gen_shim_asm(functions, abi))
 
-    build_shim(temp_asm_file, sdk_lib_dir)
+    build_shim(temp_asm_file, sdk_lib_dir, abi)
