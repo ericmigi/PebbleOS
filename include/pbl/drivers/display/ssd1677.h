@@ -154,6 +154,16 @@ struct pbl_display_ssd1677 {
 int pbl_display_ssd1677_grey(const struct pbl_display *disp, const uint8_t *old_frame,
                              const uint8_t *new_frame, uint8_t vcom);
 
+/**
+ * @brief Set the 4-level overlay's waveform, for tuning (experimental).
+ *
+ * @param light Frames towards white for light grey, 0 for the stock table.
+ * @param dark Frames towards white for dark grey.
+ * @param frame_rate Frame rate code of every group.
+ * @param tail Undriven phases after the longer drive.
+ */
+void pbl_display_ssd1677_grey_tune(uint8_t light, uint8_t dark, uint8_t frame_rate, uint8_t tail);
+
 /** @cond INTERNAL_HIDDEN */
 extern const struct pbl_display_ops pbl_display_ssd1677_ops;
 
