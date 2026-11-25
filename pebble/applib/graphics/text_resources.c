@@ -529,6 +529,9 @@ static bool prv_load_font_res(ResAppNum app_num, uint32_t resource_id, FontResou
       if (header.features & FEATURE_RLE4) {
         font_res->md.version |= VERSION_FIELD_FEATURE_RLE4;
       }
+      if (header.features & FEATURE_SCALE2) {
+        font_res->md.version |= VERSION_FIELD_FEATURE_SCALE2;
+      }
       if (header.features & FEATURE_COLOR) {
 #if CONFIG_SCREEN_COLOR_DEPTH_BITS == 8
         if (header.features & FEATURE_RLE4) {
@@ -826,12 +829,15 @@ static const GlyphData *prv_get_glyph(FontCache *font_cache, Codepoint codepoint
 int8_t text_resources_get_glyph_horiz_advance(FontCache *font_cache, const Codepoint codepoint,
                                               FontInfo *font_info) {
   // Metadata only: measuring must not pay the deep bitmap load; render pre-loads it in walk_line().
+  GlyphLocation location;
   const GlyphData *g =
-      prv_get_glyph(font_cache, codepoint, font_info, false /* need_bitmap */, nullptr);
+      prv_get_glyph(font_cache, codepoint, font_info, false /* need_bitmap */, &location);
   if (!g) {
     return 0;
   }
-  return g->header.horiz_advance;
+  // A glyph at twice the font's resolution advances by whole pixels of the font's own
+  return text_resources_glyph_is_scale2(&location) ? g->header.horiz_advance / 2
+                                                   : g->header.horiz_advance;
 }
 
 const GlyphData *text_resources_get_glyph(FontCache *font_cache, const Codepoint codepoint,
@@ -848,8 +854,21 @@ GRect text_resources_get_glyph_frame(FontCache *font_cache, Codepoint codepoint,
   if (!glyph) {
     return GRectZero;
   }
+  if (text_resources_glyph_is_scale2(&location)) {
+    // In the font's own pixels, covering every pixel the glyph touches
+    const int16_t left = glyph->header.left_offset_px >> 1;
+    const int16_t top = glyph->header.top_offset_px >> 1;
+    return GRect(left, top + location.baseline_adjust,
+                 ((glyph->header.left_offset_px + glyph->header.width_px + 1) >> 1) - left,
+                 ((glyph->header.top_offset_px + glyph->header.height_px + 1) >> 1) - top);
+  }
   return GRect(glyph->header.left_offset_px, glyph->header.top_offset_px + location.baseline_adjust,
                glyph->header.width_px, glyph->header.height_px);
+}
+
+bool text_resources_glyph_is_scale2(const GlyphLocation *location) {
+  return location->font_res &&
+         HAS_FEATURE(location->font_res->md.version, VERSION_FIELD_FEATURE_SCALE2);
 }
 
 bool text_resources_glyph_is_color(const GlyphLocation *location) {

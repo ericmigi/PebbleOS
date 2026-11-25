@@ -14,6 +14,10 @@
 #include <process_state/app_state/app_state.h>
 #include <syscall/syscall.h>
 
+#ifdef CONFIG_TEXT_DETAIL
+#include "text_detail.h"
+#endif
+
 typedef uint32_t GlyphBlock PBL_ALIGNED(1);
 
 #if !defined(__clang__)
@@ -205,6 +209,85 @@ static PBL_NOINLINE void prv_render_color_glyph(GContext *ctx, const GlyphData *
 }
 #endif
 
+#if CONFIG_SCREEN_COLOR_DEPTH_BITS == 1
+// A glyph stored at twice its font's resolution: each framebuffer pixel covers 2x2 glyph pixels,
+// inked when at least two are. The pixels at the glyph's edges are recorded with their pattern,
+// for displays that can show them at panel resolution.
+static PBL_NOINLINE void prv_render_scale2_glyph(GContext *ctx, const GlyphData *glyph,
+                                                 const GlyphLocation *location,
+                                                 const GRect cursor) {
+  const int w2 = glyph->header.width_px;
+  const int h2 = glyph->header.height_px;
+  if (w2 == 0 || h2 == 0) {
+    return;
+  }
+  // The bitmap's position, in glyph pixels
+  const int x2 = 2 * cursor.origin.x + glyph->header.left_offset_px;
+  const int y2 = 2 * (cursor.origin.y + location->baseline_adjust) + glyph->header.top_offset_px;
+  // Arithmetic shifts round down for negative positions too
+  const int cx0 = x2 >> 1;
+  const int cy0 = y2 >> 1;
+  GRect cells = GRect(cx0, cy0, ((x2 + w2 + 1) >> 1) - cx0, ((y2 + h2 + 1) >> 1) - cy0);
+  grect_clip(&cells, &ctx->draw_state.clip_box);
+  if (cells.size.w <= 0 || cells.size.h <= 0) {
+    return;
+  }
+
+  GBitmap *dest = graphics_context_get_bitmap(ctx);
+  const bool white = !gcolor_equal(ctx->draw_state.text_color, GColorBlack);
+  const GlyphBlock *bits = (const GlyphBlock *)glyph->data;
+#ifdef CONFIG_TEXT_DETAIL
+  const int owner = text_detail_glyph_begin(dest);
+#endif
+  for (int cy = cells.origin.y; cy < cells.origin.y + cells.size.h; cy++) {
+    const GBitmapDataRowInfo row = gbitmap_get_data_row_info(dest, cy);
+    // Bit offsets of the cell row's two glyph rows, or -1 outside the glyph
+    const int sy = 2 * cy - y2;
+    const int base0 = (sy >= 0 && sy < h2) ? sy * w2 : -1;
+    const int base1 = (sy + 1 >= 0 && sy + 1 < h2) ? (sy + 1) * w2 : -1;
+    const int x_min = PBL_MAX(cells.origin.x, row.min_x);
+    const int x_max = PBL_MIN(cells.origin.x + cells.size.w - 1, row.max_x);
+    for (int cx = x_min; cx <= x_max; cx++) {
+      const int sx = 2 * cx - x2;
+      uint8_t pattern = 0;
+      for (int i = 0; i < 2; i++) {
+        if (sx + i < 0 || sx + i >= w2) {
+          continue;
+        }
+        if (base0 >= 0) {
+          const uint32_t bit = (uint32_t)(base0 + sx + i);
+          pattern |= ((bits[bit / 32] >> (bit % 32)) & 1U) << i;
+        }
+        if (base1 >= 0) {
+          const uint32_t bit = (uint32_t)(base1 + sx + i);
+          pattern |= ((bits[bit / 32] >> (bit % 32)) & 1U) << (i + 2);
+        }
+      }
+      if (pattern == 0) {
+        continue;
+      }
+      // At least two of the four glyph pixels ink the framebuffer pixel
+      if ((0xFEE8U >> pattern) & 1U) {
+        if (white) {
+          row.data[cx / 8] |= (uint8_t)(1U << (cx % 8));
+        } else {
+          row.data[cx / 8] &= (uint8_t)~(1U << (cx % 8));
+        }
+      }
+#ifdef CONFIG_TEXT_DETAIL
+      if (pattern != 0x0F && owner >= 0) {
+        text_detail_add(owner, cx, cy, pattern, white);
+      }
+#endif
+    }
+  }
+#ifdef CONFIG_TEXT_DETAIL
+  text_detail_glyph_end(owner);
+#endif
+  graphics_context_mark_dirty_rect(ctx, cells);
+}
+#endif
+
 // PRO TIP: if you have to modify this function, expect to waste the rest of your day on it
 void render_glyph(GContext *const ctx, const uint32_t codepoint, FontInfo *const font,
                   const GRect cursor) {
@@ -250,6 +333,13 @@ void render_glyph(GContext *const ctx, const uint32_t codepoint, FontInfo *const
       prv_render_color_glyph(ctx, glyph, &location, &glyph_target, &clipped_glyph_target);
       graphics_context_mark_dirty_rect(ctx, clipped_glyph_target);
     }
+    return;
+  }
+#endif
+
+#if CONFIG_SCREEN_COLOR_DEPTH_BITS == 1
+  if (text_resources_glyph_is_scale2(&location)) {
+    prv_render_scale2_glyph(ctx, glyph, &location, cursor);
     return;
   }
 #endif
