@@ -82,6 +82,58 @@ properties:
     maximum: 255
     default: 0
 
+  fast-differential:
+    type: boolean
+    description: |
+      The fast waveform drives only the pixels that change, for its main
+      phase alone, and leaves the others undriven: fast-frames frames of 20 ms
+      at the default frame rate, without the other phases' 5.
+
+  fast-frame-rate:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: |
+      Frame rate code of the fast waveform, as its LUT stores it, one nibble
+      per group of phases; 0x22 is the panel's own, 50 Hz.
+    maximum: 255
+    default: 0x22
+
+  source-voltage:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    description: |
+      VSH1, VSH2 and VSL codes of the fast waveform (command 0x04); the
+      panel's own are 0x41 (15 V), 0xA8 (5 V) and 0x32 (-15 V). The
+      controller allows up to 0x4B (17 V) and 0x3A (-17 V).
+    minItems: 3
+    maxItems: 3
+
+  topup-frames:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: |
+      Main phase of the idle top up, in frames; 0 for none. Once no update
+      has come for idle-ms, every pixel of the rows fast refreshes changed
+      since the last top up or clean refresh gets that much more drive
+      towards its colour: short drives leave greys behind.
+    maximum: 255
+    default: 0
+
+  full-refresh-on-idle:
+    type: boolean
+    description: |
+      The periodic clean refresh waits until no update has come for idle-ms,
+      or for twice full-refresh-interval updates.
+
+  idle-ms:
+    description: Time without updates before idle work, in ms.
+    maximum: 65535
+    default: 150
+
+  power-off-idle-ms:
+    description: |
+      Time without refreshes before the panel's analog supplies go off, in
+      ms; 0 to leave them on. The next refresh turns them on again, 80 ms
+      more.
+    default: 0
+
 required:
   - compatible
   - reg

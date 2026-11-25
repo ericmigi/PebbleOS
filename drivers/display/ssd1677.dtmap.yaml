@@ -31,3 +31,22 @@ args:
     default: 20
   - prop: fast-frames
     default: 0
+  - flag: fast-differential
+  - prop: fast-frame-rate
+    default: 0x22
+  - prop: source-voltage
+    index: 0
+    default: 0x41
+  - prop: source-voltage
+    index: 1
+    default: 0xA8
+  - prop: source-voltage
+    index: 2
+    default: 0x32
+  - prop: topup-frames
+    default: 0
+  - flag: full-refresh-on-idle
+  - prop: idle-ms
+    default: 150
+  - prop: power-off-idle-ms
+    default: 0
