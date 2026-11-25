@@ -1,14 +1,18 @@
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
 # SPDX-License-Identifier: Apache-2.0
 
-if PLATFORM_XTEINKX4
+if PLATFORM_XTEINKX4 || PLATFORM_XTEINKX4PRO
 
 config PLATFORM_NAME
+    default "xteinkx4pro" if PLATFORM_XTEINKX4PRO
     default "xteinkx4"
 
-# Apps are the X4's own RISC-V code
 config PLATFORM_ABI
+    default "xtensa" if PLATFORM_XTEINKX4PRO
     default "riscv32"
+
+config PLATFORM_TOUCH
+    default y if BOARD_XTEINK_X4_PRO
 
 config PLATFORM_DISPLAY_WIDTH
     default 240

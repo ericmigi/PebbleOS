@@ -206,6 +206,10 @@ void text_detail_add_edges(int owner, GPoint origin, const GRect *clip, const ui
   }
 }
 
+void text_detail_app_unload(void) {
+  prv_forget(0);
+}
+
 void text_detail_kernel_frame_begin(bool app_hidden) {
   prv_forget(OWNER_KERNEL);
   if (app_hidden) {

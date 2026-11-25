@@ -661,7 +661,7 @@ def configure(args):
             SDK_COMMON,
             "pebble_app.ld.template"
             if abi == "armv7m"
-            else f"pebble_app_{abi}.ld.template",
+            else "pebble_app_riscv32.ld.template",
         )
         with open(template) as f:
             ldscript_template = f.read()

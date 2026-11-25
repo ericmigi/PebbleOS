@@ -9,6 +9,9 @@
 #include <pbl/crc/crc.h>
 #include <pbl/devicetree.h>
 #include <pbl/drivers/display/ssd1677.h>
+#ifdef CONFIG_DISPLAY_UC8279_X4
+#include "uc8279_x4.h"
+#endif
 #include <pbl/kernel/assert.h>
 #include <pbl/kernel/delay.h>
 #include <pbl/kernel/irq.h>
@@ -507,9 +510,8 @@ static PBL_SECTION_RAM void prv_map_block_quarter1(const struct pbl_display_ssd1
 
 // A window of a frame, scaled and turned, to a RAM plane; rows a scale-up repeats are mapped once,
 // unless detail tells them apart, and several go out per transfer
-static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint8_t ram,
-                           const struct pbl_display_ssd1677_window *w,
-                           const struct plane_src *src) {
+static int prv_write_rows(const struct pbl_display_ssd1677 *epd,
+                          const struct pbl_display_ssd1677_window *w, const struct plane_src *src) {
   struct display_geometry g = prv_geometry(epd);
   bool flip = epd->state->flip;
   bool cells = src->cells && epd->cells != nullptr && epd->cell_start[epd->disp.props.height] != 0U;
@@ -518,11 +520,7 @@ static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint8_t ram,
   uint32_t fill = 0U;
   int32_t prev = INT32_MIN;
   bool prev_cells = false;
-  int ret;
-
-  if (w->x0 > w->x1 || w->y0 > w->y1) {
-    return 0;
-  }
+  int ret = 0;
 
   // The frame's pixels the window's columns show
   uint32_t lo = UINT32_MAX;
@@ -545,11 +543,6 @@ static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint8_t ram,
     for (uint32_t y = lo; y <= hi && lo <= hi; y++) {
       epd->cursor[y] = asc ? epd->cell_start[y] : epd->cell_start[y + 1U];
     }
-  }
-
-  ret = prv_ram_window(epd, w);
-  if (ret == 0) {
-    ret = prv_cmd(epd, ram, nullptr, 0U);
   }
 
   for (uint32_t cy = w->y0; ret == 0 && cy <= w->y1; cy++) {
@@ -596,6 +589,76 @@ static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint8_t ram,
   return ret;
 }
 
+static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint8_t ram,
+                           const struct pbl_display_ssd1677_window *w,
+                           const struct plane_src *src) {
+  if (w->x0 > w->x1 || w->y0 > w->y1) {
+    return 0;
+  }
+  int ret = prv_ram_window(epd, w);
+  if (ret == 0) {
+    ret = prv_cmd(epd, ram, nullptr, 0);
+  }
+  return ret != 0 ? ret : prv_write_rows(epd, w, src);
+}
+
+#ifdef CONFIG_DISPLAY_UC8279_X4
+bool pbl_display_ssd1677_text_grey_supported(const struct pbl_display *disp) {
+  const struct pbl_display_ssd1677 *epd = prv_epd(disp);
+  return !epd->state->uc8279 || epd->state->panel_id[0][3] == 0x68;
+}
+
+bool pbl_display_uc8279_motion_settle(const struct pbl_display *disp, bool arm) {
+  if (disp->ops != &pbl_display_ssd1677_ops) {
+    return false;
+  }
+  struct pbl_display_ssd1677_state *state = prv_epd(disp)->state;
+  pbl_mutex_lock(&state->lock, PBL_FOREVER);
+  bool pending = state->uc8279 && state->unsettled_pulses != 0U &&
+                 !state->next_frame.continuous;
+  if (pending && arm) {
+    state->need_half = true;
+  }
+  pbl_mutex_unlock(&state->lock);
+  return pending;
+}
+
+uint32_t pbl_display_uc8279_completed_drives(const struct pbl_display *disp) {
+  return prv_epd(disp)->state->completed_drives;
+}
+
+int epaper_write_command(const struct pbl_display_ssd1677 *epd, uint8_t command,
+                         const uint8_t *data, size_t len) {
+  return prv_cmd(epd, command, data, len);
+}
+
+int epaper_write_frame(const struct pbl_display_ssd1677 *epd, uint8_t command,
+                       const uint8_t *frame) {
+  const struct pbl_display_ssd1677_window w = prv_full_window(epd);
+  const struct plane_src src = {.frame = frame, .invert = frame == nullptr};
+  // The controller's first 120 gates are outside the visible panel.
+  const uint32_t chunk = 8U * (w.x1 + 1U);
+  int ret = prv_cmd(epd, command, nullptr, 0);
+  memset(epd->row, 0xff, chunk);
+  for (unsigned y = 0; ret == 0 && y < 120; y += 8) {
+    ret = pbl_spi_write(&epd->spi, epd->row, chunk);
+  }
+  if (frame == nullptr) {
+    for (unsigned y = 0; ret == 0 && y < epd->panel_width; y += 8) {
+      ret = pbl_spi_write(&epd->spi, epd->row, chunk);
+    }
+    return ret;
+  }
+  return ret != 0 ? ret : prv_write_rows(epd, &w, &src);
+}
+
+int epaper_write_window(const struct pbl_display_ssd1677 *epd, uint8_t command,
+                        const uint8_t *frame, const struct pbl_display_ssd1677_window *window) {
+  int ret = prv_cmd(epd, command, nullptr, 0);
+  return ret != 0 ? ret : prv_write_rows(epd, window, &(struct plane_src){.frame = frame});
+}
+#endif
+
 static bool prv_has_idle_work(const struct pbl_display_ssd1677 *epd) {
   return epd->touched != nullptr || epd->touched_rows != nullptr || epd->full_on_idle ||
          epd->power_off_ms != 0U;
@@ -622,6 +685,14 @@ static void prv_end(const struct pbl_display *disp, int status) {
   }
   state->idle_since_ms = (uint32_t)pbl_uptime_ms();
   state->last_refresh_ms = (uint16_t)(state->idle_since_ms - state->refresh_start_ms);
+#ifdef CONFIG_SHELL
+  if (status == 0 && !state->own) {
+    if (state->completed_updates++ == 0U) {
+      state->first_update_ms = state->idle_since_ms;
+    }
+    state->last_update_ms = state->idle_since_ms;
+  }
+#endif
   // Without a frame copy the planes are re-synced first, from the framebuffer
   if (prv_epd(disp)->shadow == nullptr) {
     state->post_status = status;
@@ -731,6 +802,21 @@ static int prv_init(const struct pbl_display *disp) {
     return ret;
   }
 
+  state->disp = disp;
+  state->need_half = true;
+  pbl_mutex_init(&state->lock);
+  pbl_delayed_work_init(&state->idle, prv_idle_work);
+
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  ret = uc8279_x4_probe(epd);
+  if (ret != 0) {
+    return ret;
+  }
+  if (state->uc8279) {
+    return uc8279_x4_init(epd);
+  }
+#endif
+
   // BUSY drops when a refresh ends
   edge = ((epd->busy.flags & PBL_GPIO_ACTIVE_LOW) != 0U) ? PBL_IRQ_TYPE_EDGE_RISING
                                                          : PBL_IRQ_TYPE_EDGE_FALLING;
@@ -742,12 +828,9 @@ static int prv_init(const struct pbl_display *disp) {
     return -ENODEV;
   }
 
-  state->disp = disp;
   state->refreshing = false;
   state->own = false;
   state->dirty_valid = false;
-  pbl_mutex_init(&state->lock);
-  pbl_delayed_work_init(&state->idle, prv_idle_work);
   pbl_work_init(&state->post, prv_post);
   state->post_pending = false;
   state->resync_valid = false;
@@ -763,10 +846,13 @@ static int prv_init(const struct pbl_display *disp) {
   state->wave.frame_rate = epd->fast_frame_rate;
   memcpy(state->wave.source, epd->source, sizeof(state->wave.source));
   state->wave.topup_frames = epd->topup_frames;
+  if (epd->fast_differential && epd->fast_frame_rate == 0x22U && epd->topup_frames != 0U &&
+      epd->full_on_idle) {
+    state->motion_frames = CONFIG_DISPLAY_SSD1677_MOTION_FRAMES;
+  }
   // Four extra frames on a large change (~138 ms total) clear white-to-black and black-to-white
   // app-switch ghosts in a single drive without needing a second idle pass
   state->wave.large_frames = 4U;
-  state->need_half = true;
   state->powered = false;
   state->stale_valid = false;
   state->updates = 0U;
@@ -800,6 +886,18 @@ static int prv_disable(const struct pbl_display *disp) {
     return -EBUSY;
   }
 
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  if (epd->state->uc8279) {
+    if (pbl_display_update_in_progress(disp)) {
+      pbl_mutex_unlock(&epd->state->lock);
+      return -EBUSY;
+    }
+    ret = uc8279_x4_power_off(epd);
+    epd->state->need_half = true;
+    pbl_mutex_unlock(&epd->state->lock);
+    return ret;
+  }
+#endif
   ret = prv_cmd1(epd, CMD_BORDER, BORDER_INIT);
   if (ret == 0) {
     ret = prv_cmd1(epd, CMD_UPDATE_CTRL2, SEQ_POWER_OFF);
@@ -823,6 +921,12 @@ static int prv_set_rotated(const struct pbl_display *disp, bool rotated) {
   const struct pbl_display_ssd1677 *epd = prv_epd(disp);
   struct display_geometry g = prv_geometry(epd);
 
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  if (epd->state->uc8279 && pbl_display_update_in_progress(disp)) {
+    return -EBUSY;
+  }
+#endif
+
   // The whole panel moves: the shadow no longer says what it shows
   if (epd->state->flip != rotated) {
     epd->state->need_half = true;
@@ -836,24 +940,32 @@ static int prv_set_rotated(const struct pbl_display *disp, bool rotated) {
   return 0;
 }
 
-static enum refresh_mode prv_mode(const struct pbl_display_ssd1677 *epd) {
+static enum refresh_mode prv_mode(const struct pbl_display_ssd1677 *epd, bool small) {
   struct pbl_display_ssd1677_state *state = epd->state;
+  uint32_t now = (uint32_t)pbl_uptime_ms();
 
+  state->short_drive = state->motion_frames != 0U && small && state->powered &&
+                       !state->need_half && now - state->last_user_start_ms <= 150U;
+  state->last_user_start_ms = now;
   if (state->need_half) {
     state->need_half = false;
     state->updates = 0U;
     return REFRESH_HALF;
   }
 
-  // The periodic clean refresh is the half one too, the stock firmware's only one: the OTP full
-  // waveform (22=F7) takes 3.7 s here
-  // On idle if asked, unless that never comes
-  if (epd->full_interval != 0U && ++state->updates >= epd->full_interval &&
-      (!epd->full_on_idle || state->updates >= 2U * epd->full_interval)) {
-    state->updates = 0U;
-    return REFRESH_HALF;
+  if (epd->full_interval != 0U && ++state->updates >= epd->full_interval) {
+    if (state->updates == epd->full_interval) {
+      state->clean_due_ms = now;
+    }
+    // Continuous small motion can defer a due clean for four seconds, capped at 120 extra drives.
+    uint32_t extra = state->short_drive && now - state->clean_due_ms < 4000U
+                         ? 120U
+                         : epd->full_interval;
+    if (!epd->full_on_idle || state->updates >= epd->full_interval + extra) {
+      state->updates = 0U;
+      return REFRESH_HALF;
+    }
   }
-
   return REFRESH_FAST;
 }
 
@@ -977,6 +1089,7 @@ static int prv_refresh(const struct pbl_display *disp, enum refresh_mode mode, b
     ret = prv_cmd1(epd, CMD_BORDER, BORDER_REFRESH);
   }
   if (ret == 0 && mode == REFRESH_HALF) {
+    state->topup_extra = 0U;
     ret = prv_cmd1(epd, CMD_TEMP_WRITE, HALF_TEMP);
   }
   // A half refresh loads the OTP waveforms over the LUT, so it goes in before every fast one
@@ -986,13 +1099,20 @@ static int prv_refresh(const struct pbl_display *disp, enum refresh_mode mode, b
       uint8_t phases[4];
 
       memcpy(phases, state->wave.phases, sizeof(phases));
+      if (state->short_drive && boost == 0U && state->motion_frames < phases[1]) {
+        uint8_t extra = phases[1] - state->motion_frames;
+        state->topup_extra = PBL_MAX(state->topup_extra, extra);
+        phases[1] = state->motion_frames;
+      }
       phases[1] = (uint8_t)PBL_MIN(phases[1] + boost, UINT8_MAX);
       seq = state->powered ? SEQ_CUSTOM_LUT : (SEQ_CLOCK_ANALOG | SEQ_CUSTOM_LUT);
       ret = prv_load_lut(epd, phases, state->wave.vs);
     }
   }
   if (ret == 0 && mode == REFRESH_TOPUP) {
-    const uint8_t phases[4] = {0U, state->wave.topup_frames, 0U, 0U};
+    uint8_t frames = (uint8_t)PBL_MIN(state->wave.topup_frames + state->topup_extra, UINT8_MAX);
+    const uint8_t phases[4] = {0U, frames, 0U, 0U};
+    state->topup_extra = 0U;
 
     seq = state->powered ? SEQ_CUSTOM_LUT : (SEQ_CLOCK_ANALOG | SEQ_CUSTOM_LUT);
     ret = prv_load_lut(epd, phases, s_diff_vs);
@@ -1435,7 +1555,8 @@ static int prv_update_nocopy(const struct pbl_display_ssd1677 *epd,
     return 1;
   }
 
-  enum refresh_mode mode = prv_mode(epd);
+  enum refresh_mode mode = prv_mode(
+      epd, first >= 0 && (uint32_t)(last - first + 1) * 2U < epd->disp.props.height);
 
   if (mode == REFRESH_HALF) {
     ret = prv_write_half_nocopy(epd);
@@ -1517,9 +1638,30 @@ static void prv_idle_work(struct pbl_work *work) {
 
   // An update holds it: its refresh starts the wait over at its end
   if (pbl_mutex_lock(&state->lock, PBL_NO_WAIT) != 0) {
+#ifdef CONFIG_DISPLAY_UC8279_X4
+    if (state->uc8279) {
+      (void)pbl_delayed_work_reschedule(&pbl_sys_workq, &state->idle, PBL_MSEC(100));
+    }
+#endif
     return;
   }
 
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  if (epd->state->uc8279) {
+    uint32_t elapsed = (uint32_t)pbl_uptime_ms() - state->idle_since_ms;
+    if (elapsed >= epd->power_off_ms) {
+      if (uc8279_x4_power_off(epd) != 0) {
+        state->need_half = true;
+        (void)pbl_delayed_work_reschedule(&pbl_sys_workq, &state->idle, PBL_MSEC(1000));
+      }
+    } else {
+      (void)pbl_delayed_work_reschedule(&pbl_sys_workq, &state->idle,
+                                        PBL_MSEC(epd->power_off_ms - elapsed));
+    }
+    pbl_mutex_unlock(&state->lock);
+    return;
+  }
+#endif
   // A refresh in flight starts the wait over at its end
   if (state->refreshing || state->post_pending || pbl_display_update_in_progress(disp) ||
       pbl_gpio_get(&epd->busy) != 0) {
@@ -1786,6 +1928,29 @@ static int prv_update(const struct pbl_display *disp, const struct pbl_display_b
 
   (void)pbl_mutex_lock(&state->lock, PBL_FOREVER);
 
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  if (epd->state->uc8279) {
+    struct pbl_display_buffer next = *buf;
+    if (buf->detail && buf->detail->grey) {
+      enum uc8279_grey_action action;
+      ret = uc8279_x4_prepare_grey(epd, buf, &action);
+      if (ret != 0 || action == UC8279_GREY_SKIP) {
+        pbl_mutex_unlock(&state->lock);
+        if (ret == 0) {
+          pbl_display_complete(disp, 0);
+        }
+        return ret;
+      }
+      if (action == UC8279_GREY_CLEAR) {
+        next.detail = nullptr;
+      }
+    }
+    uc8279_x4_submit(epd, &next, y0, y1);
+    pbl_mutex_unlock(&state->lock);
+    return 0;
+  }
+#endif
+
   // The driver's own refresh, a top up or a clean one, ends first, and its re-sync
   if (PBL_POLL_SLEEP_MS(!state->refreshing && !state->post_pending, 1U, WAIT_IDLE_TIMEOUT_MS) !=
       0) {
@@ -1859,7 +2024,8 @@ static int prv_update(const struct pbl_display *disp, const struct pbl_display_b
     return 0;
   }
 
-  mode = prv_mode(epd);
+  mode = prv_mode(
+      epd, first >= 0 && (uint32_t)(last - first + 1) * 2U < epd->disp.props.height);
 
   // A change over half the frame or more, as an app switch, gets the top up's drive at once, so
   // large fields come out as dark as the ones the top up finishes; smaller ones are left for it
@@ -1947,6 +2113,11 @@ int pbl_display_ssd1677_grey(const struct pbl_display *disp, const uint8_t *old_
   struct pbl_display_ssd1677_window w = prv_window(epd, 0U, disp->props.height - 1U);
   int ret;
 
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  if (epd->state->uc8279) {
+    return -ENOTSUP;
+  }
+#endif
   (void)pbl_mutex_lock(&state->lock, PBL_FOREVER);
   (void)PBL_POLL_SLEEP_MS(!state->refreshing && pbl_gpio_get(&epd->busy) == 0, 1U,
                           REFRESH_TIMEOUT_MS);
@@ -2014,12 +2185,91 @@ static int prv_cmd_stat(const struct pbl_shell *sh, size_t argc, char **argv) {
   if (epd == nullptr) {
     return -ENODEV;
   }
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  if (epd->state->uc8279) {
+    pbl_mutex_lock(&epd->state->lock, PBL_FOREVER);
+  }
+  for (unsigned i = 0; i < 2; i++) {
+    const uint8_t *p = epd->state->panel_id[i];
+    pbl_shell_print(sh, "display FLG %02x VER %02x %02x %02x %02x %02x", p[0], p[1], p[2], p[3],
+                    p[4], p[5]);
+  }
+#endif
   pbl_shell_print(sh, "last update: write %u ms, refresh %u ms, re-sync %u ms",
                   epd->state->last_write_ms, epd->state->last_refresh_ms, epd->state->last_post_ms);
-  pbl_shell_print(sh, "fast %u frames, large +%u, top up %u, frame rate 0x%02x",
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  if (epd->state->uc8279) {
+    pbl_shell_print(sh, "last drive window %ux%u", epd->state->last_window_width,
+                    epd->state->last_window_height);
+    static const char *const modes[] = {
+      "none", "full monochrome OTP", "partial monochrome OTP", "four-level grayscale",
+      "gray-to-monochrome transition", "monochrome motion"
+    };
+    pbl_shell_print(sh, "UC8279 %s; %u completed drives, panel power %s",
+                    modes[epd->state->last_drive], (unsigned)epd->state->completed_drives,
+                    epd->state->powered ? "on" : "off");
+    pbl_shell_print(sh, "%u full monochrome drives", (unsigned)epd->state->full_mono_drives);
+    pbl_shell_print(sh, "%u motion drives", (unsigned)epd->state->motion_drives);
+    pbl_shell_print(sh, "sparse updates %u, regions %u, bytes saved across both planes %u",
+                    (unsigned)epd->state->sparse_updates, (unsigned)epd->state->sparse_regions,
+                    (unsigned)epd->state->sparse_bytes_saved);
+    if (epd->state->measured_motion_drives) {
+      pbl_shell_print(sh, "motion trigger to BUSY release: %u ms across %u drives, minimum %u ms",
+                      (unsigned)epd->state->motion_busy_ms,
+                      (unsigned)epd->state->measured_motion_drives,
+                      (unsigned)epd->state->motion_min_busy_ms);
+    }
+    pbl_mutex_unlock(&epd->state->lock);
+    return 0;
+  }
+#endif
+  if (argc == 2 && strcmp(argv[1], "reset") != 0) {
+    return -EINVAL;
+  }
+  pbl_irq_lock();
+  if (argc == 2) {
+    epd->state->completed_updates = 0;
+    epd->state->first_update_ms = 0;
+    epd->state->last_update_ms = 0;
+  }
+  uint32_t completed = epd->state->completed_updates;
+  uint32_t elapsed = epd->state->last_update_ms - epd->state->first_update_ms;
+  pbl_irq_unlock();
+  pbl_shell_print(sh, "%u completed updates, first to last %u ms", (unsigned)completed,
+                  (unsigned)elapsed);
+  pbl_shell_print(sh, "fast %u frames, large +%u, top up %u, frame rate 0x%02x, motion %u",
                   epd->state->wave.phases[1], epd->state->wave.large_frames,
-                  epd->state->wave.topup_frames, epd->state->wave.frame_rate);
+                  epd->state->wave.topup_frames, epd->state->wave.frame_rate,
+                  epd->state->motion_frames);
 
+  return 0;
+}
+
+// Short differential drives apply only to consecutive small changes.
+static int prv_cmd_motion(const struct pbl_shell *sh, size_t argc, char **argv) {
+  const struct pbl_display_ssd1677 *epd = prv_first();
+  unsigned long frames;
+  if (epd == nullptr || !epd->fast_differential) {
+    return -ENOTSUP;
+  }
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  if (epd->state->uc8279) {
+    return -ENOTSUP;
+  }
+#endif
+  if (pbl_shell_strtoul(argv[1], &frames) != 0 || frames > 2U) {
+    return -EINVAL;
+  }
+  (void)pbl_mutex_lock(&epd->state->lock, PBL_FOREVER);
+  if (frames != 0U && (epd->state->wave.frame_rate != 0x22U || !epd->full_on_idle ||
+                       epd->state->wave.topup_frames == 0U)) {
+    pbl_mutex_unlock(&epd->state->lock);
+    return -ENOTSUP;
+  }
+  epd->state->motion_frames = (uint8_t)frames;
+  epd->state->short_drive = false;
+  pbl_mutex_unlock(&epd->state->lock);
+  pbl_shell_print(sh, "Motion frames %u (0 uses the normal waveform)", (unsigned)frames);
   return 0;
 }
 
@@ -2031,6 +2281,12 @@ static int prv_cmd_tune(const struct pbl_shell *sh, size_t argc, char **argv) {
   if (epd == nullptr) {
     return -ENODEV;
   }
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  if (epd->state->uc8279) {
+    pbl_shell_error(sh, "UC8279 uses its built-in monochrome waveforms");
+    return -ENOTSUP;
+  }
+#endif
   for (size_t i = 1U; i < argc; i++) {
     if (pbl_shell_strtoul(argv[i], &v[i - 1U]) != 0 || v[i - 1U] > 255U) {
       pbl_shell_error(sh, "invalid '%s'", argv[i]);
@@ -2038,6 +2294,7 @@ static int prv_cmd_tune(const struct pbl_shell *sh, size_t argc, char **argv) {
     }
   }
   (void)pbl_mutex_lock(&epd->state->lock, PBL_FOREVER);
+  epd->state->motion_frames = 0U;
   epd->state->wave.phases[1] = (uint8_t)v[0];
   epd->state->wave.large_frames = (uint8_t)v[1];
   epd->state->wave.topup_frames = (uint8_t)v[2];
@@ -2057,6 +2314,12 @@ static int prv_cmd_resync(const struct pbl_shell *sh, size_t argc, char **argv) 
   if (epd == nullptr) {
     return -ENODEV;
   }
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  if (epd->state->uc8279) {
+    pbl_shell_error(sh, "UC8279 uses its built-in monochrome waveforms");
+    return -ENOTSUP;
+  }
+#endif
   if (pbl_shell_strtoul(argv[1], &v) != 0 || v > 2U) {
     pbl_shell_error(sh, "0, 1 or 2");
     return -EINVAL;
@@ -2066,16 +2329,16 @@ static int prv_cmd_resync(const struct pbl_shell *sh, size_t argc, char **argv) 
   return 0;
 }
 
-static const struct pbl_shell_cmd sub_epd[] = {
-  PBL_SHELL_CMD_ARG(resync, nullptr, "Planes re-synced after a refresh: 0 both, 1 old, 2 new",
-                    prv_cmd_resync, 2, 0),
-  PBL_SHELL_CMD(stat, nullptr, "Times of the last update and the waveform", prv_cmd_stat),
-  PBL_SHELL_CMD_ARG(tune, nullptr, "Set <fast> <large extra> <top up> frames [frame rate]",
-                    prv_cmd_tune, 4, 1),
-  PBL_SHELL_SUBCMD_SET_END,
-};
-
-PBL_SHELL_CMD_REGISTER(epd, sub_epd, "SSD1677 e-paper timing and waveform", nullptr);
+PBL_SHELL_SUBCMD_SET_CREATE(sub_epd);
+PBL_SHELL_CMD_REGISTER(epd, sub_epd, "E-paper controller timing and waveform", nullptr);
+PBL_SHELL_SUBCMD_ADD(sub_epd, motion, nullptr, "Small animation drive frames: 0 normal, 1 or 2 fast",
+                    prv_cmd_motion, 2, 0);
+PBL_SHELL_SUBCMD_ADD(sub_epd, resync, nullptr, "Planes re-synced: 0 both, 1 old, 2 new",
+                     prv_cmd_resync, 2, 0);
+PBL_SHELL_SUBCMD_ADD(sub_epd, stat, nullptr, "Update timings and completed drives [reset]",
+                    prv_cmd_stat, 1, 1);
+PBL_SHELL_SUBCMD_ADD(sub_epd, tune, nullptr,
+                     "Set <fast> <large extra> <top up> frames [frame rate]", prv_cmd_tune, 4, 1);
 #endif
 
 #include PBL_DT_INSTANCES(solomon_ssd1677)

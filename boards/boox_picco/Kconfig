@@ -5,3 +5,4 @@ config BOARD_BOOX_PICCO
     bool
     default y
     select REGULATOR
+    select SOC_ESP32S3_OCTAL_MEMORY

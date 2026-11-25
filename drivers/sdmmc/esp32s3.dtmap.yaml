@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+compatible: esp,esp32s3-sdmmc
+config: SDMMC_ESP32S3
+class: device
+define: PBL_SDMMC_DEFINE
+args:
+  - reg: 0
+  - pinctrl: default
+  - gpio: power
+    optional: true
+    field: power

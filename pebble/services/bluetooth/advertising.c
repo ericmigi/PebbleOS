@@ -88,8 +88,15 @@ static int prv_set_discovery_fields(void) {
     uint8_t color;
     uint8_t fw_version[3];
     uint8_t flags;
+#ifdef CONFIG_BOARD_XTEINK_X4_PRO
+    char board_revision[5];
+#endif
   } mfg_data = {
     .company_id = CONFIG_BT_VENDOR_ID,
+#ifdef CONFIG_BOARD_XTEINK_X4_PRO
+    // The legacy hardware number is shared with Flint. Append the board revision for discovery.
+    .board_revision = "x4pro",
+#endif
     .hw_platform = TINTIN_METADATA.hw_platform,
     .color = mfg_info_get_watch_color(),
     .fw_version = {PBL_VERSION_MAJOR, PBL_VERSION_MINOR, PBL_VERSION_PATCH},

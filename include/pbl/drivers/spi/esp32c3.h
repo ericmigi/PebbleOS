@@ -30,7 +30,7 @@
 /** @cond INTERNAL_HIDDEN */
 struct pbl_spi_esp32c3_state {
   uint32_t max_hz;
-  uint32_t mode;
+  uint32_t fifo_timeout_us;
   uint32_t hz;
   uint32_t clock;
 };

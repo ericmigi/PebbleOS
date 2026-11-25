@@ -24,7 +24,7 @@ static int prv_configure_pin(const struct pbl_pinctrl_esp32c3 *ctrl, uint32_t pi
   uint32_t mask = IO_MUX_FUN_PD | IO_MUX_FUN_PU | IO_MUX_FUN_IE | IO_MUX_MCU_SEL_MASK;
   uint32_t iomux = PBL_FIELD_PREP(IO_MUX_MCU_SEL_MASK, IO_MUX_FUNC_GPIO);
 
-  if (pad >= ESP32C3_GPIO_NUM_PINS) {
+  if (!esp32_gpio_pad_available(pad)) {
     return -EINVAL;
   }
   if (ESP32C3_GPIO_IS_USB(pad)) {
@@ -78,7 +78,7 @@ static int prv_configure(const struct pbl_pinctrl_controller *ctrl, const uint32
 }
 
 static int prv_get(const struct pbl_pinctrl_controller *ctrl, uint16_t pad, uint32_t *val) {
-  if (pad >= ESP32C3_GPIO_NUM_PINS) {
+  if (!esp32_gpio_pad_available(pad)) {
     return -EINVAL;
   }
 

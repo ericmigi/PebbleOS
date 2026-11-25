@@ -1,6 +1,8 @@
 /* SPDX-FileCopyrightText: 2024 Google LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include "epd_bench.h"
+
 #include <pbl/kernel/assert.h>
 #include <pbl/logging/logging.h>
 #include <pbl/profiler/profiler.h>
@@ -62,6 +64,12 @@ static GPoint s_app_framebuffer_mirror_origin;
 
 //! Set by the completion of a flush whose rows did not reach the panel.
 static bool s_flush_failed;
+
+#ifdef CONFIG_SERVICE_COMPOSITOR_COALESCE_FRAMES
+// The app owns its framebuffer again after a skipped frame. Request the latest when the panel frees.
+static bool s_app_redraw_after_flush;
+#endif
+static void prv_send_app_render_request(bool reuse_frame);
 
 typedef enum {
   //! Render the app with no transparent modals straight through
@@ -434,6 +442,12 @@ PBL_T_STATIC void prv_handle_display_update_complete(bool success) {
     s_deferred_render.app.pending = false;
     compositor_app_render_ready();
   }
+#ifdef CONFIG_SERVICE_COMPOSITOR_COALESCE_FRAMES
+  if (s_app_redraw_after_flush && !compositor_display_update_in_progress()) {
+    s_app_redraw_after_flush = false;
+    prv_send_app_render_request(true);
+  }
+#endif
   prv_notify_frozen();
 }
 
@@ -459,16 +473,26 @@ static bool prv_should_render(void) {
   return !(compositor_display_update_in_progress() || s_framebuffer_frozen);
 }
 
-static void prv_release_app_framebuffer(void) {
+static void prv_release_app_framebuffer(bool skipped) {
   // Inform the app that the render is complete and it is safe to write into its framebuffer again.
   PebbleEvent event = {
     .type = PEBBLE_RENDER_FINISHED_EVENT,
+    .render.reuse_frame = skipped,
   };
   process_manager_send_event_to_process(PebbleTask_App, &event);
 }
 
 void compositor_app_render_ready(void) {
   if (!prv_should_render()) {
+#ifdef CONFIG_SERVICE_COMPOSITOR_COALESCE_FRAMES
+    if (compositor_display_update_in_progress() && !s_framebuffer_frozen &&
+        !s_deferred_render.transition_start.pending && !s_deferred_render.app.pending &&
+        (s_state == CompositorState_App || s_state == CompositorState_AppAndModal)) {
+      s_app_redraw_after_flush = true;
+      prv_release_app_framebuffer(true);
+      return;
+    }
+#endif
     s_deferred_render.app.pending = true;
     return;
   }
@@ -497,7 +521,12 @@ void compositor_app_render_ready(void) {
   if (s_state == CompositorState_App || s_state == CompositorState_AppAndModal) {
     // compositor_render_app also renders modals if the CompositorState_AppAndModal as that state
     // indicates that there are transparent modals that allow the app framebuffer to show through
+#ifdef CONFIG_SERVICE_COMPOSITOR_COALESCE_FRAMES
+    s_app_redraw_after_flush = false;
+#endif
+    uint32_t start = epd_appbench_compose_start();
     compositor_render_app();
+    epd_appbench_compose_done(start);
     s_flush_failed = false;
     prv_compositor_flush();
     // The flush dropped the mirror; an app frame copied one to one and sent restores it
@@ -507,16 +536,19 @@ void compositor_app_render_ready(void) {
 
   // Draw the modal if in the Modal state
   if (s_state == CompositorState_Modal) {
+    uint32_t start = epd_appbench_compose_start();
     compositor_render_modal();
+    epd_appbench_compose_done(start);
     prv_compositor_flush();
   }
 
-  prv_release_app_framebuffer();
+  prv_release_app_framebuffer(false);
 }
 
-static void prv_send_app_render_request(void) {
+static void prv_send_app_render_request(bool reuse_frame) {
   PebbleEvent event = {
     .type = PEBBLE_RENDER_REQUEST_EVENT,
+    .render.reuse_frame = reuse_frame,
   };
   process_manager_send_event_to_process(PebbleTask_App, &event);
 }
@@ -538,7 +570,7 @@ void compositor_modal_render_ready(void) {
     compositor_render_modal();
     prv_compositor_flush();
   } else if (s_state == CompositorState_AppAndModal) {
-    prv_send_app_render_request();
+    prv_send_app_render_request(false);
   }
 }
 
@@ -596,7 +628,7 @@ static void prv_finish_transition(void) {
     // framebuffer from changing while it's being animated but now that we're done we want to make
     // sure it's always available to the app. This is only needed when we're finishing to a modal
     // since compositor_app_render_ready will also release the framebuffer.
-    prv_release_app_framebuffer();
+    prv_release_app_framebuffer(false);
   } else {
     s_state = CompositorState_App;
     compositor_app_render_ready();
@@ -639,7 +671,7 @@ void compositor_transition(const CompositorTransition *compositor_animation) {
   if (!prv_should_render() || s_deferred_render.animation.pending) {
     if (s_deferred_render.app.pending) {
       s_deferred_render.app.pending = false;
-      prv_release_app_framebuffer();
+      prv_release_app_framebuffer(false);
     }
 
     s_deferred_render.transition_start.pending = true;
@@ -672,7 +704,7 @@ void compositor_transition(const CompositorTransition *compositor_animation) {
     // app could be redrawing itself right now. Since we can't query this, instead trigger the
     // app to redraw itself. This way we will cause an PEBBLE_RENDER_READY_EVENT in the very near
     // future, regardless of the app's state.
-    prv_send_app_render_request();
+    prv_send_app_render_request(false);
 
     // Now wait for the ready event.
     s_state = CompositorState_AppTransitionPending;
@@ -696,12 +728,21 @@ void compositor_transition(const CompositorTransition *compositor_animation) {
     // app could be redrawing itself right now. Since we can't query this, instead trigger the
     // app to redraw itself. This way we will cause an PEBBLE_RENDER_READY_EVENT in the very near
     // future, regardless of the app's state.
-    prv_send_app_render_request();
+    prv_send_app_render_request(false);
 
     // Now wait for the ready event.
     s_state = CompositorState_AppTransitionPending;
   }
 }
+
+#ifdef CONFIG_SERVICE_BOOT_SPLASH_POWER_OFF
+FrameBuffer *compositor_take_shutdown_framebuffer(void) {
+  PBL_ASSERT_TASK(PebbleTask_KernelMain);
+  compositor_display_prepare_shutdown();
+  // An active screenshot can still be reading the frozen pixels on another thread.
+  return s_framebuffer_frozen ? nullptr : &s_framebuffer;
+}
+#endif
 
 FrameBuffer *compositor_get_framebuffer(void) {
   return &s_framebuffer;

@@ -37,6 +37,20 @@ properties:
     maxItems: 1
     description: BUSY, active while the controller works.
 
+  probe-data-gpios:
+    maxItems: 1
+    description: Bidirectional SPI data pin for identifying alternate X4 Pro panel controllers.
+
+  probe-clock-gpios:
+    maxItems: 1
+    description: SPI clock pin used during GPIO controller identification.
+
+  pinctrl-0:
+    description: Restore these SPI pins after identification.
+
+  pinctrl-names:
+    const: default
+
   width:
     $ref: /schemas/types.yaml#/definitions/uint32
     description: Framebuffer width, in pixels.
@@ -133,6 +147,10 @@ properties:
       ms; 0 to leave them on. The next refresh turns them on again, 80 ms
       more.
     default: 0
+
+dependencies:
+  probe-data-gpios: [probe-clock-gpios, pinctrl-0, pinctrl-names]
+  probe-clock-gpios: [probe-data-gpios]
 
 required:
   - compatible

@@ -17,6 +17,11 @@
  */
 void compositor_display_init(void);
 
+#ifdef CONFIG_SERVICE_BOOT_SPLASH_POWER_OFF
+//! Stop further display submissions and ignore completions still queued on KernelMain.
+void compositor_display_prepare_shutdown(void);
+#endif
+
 /**
  * @brief Flush the dirty region of the system framebuffer to the display.
  *

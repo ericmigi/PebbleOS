@@ -50,3 +50,12 @@ args:
     default: 150
   - prop: power-off-idle-ms
     default: 0
+  - gpio: probe-data
+    optional: true
+    field: probe_data
+  - gpio: probe-clock
+    optional: true
+    field: probe_clock
+  - pinctrl: default
+    optional: true
+    field: probe_restore

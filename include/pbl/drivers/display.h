@@ -127,6 +127,8 @@ struct pbl_display_buffer {
   uint32_t pitch;
   /** Detail of the rows, or NULL. */
   const struct pbl_display_detail *detail;
+  /** Keep a live monochrome image visible during maintenance when the controller permits it. */
+  bool continuous;
 };
 
 /**

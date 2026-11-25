@@ -8,6 +8,27 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+enum esp_bt_init_stage {
+  EspBtStage_None,
+  EspBtStage_Power,
+  EspBtStage_Rom,
+  EspBtStage_Osi,
+  EspBtStage_Clocks,
+  EspBtStage_Reset,
+  EspBtStage_LpClock,
+  EspBtStage_LpDiv,
+  EspBtStage_ControllerInit,
+  EspBtStage_Features,
+  EspBtStage_Phy,
+  EspBtStage_UsbPll,
+  EspBtStage_Calibrate,
+  EspBtStage_Enable,
+  EspBtStage_Coex,
+};
+
+void esp_bt_init_stage(enum esp_bt_init_stage stage);
+uint32_t esp_bt_measured_cpu_mhz(void);
+
 /** @brief What the controller calls, in its task. */
 struct esp32c3_bt_vhci_callbacks {
   /** The controller can take another packet. */
@@ -45,6 +66,7 @@ bool esp32c3_bt_failed(void);
 // The unguarded steps of esp32c3_bt_start(), derived from ESP-IDF's
 int esp32c3_bt_controller_init(void);
 int esp32c3_bt_controller_enable(void);
+int esp32c3_bt_controller_disable(void);
 bool esp32c3_bt_controller_enabled(void);
 const char *esp32c3_bt_controller_version(void);
 /** @brief The source and the call count of the controller's i-th interrupt, while there is one. */

@@ -93,6 +93,17 @@ config APP_NATIVE_RISCV32
       the system from them: this port has no userspace or PMP, so an app
       runs privileged, as a built-in app does, and can write any memory.
 
+config APP_NATIVE_XTENSA
+    bool "Run Xtensa LX7 apps natively"
+    depends on CPU_XTENSA && PLATFORM_ABI = "xtensa" && !RECOVERY_FW
+    default y
+    help
+      Run trusted windowed-ABI apps from the instruction alias of app RAM.
+      These apps execute with the same memory access as the firmware.
+
+config APP_NATIVE_ALIASED
+    def_bool APP_NATIVE_RISCV32 || APP_NATIVE_XTENSA
+
 # RAM of the apps of the legacy SDK execution environments. 2.x apps are
 # rectangular; 3.x apps are those of the frozen platform of the same shape
 # and colour depth. A platform states the RAM of its own, 4.x, apps.
@@ -194,7 +205,7 @@ config WATCHFACE_BEZEL
 
 choice SYSTEM_UI_FONT_CHOICE
     prompt "Typeface of the system UI"
-    default SYSTEM_UI_FONT_ATKINSON_NEXT if PLATFORM_XTEINKX4
+    default SYSTEM_UI_FONT_ATKINSON_NEXT if PLATFORM_XTEINKX4 || PLATFORM_XTEINKX4PRO
     default SYSTEM_UI_FONT_GOTHIC
     help
       The system's own windows and the built-in apps that fill the display
@@ -309,7 +320,7 @@ config TEXT_DETAIL_GLYPHS
     help
       At twice the display's size, the glyphs of the system UI's text on
       the display, 20 bytes each, which the grey pass draws the levels of.
-      A frame with more text gets no grey.
+      Further glyphs use their monochrome coverage when the pool is full.
 
 config TEXT_DETAIL_CELLS
     int "Edge pixels recorded"

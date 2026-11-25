@@ -32,6 +32,7 @@ extern void nimble_gattc_op_queue_init(void);
 static PBL_SEM_DEFINE(s_host_started, 0, 1);
 static PBL_SEM_DEFINE(s_host_stopped, 0, 1);
 static struct ble_hs_stop_listener s_listener;
+static int s_stop_status;
 
 typedef enum {
   DriverStateStopped,
@@ -97,6 +98,7 @@ static int prv_ensure_addr(void) {
 }
 
 static void prv_ble_hs_stop_cb(int status, void *arg) {
+  s_stop_status = status;
   pbl_sem_give(&s_host_stopped);
 }
 
@@ -144,6 +146,13 @@ bool pbl_bt_start(struct pbl_bt_config *config) {
     return false;
   }
 
+#ifdef CONFIG_NIMBLE_HCI_ESP32C3
+  if (nimble_port_pebble_hci_resume() != 0) {
+    (void)ble_gatts_reset();
+    s_driver_state = DriverStateStopped;
+    return false;
+  }
+#endif
   ble_hs_sched_start();
   f_rc = (pbl_sem_take(&s_host_started, PBL_MSEC(s_bt_stack_start_stop_timeout_ms)) == 0);
   if (!f_rc) {
@@ -177,7 +186,11 @@ err:
 
   s_driver_state = DriverStateStopped;
   (void)ble_gatts_reset();
-
+#ifdef CONFIG_NIMBLE_HCI_ESP32C3
+  if (s_stop_status == 0) {
+    nimble_port_pebble_hci_suspend();
+  }
+#endif
   return false;
 }
 
@@ -192,4 +205,9 @@ void pbl_bt_stop(void) {
   s_driver_state = DriverStateStopped;
 
   ble_gatts_reset();
+#ifdef CONFIG_NIMBLE_HCI_ESP32C3
+  if (s_stop_status == 0) {
+    nimble_port_pebble_hci_suspend();
+  }
+#endif
 }

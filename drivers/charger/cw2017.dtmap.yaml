@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+compatible: xteink,x4-pro-charger
+config: CHARGER_X4_PRO
+class: charger
+define: X4PRO_CHARGER_DEFINE
+args:
+  - parent: i2c
+  - reg: 0
+  - gpio: stat

@@ -33,11 +33,15 @@
 #define XT_FRAME_FCR      96
 #define XT_FRAME_FSR      100
 #define XT_FRAME_F0       104
-#define XT_FRAME_SIZE     176
-#define XT_FRAME_REDZONE  32
-#define XT_FRAME_ALLOC    (XT_FRAME_SIZE + XT_FRAME_REDZONE)
+
+#define XT_FRAME_SCOMPARE1 168
+
+#define XT_FRAME_SIZE    176
+#define XT_FRAME_REDZONE 32
+#define XT_FRAME_ALLOC   (XT_FRAME_SIZE + XT_FRAME_REDZONE)
 
 #ifndef __ASSEMBLER__
+#include <stddef.h>
 #include <stdint.h>
 
 struct xtensa_frame {
@@ -53,9 +57,11 @@ struct xtensa_frame {
   uint32_t fcr;
   uint32_t fsr;
   uint32_t f[16];
-  uint32_t pad[2];
+  uint32_t scompare1;
+  uint32_t pad;
 };
 
+static_assert(offsetof(struct xtensa_frame, scompare1) == XT_FRAME_SCOMPARE1, "SCOMPARE1 offset");
 static_assert(sizeof(struct xtensa_frame) == XT_FRAME_SIZE, "trap frame layout");
 static_assert(XT_FRAME_SIZE % 16 == 0, "the ABI wants sp 16-byte aligned");
 static_assert(XT_FRAME_ALLOC % 16 == 0, "total allocation must stay 16-byte aligned");

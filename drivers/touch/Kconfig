@@ -27,6 +27,13 @@ config TOUCH_CST816
     help
       Support for the Hynitron CST816 touch controller.
 
+config TOUCH_GT911
+    bool "Goodix GT911"
+    default y
+    depends on DT_HAS_GOODIX_GT911_ENABLED
+    select I2C
+    select REGULATOR
+
 config TOUCH_FT6236
     bool "FocalTech FT6x36"
     default y

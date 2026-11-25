@@ -51,6 +51,7 @@ enum pbl_input_type : uint8_t {
 
 /** @brief @ref PBL_INPUT_EV_KEY codes, with the Linux input event code values. */
 enum : uint16_t {
+  PBL_INPUT_KEY_HOME = 102,
   PBL_INPUT_KEY_UP = 103,
   PBL_INPUT_KEY_DOWN = 108,
   /** Power key, apart from the four Pebble buttons. */

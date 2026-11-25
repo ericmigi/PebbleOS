@@ -3,19 +3,19 @@
 
 /dts-v1/;
 
-// Xteink X4 Pro e-reader: ESP32-S3 (16 MiB flash, 8 MiB octal PSRAM), 800x480 SSD1677 e-paper,
+// Xteink X4 Pro e-reader: ESP32-S3 (16 MiB flash, 8 MiB octal PSRAM), 800x480 e-paper,
 // digital buttons, GT911 touch, dual PWM frontlight, CW2017 fuel gauge, BM8563 RTC.
 // Hardware pinout confirmed by CrossPoint / FreeInk (MIT).
 //
 // Peripherals wired on the board awaiting drivers:
-//   - I2C0 (SDA=GPIO39, SCL=GPIO38, 400 kHz): GT911 touch @0x5D (INT=GPIO10, RST=GPIO4,
-//     power=GPIO2 active-LOW), CW2017 fuel gauge @0x63, BM8563 RTC @0x51
+//   - Shared I2C bus: CW2017 fuel gauge @0x63, BM8563 RTC @0x51
 //   - Dual PWM frontlight (LEDC 25 kHz / 10-bit, active-HIGH): Cool=GPIO8, Warm=GPIO9
 //   - Charger STAT: GPIO21 (active-HIGH)
 //   - SDMMC 1-bit: CLK=GPIO41, CMD=GPIO42, D0=GPIO40, power=GPIO5 (active-LOW)
 
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
+#include <dt-bindings/interrupt-controller/irq.h>
 #include <dt-bindings/pinctrl/esp32s3-pinctrl.h>
 
 #include "espressif/esp32s3.dtsi"
@@ -26,6 +26,20 @@
 
 	chosen {
 		stdout-path = &usb_serial_jtag;
+	};
+
+	frontlight: frontlight {
+		compatible = "xteink,x4-pro-frontlight";
+		pinctrl-0 = <&light_pins>;
+		pinctrl-names = "default";
+	};
+
+	i2c_touch: i2c {
+		compatible = "i2c-gpio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		sda-gpios = <&gpio 39 (GPIO_OPEN_DRAIN | GPIO_PULL_UP)>;
+		scl-gpios = <&gpio 38 (GPIO_OPEN_DRAIN | GPIO_PULL_UP)>;
 	};
 
 	// Master peripheral rail / power latch: driven HIGH from reset
@@ -41,6 +55,7 @@
 	touch_power: regulator-touch {
 		compatible = "regulator-fixed";
 		regulator-name = "touch-power";
+		startup-delay-us = <50000>;
 		gpios = <&gpio 2 GPIO_ACTIVE_LOW>;
 		regulator-always-on;
 	};
@@ -49,10 +64,10 @@
 	gpio-keys {
 		compatible = "gpio-keys";
 
-		button-up {
-			label = "Up";
+		button-back {
+			label = "Back";
 			gpios = <&gpio 0 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-			linux,code = <KEY_UP>;
+			linux,code = <KEY_BACK>;
 			debounce-interval = <20>;
 		};
 
@@ -63,10 +78,10 @@
 			debounce-interval = <20>;
 		};
 
-		button-power {
-			label = "Power";
+		button-up {
+			label = "Up";
 			gpios = <&gpio 3 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-			linux,code = <KEY_POWER>;
+			linux,code = <KEY_UP>;
 			debounce-interval = <20>;
 		};
 	};
@@ -97,8 +112,14 @@
 };
 
 &io_mux {
+	light_pins: frontlight-pins {
+		out-pins {
+			pinmux = <ESP32S3_PINMUX(8, ESP32S3_NOSIG, 77)>,
+				 <ESP32S3_PINMUX(9, ESP32S3_NOSIG, 78)>;
+		};
+	};
 	spi2_default: spi2-default-state {
-		// Write-only SSD1677 bus: SCLK=GPIO12, MOSI=GPIO11
+		// Panel writes use SPI; controller identification reads back on GPIO11.
 		out-pins {
 			pinmux = <ESP32S3_PINMUX(12, ESP32S3_NOSIG, ESP32S3_SIG_FSPICLK)>,
 				 <ESP32S3_PINMUX(11, ESP32S3_NOSIG, ESP32S3_SIG_FSPID)>;
@@ -115,8 +136,12 @@
 	display: display@0 {
 		compatible = "solomon,ssd1677";
 		reg = <0>;
-		spi-max-frequency = <10000000>;
+		spi-max-frequency = <16000000>;
 		dc-gpios = <&gpio 18 GPIO_ACTIVE_HIGH>;
+		probe-data-gpios = <&gpio 11 GPIO_PULL_UP>;
+		probe-clock-gpios = <&gpio 12 GPIO_ACTIVE_HIGH>;
+		pinctrl-0 = <&spi2_default>;
+		pinctrl-names = "default";
 		reset-gpios = <&gpio 14 GPIO_ACTIVE_LOW>;
 		busy-gpios = <&gpio 6 GPIO_ACTIVE_HIGH>;
 		width = <480>;
@@ -130,4 +155,61 @@
 		full-refresh-on-idle;
 		power-off-idle-ms = <15000>;
 	};
+};
+
+&i2c_touch {
+	board_charger: fuel-gauge@63 {
+		compatible = "xteink,x4-pro-charger";
+		reg = <0x63>;
+		stat-gpios = <&gpio 21 GPIO_ACTIVE_HIGH>;
+	};
+
+	board_rtc: rtc@51 {
+		compatible = "nxp,pcf8563";
+		reg = <0x51>;
+	};
+
+	touchscreen: touchscreen@5d {
+		compatible = "goodix,gt911";
+		reg = <0x5d>;
+		interrupt-parent = <&gpio>;
+		interrupts = <10 IRQ_TYPE_EDGE_BOTH>;
+		irq-gpios = <&gpio 10 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio 4 GPIO_ACTIVE_LOW>;
+		AVDD28-supply = <&touch_power>;
+		touchscreen-size-x = <480>;
+		touchscreen-size-y = <800>;
+	};
+};
+
+&io_mux {
+	sd_default: sd-default-state {
+		clock {
+			pinmux = <ESP32S3_PINMUX(41, ESP32S3_NOSIG, 173)>;
+		};
+		data {
+			// Slot 1 command and DAT0 in both directions.
+			pinmux = <ESP32S3_PINMUX(42, 179, 179)>,
+				 <ESP32S3_PINMUX(40, 213, 213)>;
+			bias-pull-up;
+		};
+	};
+};
+
+/ {
+	sdmmc: mmc@60028000 {
+		compatible = "esp,esp32s3-sdmmc";
+		reg = <0x60028000 0x1000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&sd_default>;
+		power-gpios = <&gpio 5 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&cpu0 {
+	clock-frequency = <240000000>;
+};
+
+&clk_apb {
+	clock-frequency = <80000000>;
 };

@@ -64,10 +64,12 @@ void xtensa_fault(struct xtensa_frame *frame) {
   const char *cause = (exccause < PBL_ARRAY_SIZE(s_causes) && s_causes[exccause] != nullptr)
                           ? s_causes[exccause]
                           : "unknown";
+  // In the windowed ABI a0 carries CALLINC in place of the return address's top two bits.
+  const uintptr_t lr = frame->a[0] ? (frame->pc & 0xc0000000U) | (frame->a[0] & 0x3fffffffU) : 0;
   const struct pbl_fault_info info = {
     .reason = xtensa_isr_nesting > 1U ? PBL_FAULT_HARD : prv_reason(exccause),
     .pc = frame->pc,
-    .lr = frame->a[0],
+    .lr = lr,
     .addr = frame->excvaddr,
   };
 

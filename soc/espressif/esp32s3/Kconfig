@@ -9,3 +9,8 @@ config SOC_ESP32S3_POWER_LATCH
       Drive the pin of the board's power_latch node high as the first
       thing early init does, before devices initialize, so a battery-powered
       board stays on once the power button is released.
+
+config SOC_ESP32S3_OCTAL_MEMORY
+    bool
+    help
+      The memory bus occupies GPIO26 through GPIO37 on this board.

@@ -23,6 +23,7 @@
 #include <applib/app_launch_reason.h>
 #include <applib/app_message/app_message_internal.h>
 #include <applib/fonts/fonts.h>
+#include <applib/graphics/text_detail.h>
 #include <applib/ui/dialogs/dialog.h>
 #include <applib/ui/dialogs/simple_dialog.h>
 #include <kernel/event_loop.h>
@@ -236,11 +237,11 @@ static size_t prv_get_app_segment_size(const PebbleProcessMd *app_md) {
   }
 }
 
-#ifdef CONFIG_APP_NATIVE_RISCV32
+#ifdef CONFIG_APP_NATIVE_ALIASED
 // Without userspace a native app's firmware calls run on its own stack. 4 KiB
 // also puts the app it is carved in front of on a 4 KiB boundary, which its
 // lui relocations need.
-#define APP_STACK_NATIVE_RISCV32_SIZE (4 * 1024)
+#define APP_STACK_NATIVE_SIZE (4 * 1024)
 #endif
 
 static size_t prv_get_app_stack_size(const PebbleProcessMd *app_md) {
@@ -249,9 +250,9 @@ static size_t prv_get_app_stack_size(const PebbleProcessMd *app_md) {
     return APP_STACK_JS_SIZE;
   }
 #endif
-#ifdef CONFIG_APP_NATIVE_RISCV32
+#ifdef CONFIG_APP_NATIVE_ALIASED
   if ((app_md->process_storage == ProcessStorageFlash) && process_metadata_runs_natively(app_md)) {
-    return APP_STACK_NATIVE_RISCV32_SIZE;
+    return APP_STACK_NATIVE_SIZE;
   }
 #endif
   // Only 4x/System apps get the larger stack: their segment (CONFIG_APP_RAM_*)
@@ -492,6 +493,9 @@ static void prv_app_cleanup(void) {
   process_manager_process_cleanup(PebbleTask_App);
 
   // Perform app specific cleanup
+#ifdef CONFIG_TEXT_DETAIL
+  text_detail_app_unload();
+#endif
   app_idle_timeout_stop();
 #ifndef CONFIG_RECOVERY_FW
   app_inbox_service_unregister_all();

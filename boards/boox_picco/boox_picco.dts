@@ -7,7 +7,7 @@
 // digital buttons, TMA525C touch, I2C dual frontlight, SGM41562 charger, PCF8563 RTC, QMI8658 IMU.
 // Hardware pinout confirmed by CrossPoint / FreeInk (MIT).
 //
-// Peripherals wired on the board awaiting drivers:
+// Board peripheral wiring:
 //   - I2C0 (SDA=GPIO7, SCL=GPIO8, 400 kHz): TMA525C touch @0x24 (INT=GPIO11, RST=GPIO10),
 //     PiccoDualLed frontlight @0x38, SGM41562 charger @0x03, PCF8563 RTC @0x51,
 //     QMI8658 6-axis IMU @0x6A
@@ -27,6 +27,19 @@
 
 	chosen {
 		stdout-path = &usb_serial_jtag;
+	};
+
+	i2c_periph: i2c {
+		compatible = "i2c-gpio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		sda-gpios = <&gpio 7 (GPIO_OPEN_DRAIN | GPIO_PULL_UP)>;
+		scl-gpios = <&gpio 8 (GPIO_OPEN_DRAIN | GPIO_PULL_UP)>;
+
+		board_rtc: rtc@51 {
+			compatible = "nxp,pcf8563";
+			reg = <0x51>;
+		};
 	};
 
 	// Master power latch: driven HIGH from reset
@@ -137,5 +150,29 @@
 		topup-frames = <10>;
 		full-refresh-on-idle;
 		power-off-idle-ms = <15000>;
+	};
+};
+
+&io_mux {
+	sd_default: sd-default-state {
+		clock {
+			pinmux = <ESP32S3_PINMUX(41, ESP32S3_NOSIG, 173)>;
+		};
+		data {
+			// Slot 1 command and DAT0 in both directions.
+			pinmux = <ESP32S3_PINMUX(42, 179, 179)>,
+				 <ESP32S3_PINMUX(40, 213, 213)>;
+			bias-pull-up;
+		};
+	};
+};
+
+/ {
+	sdmmc: mmc@60028000 {
+		compatible = "esp,esp32s3-sdmmc";
+		reg = <0x60028000 0x1000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&sd_default>;
+		// Card power comes from the always-on shared peripheral rail.
 	};
 };

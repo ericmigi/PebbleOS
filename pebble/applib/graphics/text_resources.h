@@ -119,6 +119,10 @@ typedef struct FontCache {
   uint8_t glyph_buffer[sizeof(LineCacheData) + CACHE_GLYPH_SIZE];
   KeyedCircularCache line_cache;
   const FontResource *cached_font;
+#ifdef CONFIG_MMAP_RESOURCES
+  const uint8_t *mapped_font;
+  size_t mapped_font_size;
+#endif
   //! g_font_language_generation the cache was filled under
   uint32_t language_generation;
   //! System font that language_fonts extend, and the slots already fetched for it

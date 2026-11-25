@@ -62,7 +62,12 @@ typedef struct {
 
   SamsaCpu cpu;
   SamsaRegion regions[3];
+#if defined(CONFIG_SAMSA_BIND_SDK_DISPATCH) && defined(SAMSA_INSTRUCTION_HOOK)
+  SamsaHook hooks[2];
+  bool checked_sdk_dispatch;
+#else
   SamsaHook hooks[1];
+#endif
   bool running;
   uint32_t last_call;
 
@@ -618,11 +623,68 @@ static const char *prv_stop_name(SamsaStop stop) {
   process_manager_task_exit();
 }
 
+#if defined(CONFIG_SAMSA_BIND_SDK_DISPATCH) && defined(SAMSA_INSTRUCTION_HOOK)
+// jump_to_pbl_function emitted by the ARM SDK. Its final bx ip enters a host hook.
+// Only bind the exact sequence and its literal, both in the process's ordinary RAM.
+static bool prv_is_sdk_dispatch(const Process *p, uint32_t pc) {
+  static const uint16_t code[] = {
+    0xa303, // adr r3, .+16
+    0x6818, // ldr r0, [r3]
+    0x4408, // add r0, r1
+    0x6802, // ldr r2, [r0]
+    0x4694, // mov ip, r2
+    0xbc0f, // pop {r0-r3}
+    0x4760, // bx ip
+  };
+  const size_t size = p->ram_end - p->ram;
+  const uint32_t offset = pc - p->ram_base;
+  return !(pc & 3) && size >= 20 && offset <= size - 20 &&
+         memcmp(p->ram + offset, code, sizeof(code)) == 0 &&
+         samsa_rd32((const uint8_t *)p->ram + offset + 16) == GUEST_TABLE;
+}
+
+static bool prv_run_sdk_dispatch(Process *p) {
+  SamsaCpu *cpu = &p->cpu;
+  const uint32_t pc = cpu->r[15];
+  const uint32_t stack = cpu->r[13] - p->ram_base;
+  const uint32_t offset = cpu->r[1];
+  const size_t size = p->ram_end - p->ram;
+  // Fall back to instruction execution for IT blocks, modified code, indirect
+  // bus or faulting accesses. Leave all guest effects to Samsa in those cases.
+  if (cpu->itstate || (stack & 3) || size < 16 || stack > size - 16 ||
+      (offset & 3) || offset / 4 >= g_samsa_num_thunks || !prv_is_sdk_dispatch(p, pc)) {
+    cpu->num_hooks = 1;
+    return false;
+  }
+  const uint32_t hook = g_samsa_sdk_table[offset / 4];
+  memcpy(cpu->r, p->ram + stack, 4 * sizeof(uint32_t));
+  cpu->r[13] += 16;
+  cpu->r[12] = hook;
+  cpu->r[15] = hook & ~1U;
+  cpu->fault_pc = pc + 12;
+  return true;
+}
+#endif
+
 static SamsaStop prv_handler(SamsaCpu *cpu, SamsaStop why, void *ctx) {
   if (why != SAMSA_STOP_HOOK) {
     return why;
   }
   Process *p = cpu->user;
+#if defined(CONFIG_SAMSA_BIND_SDK_DISPATCH) && defined(SAMSA_INSTRUCTION_HOOK)
+  if (cpu->num_hooks == 2 && p->hooks[1].start == (cpu->r[15] | 1U)) {
+    if (!prv_run_sdk_dispatch(p)) {
+      return SAMSA_STOP_BUDGET;
+    }
+  } else if (!p->checked_sdk_dispatch) {
+    p->checked_sdk_dispatch = true;
+    uint32_t pc = cpu->fault_pc - 12;
+    if (prv_is_sdk_dispatch(p, pc)) {
+      p->hooks[1] = (SamsaHook)SAMSA_INSTRUCTION_HOOK(pc);
+      cpu->num_hooks = 2;
+    }
+  }
+#endif
   const uint32_t idx = (cpu->r[15] - SAMSA_GUEST_HOOKS) / 4;
   if (idx >= g_samsa_num_thunks) {
     return SAMSA_STOP_USAGE;
@@ -701,7 +763,10 @@ static void prv_reset(Process *p) {
   p->cpu.regions = p->regions;
   p->cpu.num_regions = PBL_ARRAY_SIZE(p->regions);
   p->cpu.hooks = p->hooks;
-  p->cpu.num_hooks = PBL_ARRAY_SIZE(p->hooks);
+  p->cpu.num_hooks = 1;
+#if defined(CONFIG_SAMSA_BIND_SDK_DISPATCH) && defined(SAMSA_INSTRUCTION_HOOK)
+  p->checked_sdk_dispatch = false;
+#endif
   p->cpu.bus = &s_bus;
   p->cpu.user = p;
 }

@@ -5,3 +5,6 @@ config BOARD_XTEINK_X4_PRO
     bool
     default y
     select REGULATOR
+    select I2C
+    select SOC_ESP32S3_OCTAL_MEMORY
+    select SOC_HAS_POWER_OFF

@@ -97,7 +97,10 @@ class Build:
     @property
     def qemu_esp32(self):
         """Runs on Espressif's QEMU rather than the Pebble one."""
-        return bool(self.config.get("CONFIG_BOARD_QEMU_ESP32C3"))
+        return bool(
+            self.config.get("CONFIG_BOARD_QEMU_ESP32C3")
+            or self.config.get("CONFIG_BOARD_QEMU_ESP32S3")
+        )
 
     @property
     def native(self):

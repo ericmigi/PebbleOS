@@ -328,3 +328,24 @@ void test_loader__takes_odd_entries_as_slots_without_lui_relocations(void) {
 
   cl_assert_equal_i(prv_get32(&s_dst[0x21]), (uint32_t)(uintptr_t)&s_dst[0x30]);
 }
+
+void test_loader__resolves_xtensa_long_call_literals(void) {
+  const void *const imports[] = {nullptr, &s_src[0]};
+  s_img.imports = imports;
+  s_img.import_count = 2;
+  prv_add_reloc(0x21, PBL_LOADER_XTENSA_IMPORT_BASE + 4);
+  cl_assert_equal_i(prv_load(nullptr, nullptr), 0);
+  cl_assert_equal_i(prv_get32(&s_dst[0x21]), (uint32_t)(uintptr_t)&s_src[0]);
+}
+
+void test_loader__rejects_unknown_xtensa_imports(void) {
+  const void *const imports[] = {nullptr};
+  s_img.imports = imports;
+  s_img.import_count = 1;
+  prv_add_reloc(0x20, PBL_LOADER_XTENSA_IMPORT_BASE);
+  cl_assert_equal_i(prv_load(nullptr, nullptr), -EINVAL);
+  prv_put32(&s_src[0x20], PBL_LOADER_XTENSA_IMPORT_BASE + 1);
+  cl_assert_equal_i(prv_load(nullptr, nullptr), -EINVAL);
+  prv_put32(&s_src[0x20], PBL_LOADER_XTENSA_IMPORT_BASE + 4);
+  cl_assert_equal_i(prv_load(nullptr, nullptr), -EINVAL);
+}

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+compatible: xteink,x4-pro-frontlight
+config: BACKLIGHT_X4_PRO
+class: backlight
+define: X4PRO_LIGHT_DEFINE
+args:
+  - pinctrl: default

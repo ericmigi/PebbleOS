@@ -13,7 +13,8 @@
 			compatible = "esp,xtensa-lx7";
 			device_type = "cpu";
 			reg = <0>;
-			clock-frequency = <240000000>;
+			// Stay on XTAL until board-specific PLL and voltage setup is available.
+			clock-frequency = <40000000>;
 		};
 	};
 
@@ -28,7 +29,7 @@
 		clk_apb: clk-apb {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
-			clock-frequency = <80000000>;
+			clock-frequency = <40000000>;
 		};
 	};
 

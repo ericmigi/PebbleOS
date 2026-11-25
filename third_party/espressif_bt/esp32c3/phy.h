@@ -48,3 +48,4 @@ void esp_wifi_bt_power_domain_on(void);
 void periph_bt_module_enable(void);
 void periph_bt_module_reset(void);
 void esp_phy_enable(esp_phy_modem_t modem);
+void esp_phy_disable(esp_phy_modem_t modem);

@@ -257,29 +257,78 @@ void boot_splash_stop(void) {
 #include <pbl/kernel/work.h>
 
 // Longest a frame being sent may take to finish
-#define POWER_OFF_WAIT_MS 2000U
+#define POWER_OFF_WAIT_MS 10000U
 
-// E-paper keeps its image once off: the logo rather than whatever the UI showed last
-static void prv_power_off_prepare(enum pbl_sys_off_mode mode, void *user_data) {
-  // A display may finish its updates on the system queue
-  if (pbl_workq_is_current(&pbl_sys_workq)) {
+#ifdef CONFIG_SERVICE_COMPOSITOR
+#include <stdatomic.h>
+
+#include <pbl/kernel/sem.h>
+#include <pbl/services/compositor/compositor.h>
+
+#include <applib/graphics/framebuffer.h>
+#include <kernel/event_loop.h>
+
+static PBL_SEM_DEFINE(s_shutdown_done, 0, 1);
+static atomic_bool s_shutdown_requested;
+
+static void prv_draw_shutdown(void) {
+  FrameBuffer *frame = compositor_take_shutdown_framebuffer();
+  if (frame == nullptr || prv_pitch() != FRAMEBUFFER_BYTES_PER_ROW ||
+      prv_fb_bytes() > sizeof(frame->buffer) ||
+      PBL_POLL_SLEEP_MS(!pbl_display_update_in_progress(DISPLAY), 10U, POWER_OFF_WAIT_MS) != 0) {
     return;
   }
 
   struct pbl_display_buffer fb = {
-    .data = pbl_malloc(prv_fb_bytes()),
-    .pitch = prv_pitch(),
+    .data = (uint8_t *)framebuffer_get_line(frame, 0),
+    .pitch = FRAMEBUFFER_BYTES_PER_ROW,
   };
+  prv_clear(&fb);
+  prv_draw_logo(&fb);
+  prv_show(&fb);
+}
 
-  if (fb.data == nullptr) {
+static void prv_draw_shutdown_cb(void *unused) {
+  if (atomic_exchange(&s_shutdown_requested, false)) {
+    prv_draw_shutdown();
+    pbl_sem_give(&s_shutdown_done);
+  }
+}
+#endif
+
+// The persistent display retains the final logo after its power is removed.
+static void prv_power_off_prepare(enum pbl_sys_off_mode mode, void *user_data) {
+  if (pbl_workq_is_current(&pbl_sys_workq)) {
     return;
   }
 
-  prv_clear(&fb);
-  prv_draw_logo(&fb);
-  (void)PBL_POLL_SLEEP_MS(!pbl_display_update_in_progress(DISPLAY), 10U, POWER_OFF_WAIT_MS);
-  prv_show(&fb);
-  pbl_free(fb.data);
+#ifdef CONFIG_SERVICE_COMPOSITOR
+  if (launcher_task_is_current_task()) {
+    prv_draw_shutdown();
+    return;
+  }
+
+  atomic_store(&s_shutdown_requested, true);
+  launcher_task_add_callback(prv_draw_shutdown_cb, nullptr);
+  if (pbl_sem_take(&s_shutdown_done, PBL_MSEC(POWER_OFF_WAIT_MS)) != 0 &&
+      !atomic_exchange(&s_shutdown_requested, false)) {
+    // KernelMain already claimed the request. Let the physical drive finish before power-off.
+    (void)pbl_sem_take(&s_shutdown_done, PBL_FOREVER);
+  }
+#else
+  struct pbl_display_buffer fb = {
+    .data = pbl_malloc(prv_fb_bytes()),
+    .pitch = prv_pitch(),
+  };
+  if (fb.data != nullptr) {
+    prv_clear(&fb);
+    prv_draw_logo(&fb);
+    if (PBL_POLL_SLEEP_MS(!pbl_display_update_in_progress(DISPLAY), 10U, POWER_OFF_WAIT_MS) == 0) {
+      prv_show(&fb);
+    }
+    pbl_free(fb.data);
+  }
+#endif
 }
 
 // After the services stopped, before the display is disabled

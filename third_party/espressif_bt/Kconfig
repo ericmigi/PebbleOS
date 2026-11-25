@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 menuconfig ESP32C3_BT
-    bool "Espressif ESP32-C3 Bluetooth LE controller"
-    depends on SOC_ESP32C3
+    bool "Espressif ESP32-C3/S3 Bluetooth LE controller"
+    depends on SOC_ESP32C3 || SOC_ESP32S3
     select CRC
     select MCU
     select RNG

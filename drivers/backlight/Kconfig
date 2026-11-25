@@ -53,6 +53,13 @@ config BACKLIGHT_QEMU
       Emulated backlight controller that writes to the QEMU
       pebble-display MMIO registers.
 
+config BACKLIGHT_X4_PRO
+    bool "X4 Pro warm and cool frontlight"
+    default y
+    depends on DT_HAS_XTEINK_X4_PRO_FRONTLIGHT_ENABLED
+    select PINCTRL
+    select BACKLIGHT_HAS_COLOR
+
 config BACKLIGHT_POSIX
     bool "POSIX"
     default y if SOC_POSIX

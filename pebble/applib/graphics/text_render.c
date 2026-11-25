@@ -417,7 +417,7 @@ static SCALE2_HOT void prv_write_scaled2_rows(GBitmap *dest, int y, int x0, int 
 // Draws a 1-bit glyph into a framebuffer at twice its size: each pixel as 2x2, except the edge
 // pixels of a FEATURE_EDGES glyph, whose four are inked from their own coverage (at least half)
 static SCALE2_HOT PBL_NOINLINE void prv_render_glyph_scaled2(GContext *ctx, const GlyphData *glyph,
-                                                             bool has_edges, const GRect *target,
+                                                             bool has_edges, bool light, const GRect *target,
                                                              const GRect *clipped) {
   const int w = glyph->header.width_px;
   const int h = glyph->header.height_px;
@@ -431,11 +431,6 @@ static SCALE2_HOT PBL_NOINLINE void prv_render_glyph_scaled2(GContext *ctx, cons
   const unsigned count = has_edges ? (unsigned)(edges[0] | (edges[1] << 8)) : 0U;
   edges += 2;
   unsigned e = 0;
-#ifdef CONFIG_TEXT_DETAIL
-  const bool light = !white && text_detail_ink_light();
-#else
-  const bool light = false;
-#endif
   // One mask word per 16 glyph pixels
   const int words = (w + 15) / 16;
   const int x0 = 2 * target->origin.x;
@@ -542,15 +537,16 @@ void render_glyph(GContext *const ctx, const uint32_t codepoint, FontInfo *const
     if (!text_resources_glyph_is_scale2(&location) && clipped_glyph_target.size.w > 0 &&
         clipped_glyph_target.size.h > 0) {
       const bool edges = text_resources_glyph_has_edges(&location);
-      prv_render_glyph_scaled2(ctx, glyph, edges, &glyph_target, &clipped_glyph_target);
-      graphics_context_mark_dirty_rect(ctx, clipped_glyph_target);
+      bool light = false;
 #ifdef CONFIG_TEXT_DETAIL
       if (edges && gcolor_equal(ctx->draw_state.text_color, GColorBlack)) {
-        text_detail_add_glyph(dest_bitmap, font, codepoint, glyph_target.origin,
-                              (uint8_t)PBL_MIN(glyph->header.height_px, UINT8_MAX),
-                              &clipped_glyph_target);
+        light = text_detail_add_glyph(dest_bitmap, font, codepoint, glyph_target.origin,
+                                      (uint8_t)PBL_MIN(glyph->header.height_px, UINT8_MAX),
+                                      &clipped_glyph_target);
       }
 #endif
+      prv_render_glyph_scaled2(ctx, glyph, edges, light, &glyph_target, &clipped_glyph_target);
+      graphics_context_mark_dirty_rect(ctx, clipped_glyph_target);
     }
     return;
   }

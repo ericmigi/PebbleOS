@@ -11,3 +11,5 @@ args:
   - reg: 0
   - reg: 0
     of: esp,gpio-matrix
+  - prop: ngpios
+    of: esp,gpio-matrix

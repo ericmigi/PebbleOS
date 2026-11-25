@@ -242,7 +242,7 @@ void pbl_fault_fatal_record(const struct pbl_fault_info *info) {
   }
 }
 
-#ifdef CONFIG_APP_NATIVE_RISCV32
+#ifdef CONFIG_APP_NATIVE_ALIASED
 // Every thread is privileged here, with no userspace: a fault is a native process's own when it
 // is in the code the process loaded, on the process's task. The process is then killed rather
 // than the firmware. A fault in firmware code it called is still fatal.
@@ -256,8 +256,8 @@ bool pbl_fault_thread_is_own(const struct pbl_fault_info *info) {
       !process_metadata_runs_natively(context->app_md)) {
     return false;
   }
-  const uintptr_t start = (uintptr_t)context->load_start + PROCESS_RISCV32_CODE_OFFSET;
-  const uintptr_t end = (uintptr_t)context->load_end + PROCESS_RISCV32_CODE_OFFSET;
+  const uintptr_t start = (uintptr_t)context->load_start + CONFIG_RAMFUNC_ALIAS_OFFSET;
+  const uintptr_t end = (uintptr_t)context->load_end + CONFIG_RAMFUNC_ALIAS_OFFSET;
   return (info->pc >= start) && (info->pc < end);
 }
 #endif

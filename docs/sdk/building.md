@@ -19,15 +19,14 @@ native watchapps, all under `build/`:
   firmware headers. Only macros that alias an attribute or forward their
   arguments to a builtin can be exported.
 - `build/sdk/<abi>/lib/libpebble.a` — static library containing
-  trampolines that call the exported functions in flash
+  trampolines that call the exported functions in flash, or Xtensa import
+  symbols that the loader resolves directly to those functions
 - `build/pebble/pebble.auto.c` — `g_pbl_system_tbl`, the table of function
   pointers the trampolines use to find an exported function's address;
   compiled into the firmware image
 
-The headers and the library are those of the ABI (`armv7m`, or `riscv32`
-for xteinkx4), not of the platform the firmware is built for: every board of
-the ABI generates the
-same ones. The few defines that differ between platforms, such as
+Every board with the same ABI generates the same headers and library.
+The ABIs are `armv7m`, `riscv32` for xteinkx4, and `xtensa` for xteinkx4pro. The few defines that differ between platforms, such as
 `PBL_IF_COLOR_ELSE` and `PBL_PLATFORM_TYPE_CURRENT`, are decided in the
 header by the defines the app build passes for the platform it builds for
 (`PBL_COLOR`, `PBL_PLATFORM_EMERY`, ...), see {doc}`exporting`. The generator
@@ -101,3 +100,72 @@ sdk-core/
 
 Both app builds read `package.json` through `sdk/tools/pebble_project.py`;
 the CMake build's steps are `sdk/tools/pebble_build.py`.
+
+## Xteink X4 Pro native apps
+
+For a new X4 Pro app, build the native `xteinkx4pro` variant. It runs
+directly on the Xtensa LX7 and supports the hardware touchscreen. Existing
+Flint ARM apps run through Samsa on normal X4 Pro firmware. To export the native SDK separately
+from the stock watch SDK, install Espressif's ESP32-S3 GCC toolchain and the
+usual ARM GCC app toolchain, then run this in the PebbleOS checkout with its
+Python development environment active:
+
+```shell
+pbl sdk 4.47-xteink --board xteink_x4_pro --tarball -b build-sdk-pro
+export PEBBLE_SDK="$PWD/build-sdk-pro/sdk-core/pebble"
+```
+
+The package contains `xtensa/lib/libpebble.a` and
+`xteinkx4pro/platform.json`. This board describes a 240×400 monochrome
+touch display. The emulator and Picco share its ABI but lack a touchscreen
+driver. For the hardware SDK, export from `xteink_x4_pro`.
+
+In an external CMake app, use the project layout in {doc}`app_build` and
+include `"xteinkx4pro"` in `pebble.targetPlatforms` in `package.json`.
+Build the native PBW with:
+
+```shell
+cmake -S /path/to/app -B build-app -G Ninja -DPEBBLE_PLATFORMS=xteinkx4pro
+cmake --build build-app
+```
+
+From the firmware checkout, install the PBW over a USB console by passing
+its serial device explicitly. The normal firmware must be running with
+the console Pebble protocol enabled. Close other clients of that port first.
+
+```shell
+python tools/install_xteink_pbw.py --port /dev/cu.usbmodemEXAMPLE build-app/my-app.pbw
+```
+
+To install on Espressif's QEMU, put its `qemu-system-xtensa` on `PATH`
+or set `PEBBLE_QEMU_ESP32S3_BIN` to the executable. Start the firmware in
+one terminal, then install from a second terminal using the same TCP port:
+
+```shell
+pbl configure --board qemu_esp32s3 -b build-pro-qemu
+pbl build -b build-pro-qemu
+pbl run -b build-pro-qemu --console-port 12345
+```
+
+```shell
+python tools/install_xteink_pbw.py --port socket://127.0.0.1:12345 build-app/my-app.pbw
+```
+
+### Ship a native and ARM variant together
+
+To support both the Pro and Flint from one codebase, list `"xteinkx4pro"`
+and `"flint"` in `pebble.targetPlatforms`. Export both toolchains' platform
+files and build the app in a fresh directory.
+
+```shell
+pbl sdk 4.47-xteink --board xteink_x4_pro --board qemu_flint -b build-sdk-dual
+export PEBBLE_SDK="$PWD/build-sdk-dual/sdk-core/pebble"
+cmake -S /path/to/app -B build-app-dual -G Ninja '-DPEBBLE_PLATFORMS=xteinkx4pro;flint'
+cmake --build build-app-dual
+```
+
+The resulting PBW contains a native binary under `xteinkx4pro/` and an ARM
+binary under `flint/` with the same app UUID. The X4 Pro console installer
+and CoreApp with X4 Pro support select the native binary first. Older phone
+software that recognizes Flint can select the ARM binary, which the Pro
+runs through Samsa. Keep each binary in its own architecture's directory.

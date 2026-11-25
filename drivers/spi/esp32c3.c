@@ -8,7 +8,9 @@
 #include <pbl/kernel/delay.h>
 #include <pbl/kernel/irq.h>
 #include <pbl/kernel/mmio.h>
+#include <pbl/kernel/time.h>
 #include <pbl/util/bits.h>
+#include <pbl/util/byteorder.h>
 #include <pbl/util/math.h>
 #include <pbl/util/misc.h>
 
@@ -45,8 +47,18 @@ static void prv_reset(const struct pbl_spi_esp32c3 *spi) {
   pbl_modifyl(SYSTEM_PERIP_SPI2, 0U, SYSTEM(PERIP_RST_EN0));
   pbl_irq_unlock();
 
-  prv_putreg(spi, ESP32C3_SPI_CLK_GATE_OFFSET,
-             SPI_CLK_GATE_CLK_EN | SPI_CLK_GATE_MST_CLK_ACTIVE | SPI_CLK_GATE_MST_CLK_SEL);
+  uint32_t gate = SPI_CLK_GATE_CLK_EN | SPI_CLK_GATE_MST_CLK_ACTIVE;
+  // S3 GPSPI selects the 40 MHz crystal or the 80 MHz PLL independently of the CPU.
+#if defined(CONFIG_SOC_ESP32S3) && PBL_DT_PROP_CLK_APB_CLOCK_FREQUENCY == 80000000U
+  if (pbl_cycles_per_sec() >= 80000000U) {
+    gate |= SPI_CLK_GATE_MST_CLK_SEL;
+  }
+#elif !defined(CONFIG_SOC_ESP32S3)
+  gate |= SPI_CLK_GATE_MST_CLK_SEL;
+#elif PBL_DT_PROP_CLK_APB_CLOCK_FREQUENCY != 40000000U
+#error "Select a supported ESP32-S3 GPSPI clock source"
+#endif
+  prv_putreg(spi, ESP32C3_SPI_CLK_GATE_OFFSET, gate);
   prv_putreg(spi, ESP32C3_SPI_SLAVE_OFFSET, 0U);
   prv_putreg(spi, ESP32C3_SPI_USER1_OFFSET, 0U);
   prv_putreg(spi, ESP32C3_SPI_USER2_OFFSET, 0U);
@@ -155,11 +167,19 @@ static int prv_configure(const struct pbl_spi_bus *bus, const struct pbl_spi_dev
       return ret;
     }
 
+#ifdef CONFIG_SOC_ESP32S3
+    // Early init keeps XTAL when the ROM has no calibrated 480 MHz PLL.
+    if (pbl_cycles_per_sec() < 80000000U) {
+      rate_mhz = (uint64_t)pbl_cycles_per_sec() * 1000U;
+    }
+#endif
     ret = prv_clock((uint32_t)(rate_mhz / 1000U), dev->max_hz, &state->clock, &state->hz);
     if (ret != 0) {
       return ret;
     }
     state->max_hz = dev->max_hz;
+    // Double the worst-case wire time for one FIFO load, plus controller overhead.
+    state->fifo_timeout_us = 100U + (2U * ESP32C3_SPI_BUF_LEN * 8U * 1000000U) / state->hz;
   }
 
   // Modes 1 and 2 shift out on the other edge, 2 and 3 idle high
@@ -191,17 +211,19 @@ static void prv_disable(const struct pbl_spi_bus *bus) {
 static int prv_chunk(const struct pbl_spi_esp32c3 *spi, const uint8_t *tx, uint8_t *rx,
                      uint32_t len) {
   uint32_t bits = len * 8U;
-  // Twice the time on the wire, and some
-  uint32_t timeout_us = 100U + (uint32_t)((2ULL * bits * 1000000U) / spi->state->hz);
+  const uint32_t whole = len & ~3U;
   int ret;
 
-  for (uint32_t i = 0U; i < len; i += 4U) {
-    uint32_t word = 0U;
-
-    for (uint32_t j = 0U; j < 4U && i + j < len; j++) {
-      word |= (uint32_t)((tx != nullptr) ? tx[i + j] : 0U) << (8U * j);
-    }
+  for (uint32_t i = 0; i < whole; i += 4U) {
+    uint32_t word = tx != nullptr ? pbl_get_le32(tx + i) : 0U;
     prv_putreg(spi, ESP32C3_SPI_W_OFFSET(i / 4U), word);
+  }
+  if (len != whole) {
+    uint32_t word = 0;
+    if (tx != nullptr) {
+      memcpy(&word, tx + whole, len - whole);
+    }
+    prv_putreg(spi, ESP32C3_SPI_W_OFFSET(whole / 4U), word);
   }
 
   prv_putreg(spi, ESP32C3_SPI_MS_DLEN_OFFSET, bits - 1U);
@@ -215,8 +237,9 @@ static int prv_chunk(const struct pbl_spi_esp32c3 *spi, const uint8_t *tx, uint8
 
   prv_putreg(spi, ESP32C3_SPI_DMA_INT_CLR_OFFSET, SPI_INT_TRANS_DONE);
   prv_putreg(spi, ESP32C3_SPI_CMD_OFFSET, SPI_CMD_USR);
-  ret = PBL_POLL_BUSY_US(
-      (prv_getreg(spi, ESP32C3_SPI_DMA_INT_RAW_OFFSET) & SPI_INT_TRANS_DONE) != 0U, 0U, timeout_us);
+  ret =
+      PBL_POLL_BUSY_US((prv_getreg(spi, ESP32C3_SPI_DMA_INT_RAW_OFFSET) & SPI_INT_TRANS_DONE) != 0U,
+                       0U, spi->state->fifo_timeout_us);
   if (ret != 0) {
     return ret;
   }

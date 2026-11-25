@@ -1,5 +1,42 @@
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
 # SPDX-License-Identifier: Apache-2.0
 
+config MMAP_RESOURCES
+    default y
+
 config RESOURCES_BOARD
     default "qemu_flint"
+
+# The flash-resident controller leaves internal SRAM for apps and pairing.
+config ESP32C3_BT_CONTROLLER_IN_FLASH
+    default y if ESP32C3_BT
+
+config ESP32C3_BT_ARMED_BY_DEFAULT
+    default y if ESP32C3_BT
+
+choice NIMBLE_HCI
+    default NIMBLE_HCI_ESP32C3 if ESP32C3_BT
+endchoice
+
+# Limit the compatibility runtime to the Pro's internal SRAM.
+if SAMSA
+
+config SAMSA_APP_SCRATCH_SIZE
+    default 16384
+
+config SAMSA_APP_ARENA_SIZE
+    default 16384
+
+config SAMSA_WORKER_SCRATCH_SIZE
+    default 4096
+
+config SAMSA_WORKER_ARENA_SIZE
+    default 4096
+
+config SAMSA_MAX_HANDLES
+    default 512
+
+config SAMSA_MAX_OBJS
+    default 256
+
+endif

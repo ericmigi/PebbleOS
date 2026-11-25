@@ -1,7 +1,7 @@
 /* SPDX-FileCopyrightText: 2026 Core Devices LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
-// NimBLE to the ESP32-C3's own controller, over its virtual HCI: whole H4 packets both ways,
+// NimBLE to Espressif's on-chip controller, over its virtual HCI: whole H4 packets both ways,
 // modeled on ESP-IDF's esp_nimble_hci.c. The controller calls back in its own thread.
 //
 // The controller is used once armed (btc arm, then a reset, or at every boot with
@@ -30,6 +30,7 @@ PBL_LOG_MODULE_DECLARE(nimble, CONFIG_NIMBLE_LOG_LEVEL);
 
 #define VHCI_TIMEOUT_MS 2000U
 
+static bool s_use_controller;
 static bool s_real;
 static PBL_SEM_DEFINE(s_send_avail, 1, 1);
 
@@ -94,29 +95,41 @@ static const struct esp32c3_bt_vhci_callbacks s_vhci_cb = {
 };
 
 void ble_transport_ll_init(void) {
-  int ret;
-
-  if (esp32c3_bt_failed()) {
-    PBL_LOG_ERR(
-        "ESP32-C3 controller off after a failed bring-up, fake HCI: btc clear, then "
-        "restart to retry");
-    return;
+  // Defer hardware initialization until the host starts, including at boot in airplane mode.
+  s_use_controller = esp32c3_bt_armed() && !esp32c3_bt_failed();
+  if (!s_use_controller) {
+    PBL_LOG_DBG("Espressif controller unarmed or unavailable: fake HCI");
   }
-  if (!esp32c3_bt_armed()) {
-    PBL_LOG_INFO("ESP32-C3 controller not armed: fake HCI");
-    return;
-  }
+}
 
-  ret = esp32c3_bt_start();
+int nimble_port_pebble_hci_resume(void) {
+  if (!s_use_controller) {
+    return 0;
+  }
+  int ret = esp32c3_bt_start();
   if (ret == 0) {
     ret = esp32c3_bt_vhci_register(&s_vhci_cb);
   }
   if (ret != 0) {
-    PBL_LOG_ERR("ESP32-C3 controller unavailable (%d): fake HCI", ret);
-    return;
+    PBL_LOG_ERR("Espressif controller unavailable (%d)", ret);
+    if (!s_real) {
+      s_use_controller = false;
+      return 0;
+    }
+    return ret;
   }
 
   s_real = true;
+  if (esp32c3_bt_vhci_send_available()) {
+    pbl_sem_give(&s_send_avail);
+  }
+  return 0;
+}
+
+void nimble_port_pebble_hci_suspend(void) {
+  if (s_real && esp32c3_bt_controller_disable() != 0) {
+    PBL_LOG_ERR("Bluetooth controller did not suspend");
+  }
 }
 
 static int prv_send(uint8_t *pkt, uint16_t len) {

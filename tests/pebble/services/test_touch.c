@@ -60,22 +60,36 @@ static int s_touch_sensor_enable_count;
 static int s_touch_sensor_disable_count;
 static bool s_touch_sensor_enabled;
 
-const struct pbl_touch *const TOUCH = nullptr;
+static int prv_touch_init(const struct pbl_touch *touch) {
+  return 0;
+}
 
-int pbl_touch_enable(const struct pbl_touch *touch) {
+static int prv_touch_enable(const struct pbl_touch *touch) {
   s_touch_sensor_enable_count++;
   s_touch_sensor_enabled = true;
   return 0;
 }
 
-int pbl_touch_disable(const struct pbl_touch *touch) {
+static int prv_touch_disable(const struct pbl_touch *touch) {
   s_touch_sensor_disable_count++;
   s_touch_sensor_enabled = false;
   return 0;
 }
 
+static const struct pbl_touch_ops s_ops = {
+  .init = prv_touch_init,
+  .enable = prv_touch_enable,
+  .disable = prv_touch_disable,
+};
+
+PBL_TOUCH_STATE_DEFINE(s_panel);
+static const struct pbl_touch s_panel =
+    PBL_TOUCH_INIT(s_panel, "panel", nullptr, &s_ops, .size_x = 480, .size_y = 800);
+const struct pbl_touch *const TOUCH = &s_panel;
+
 // setup and teardown
 void test_touch__initialize(void) {
+  cl_assert_equal_i(pbl_device_init(&s_panel.dev), 0);
   fake_event_init();
   s_add_subscriber_cb = nullptr;
   s_remove_subscriber_cb = nullptr;
@@ -107,6 +121,22 @@ static void prv_assert_touch_event(TouchEventType type, int16_t x, int16_t y) {
 }
 
 // tests
+void test_touch__portrait_panel_reports_app_coordinates(void) {
+  pbl_touch_report(TOUCH, true, 0, 0);
+  prv_assert_touch_event(TouchEvent_Touchdown, 0, 0);
+
+  pbl_touch_report(TOUCH, true, 120, 600);
+  prv_assert_touch_event(TouchEvent_PositionUpdate, PBL_DISPLAY_WIDTH / 4,
+                         PBL_DISPLAY_HEIGHT * 3 / 4);
+
+  pbl_touch_report(TOUCH, true, 479, 799);
+  prv_assert_touch_event(TouchEvent_PositionUpdate, PBL_DISPLAY_WIDTH - 1, PBL_DISPLAY_HEIGHT - 1);
+
+  pbl_touch_report(TOUCH, false, 479, 799);
+  prv_assert_touch_event(TouchEvent_Liftoff, PBL_DISPLAY_WIDTH - 1, PBL_DISPLAY_HEIGHT - 1);
+  cl_assert_equal_i(fake_event_get_count(), 4);
+}
+
 void test_touch__touchdown(void) {
   touch_handle_update(TouchState_FingerDown, 15, 100);
   cl_assert_equal_i(fake_event_get_count(), 1);

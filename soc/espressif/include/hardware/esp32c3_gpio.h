@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include <pbl/util/bits.h>
 
 // GPIO matrix, the pins' levels, output enables, interrupts and signal routing
@@ -16,6 +19,20 @@
 // The USB-Serial-JTAG's D- and D+: reconfiguring them drops the console and esptool's reset
 #define ESP32C3_GPIO_IS_USB(pin) ((pin) == 18U || (pin) == 19U)
 #endif
+
+static inline bool esp32_gpio_pad_available(uint32_t pin) {
+#ifdef CONFIG_SOC_ESP32S3
+  if (pin >= 22U && pin <= 25U) {
+    return false; // No pads at these indices
+  }
+#ifdef CONFIG_SOC_ESP32S3_OCTAL_MEMORY
+  if (pin >= 26U && pin <= 37U) {
+    return false; // SPI0/1 flash and PSRAM
+  }
+#endif
+#endif
+  return pin < ESP32C3_GPIO_NUM_PINS;
+}
 
 #define ESP32C3_GPIO_OUT_W1TS_OFFSET     0x0008
 #define ESP32C3_GPIO_OUT_W1TC_OFFSET     0x000c

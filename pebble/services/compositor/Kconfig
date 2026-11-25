@@ -8,6 +8,15 @@ config SERVICE_COMPOSITOR
 
 if SERVICE_COMPOSITOR
 
+config SERVICE_COMPOSITOR_COALESCE_FRAMES
+    bool "Let app rendering continue during e-paper refresh"
+    depends on DISPLAY_SSD1677
+    default y if BOARD_XTEINK_X4 || BOARD_XTEINK_X4_PRO
+    help
+      During a panel refresh, let newer app drawings replace the pending
+      frame. When the panel is ready, acquire the latest finished app
+      framebuffer for composition.
+
 config SERVICE_COMPOSITOR_PARTIAL_FRAMES
     bool "Composite app frames from their dirty rectangle"
     default y

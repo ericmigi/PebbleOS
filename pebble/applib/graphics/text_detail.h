@@ -49,6 +49,9 @@ void text_detail_add_edges(int owner, GPoint origin, const GRect *clip, const ui
 //! Ends the glyph text_detail_glyph_begin() started.
 void text_detail_glyph_end(int owner);
 
+//! Discards the outgoing app's glyphs before its framebuffer is reused.
+void text_detail_app_unload(void);
+
 //! Forgets the detail the kernel's own windows recorded, before they render again, and the app's
 //! too when they hide it.
 void text_detail_kernel_frame_begin(bool app_hidden);
@@ -84,13 +87,14 @@ void text_detail_set_mode(TextDetailMode mode);
 // the records are the glyphs drawn, for the grey pass; text_detail_row() fills a row of the stored
 // size with 2 bits per pixel (see struct pbl_display_detail)
 
-//! Whether text is inked from a quarter coverage, for the grey pass to lighten (a grey mode)
-bool text_detail_ink_light(void);
-
 //! Records a glyph of a font stored with its edges, drawn in black into @p dest: its bitmap's top
 //! left @p origin, its @p height and the @p clip it was drawn in, in display pixels
-void text_detail_add_glyph(const GBitmap *dest, const FontInfo *font, uint32_t codepoint,
+//! Returns true if the grey pass owns this glyph and can lighten its provisional black edges.
+bool text_detail_add_glyph(const GBitmap *dest, const FontInfo *font, uint32_t codepoint,
                            GPoint origin, uint8_t height, const GRect *clip);
+
+//! Set the detected panel capability before the system UI draws its first frame.
+void text_detail_set_grey_supported(bool supported);
 
 //! Makes the next grey pass draw a fixed test pattern rather than the text's levels, until the
 //! next frame

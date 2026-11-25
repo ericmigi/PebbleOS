@@ -26,6 +26,7 @@
 #include <pbl/kernel/time.h>
 #include <pbl/logging/logging.h>
 #include <pbl/system/rtc_registers.h>
+#include <pbl/util/size.h>
 
 #include <esp32c3_bt.h>
 
@@ -39,10 +40,10 @@ PBL_LOG_MODULE_DECLARE(espressif_bt, CONFIG_ESP32C3_BT_LOG_LEVEL);
 #define STATE_FAILED      PBL_BIT(2)
 
 // The RTC watchdog, which the SoC init disables at every boot
-#define RTC_CNTL_WDTCONFIG0_REG    (DR_REG_RTCCNTL_BASE + 0x0090U)
-#define RTC_CNTL_WDTCONFIG1_REG    (DR_REG_RTCCNTL_BASE + 0x0094U)
-#define RTC_CNTL_WDTFEED_REG       (DR_REG_RTCCNTL_BASE + 0x00a4U)
-#define RTC_CNTL_WDTWPROTECT_REG   (DR_REG_RTCCNTL_BASE + 0x00a8U)
+#define RTC_CNTL_WDTCONFIG0_REG    (DR_REG_RTCCNTL_BASE + RTC_CNTL_RADIO_OFFSET + 0x0090U)
+#define RTC_CNTL_WDTCONFIG1_REG    (DR_REG_RTCCNTL_BASE + RTC_CNTL_RADIO_OFFSET + 0x0094U)
+#define RTC_CNTL_WDTFEED_REG       (DR_REG_RTCCNTL_BASE + RTC_CNTL_RADIO_OFFSET + 0x00a4U)
+#define RTC_CNTL_WDTWPROTECT_REG   (DR_REG_RTCCNTL_BASE + RTC_CNTL_RADIO_OFFSET + 0x00a8U)
 #define RTC_CNTL_WDT_EN            PBL_BIT(31)
 #define RTC_CNTL_WDT_STG0_S        28U
 #define RTC_WDT_STG_SEL_RESET_RTC  4U
@@ -59,6 +60,14 @@ static bool s_loaded;
 
 static void prv_state_store(void) {
   retained_write(ESP32C3_BT_STATE_REGISTER, s_state != 0U ? (STATE_MAGIC | s_state) : 0U);
+}
+
+#define STATE_STAGE_MASK  0xff00U
+#define STATE_STAGE_SHIFT 8U
+
+void esp_bt_init_stage(enum esp_bt_init_stage stage) {
+  s_state = (s_state & ~STATE_STAGE_MASK) | ((uint32_t)stage << STATE_STAGE_SHIFT);
+  prv_state_store();
 }
 
 // On the first look of this boot, an attempt still in progress is one that never completed
@@ -90,8 +99,12 @@ static void prv_wdt_write(uint32_t config0, uint32_t config1) {
 
 // The eFuse's WDT_DELAY_SEL multiplies stage 0's timeout by 2 to 16, as ESP-IDF's
 // rwdt_ll_config_stage() accounts for
+#ifdef CONFIG_SOC_ESP32S3
+#define EFUSE_RD_REPEAT_DATA1_REG 0x60007034U
+#else
 #define EFUSE_RD_REPEAT_DATA1_REG 0x60008834U
-#define EFUSE_WDT_DELAY_SEL_MASK  PBL_GENMASK(17, 16)
+#endif
+#define EFUSE_WDT_DELAY_SEL_MASK PBL_GENMASK(17, 16)
 
 static void prv_wdt_arm(uint32_t seconds) {
   const uint32_t delay_sel =
@@ -155,7 +168,7 @@ int esp32c3_bt_start(void) {
 void esp32c3_bt_confirm(void) {
   prv_state_load();
   prv_wdt_write(0U, 0U);
-  s_state &= ~STATE_IN_PROGRESS;
+  s_state &= ~(STATE_IN_PROGRESS | STATE_STAGE_MASK);
   prv_state_store();
 }
 
@@ -243,6 +256,28 @@ static int prv_cmd_status(const struct pbl_shell *sh, size_t argc, char **argv) 
                   (s_state & STATE_ARMED) != 0U ? "armed " : "",
                   (s_state & STATE_IN_PROGRESS) != 0U ? "in-progress " : "",
                   (s_state & STATE_FAILED) != 0U ? "failed" : "");
+  static const char *const stages[] = {
+    [EspBtStage_None] = "none",
+    [EspBtStage_Power] = "power domain",
+    [EspBtStage_Rom] = "ROM data",
+    [EspBtStage_Osi] = "OS interface registration",
+    [EspBtStage_Clocks] = "controller clocks",
+    [EspBtStage_Reset] = "controller reset",
+    [EspBtStage_LpClock] = "low-power clock source",
+    [EspBtStage_LpDiv] = "low-power clock divider",
+    [EspBtStage_ControllerInit] = "link-layer initialize",
+    [EspBtStage_Features] = "HCI features",
+    [EspBtStage_Phy] = "PHY power",
+    [EspBtStage_UsbPll] = "USB PLL preservation",
+    [EspBtStage_Calibrate] = "PHY calibration",
+    [EspBtStage_Enable] = "link-layer enable",
+    [EspBtStage_Coex] = "coexistence initialization",
+  };
+  uint32_t stage = (s_state & STATE_STAGE_MASK) >> STATE_STAGE_SHIFT;
+  if (stage != 0 && stage < PBL_ARRAY_SIZE(stages)) {
+    pbl_shell_print(sh, "last bring-up stage: %s", stages[stage]);
+  }
+  pbl_shell_print(sh, "CPU measured against SYSTIMER: %u MHz", (unsigned)esp_bt_measured_cpu_mhz());
   pbl_shell_print(sh, "controller: %s, watchdog %s",
                   esp32c3_bt_controller_enabled() ? "enabled" : "off",
                   prv_wdt_armed() ? "armed" : "off");
@@ -363,6 +398,11 @@ static const struct {
   const char *name;
   uint32_t addr;
 } s_regs[] = {
+#ifdef CONFIG_SOC_ESP32S3
+  {"RTC_CNTL_DIG_PWC", RTC_CNTL_DIG_PWC_REG},       {"RTC_CNTL_DIG_ISO", RTC_CNTL_DIG_ISO_REG},
+  {"RTC_CNTL_WDTCONFIG0", RTC_CNTL_WDTCONFIG0_REG}, {"SYSCON_WIFI_CLK_EN", SYSTEM_WIFI_CLK_EN_REG},
+  {"SYSCON_WIFI_RST_EN", SYSTEM_WIFI_RST_EN_REG},
+#else
   {"RTC_CNTL_OPTIONS0", 0x60008000U},
   {"RTC_CNTL_ANA_CONF", 0x60008034U},
   {"RTC_CNTL_RESET_STATE", 0x60008038U},
@@ -388,6 +428,7 @@ static const struct {
   {"USB_SERIAL_JTAG_CONF0", 0x60043018U},
   {"USB_SERIAL_JTAG_FRAM_NUM", 0x60043024U},
   {"USB_SERIAL_JTAG_FRAM_NUM", 0x60043024U},
+#endif
 };
 
 static int prv_cmd_regs(const struct pbl_shell *sh, size_t argc, char **argv) {
@@ -429,5 +470,5 @@ static const struct pbl_shell_cmd sub_btc[] = {
   PBL_SHELL_SUBCMD_SET_END,
 };
 
-PBL_SHELL_CMD_REGISTER(btc, sub_btc, "ESP32-C3 Bluetooth controller", nullptr);
+PBL_SHELL_CMD_REGISTER(btc, sub_btc, "Espressif Bluetooth controller", nullptr);
 #endif

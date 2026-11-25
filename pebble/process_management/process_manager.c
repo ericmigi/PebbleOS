@@ -735,6 +735,14 @@ void process_manager_send_callback_event_to_process(PebbleTask task, void (*call
 // ----------------------------------------------------------------------------------------------
 void *process_manager_address_to_offset(PebbleTask task, void *system_address) {
   ProcessContext *context = prv_get_context_for_task(task);
+#ifdef CONFIG_APP_NATIVE_ALIASED
+  // Native process PCs and return addresses use the instruction-bus alias of app RAM.
+  const uintptr_t code_start = (uintptr_t)context->load_start + CONFIG_RAMFUNC_ALIAS_OFFSET;
+  const uintptr_t code_end = (uintptr_t)context->load_end + CONFIG_RAMFUNC_ALIAS_OFFSET;
+  if (((uintptr_t)system_address >= code_start) && ((uintptr_t)system_address < code_end)) {
+    return (void *)((uintptr_t)system_address - code_start);
+  }
+#endif
   if (system_address >= context->load_start && system_address < context->load_end) {
     return (void *)((uintptr_t)system_address - (uintptr_t)context->load_start);
   }

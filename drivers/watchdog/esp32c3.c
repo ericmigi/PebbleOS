@@ -5,21 +5,30 @@
 
 #include <pbl/drivers/watchdog.h>
 #include <pbl/kernel/mmio.h>
+#include <pbl/kernel/time.h>
 #include <pbl/util/bits.h>
 
 #include <devicetree/regs.h>
 #include <hardware/esp32c3_wdt.h>
 
-// Timer group 0's watchdog, off the 40 MHz crystal at 1 kHz: its one stage resets the whole system,
+// Timer group 0's watchdog: its one stage resets the whole system,
 // from hardware, whatever the CPU does. The RTC watchdog stays the Bluetooth bring-up's.
 #define TIMG(reg)   (PBL_DT_REG_TIMG0 + ESP32C3_TIMG_##reg##_OFFSET)
 #define RESET_STATE (PBL_DT_REG_RTC_CNTL + ESP32C3_RTC_CNTL_RESET_STATE_OFFSET)
-#define XTAL_KHZ    40000U
+#ifdef CONFIG_SOC_ESP32S3
+// S3 clocks the watchdog from APB. A 2 kHz tick fits the 16-bit prescaler at 80 MHz.
+#define WDT_PRESCALE     ((pbl_cycles_per_sec() < 80000000U ? pbl_cycles_per_sec() : 80000000U) / 2000U)
+#define WDT_TICKS_PER_MS 2U
+#define WDT_CLOCK_SELECT 0U
+#else
+#define WDT_PRESCALE     40000U
+#define WDT_TICKS_PER_MS 1U
+#define WDT_CLOCK_SELECT PBL_BIT(21) // Select the 40 MHz crystal
+#endif
 
 #define WDT_EN              PBL_BIT(31)
 #define WDT_STG0_RESET_SYS  (3U << 29)
 #define WDT_CONF_UPDATE_EN  PBL_BIT(22)
-#define WDT_USE_XTAL        PBL_BIT(21)
 #define WDT_CPU_RST_LEN     (7U << 18)
 #define WDT_SYS_RST_LEN     (7U << 15)
 #define WDT_CLK_PRESCALE(n) ((uint32_t)(n) << 16)
@@ -44,22 +53,26 @@ static struct pbl_mcu_reboot_reason s_reason;
 static void prv_write(uint32_t config0) {
   pbl_writel(WDT_WKEY, TIMG(WDTWPROTECT));
   pbl_writel(config0, TIMG(WDTCONFIG0));
+#ifndef CONFIG_SOC_ESP32S3
   pbl_writel(config0 | WDT_CONF_UPDATE_EN, TIMG(WDTCONFIG0));
+#endif
   pbl_writel(0U, TIMG(WDTWPROTECT));
 }
 
 void watchdog_init(void) {
   pbl_writel(WDT_WKEY, TIMG(WDTWPROTECT));
   pbl_writel(0U, TIMG(WDTCONFIG0));
-  pbl_writel(WDT_CLK_PRESCALE(XTAL_KHZ), TIMG(WDTCONFIG1));
-  pbl_writel(CONFIG_WATCHDOG_TIMEOUT_MS, TIMG(WDTCONFIG2));
+  pbl_writel(WDT_CLK_PRESCALE(WDT_PRESCALE), TIMG(WDTCONFIG1));
+  pbl_writel(CONFIG_WATCHDOG_TIMEOUT_MS * WDT_TICKS_PER_MS, TIMG(WDTCONFIG2));
+#ifndef CONFIG_SOC_ESP32S3
   pbl_writel(WDT_CONF_UPDATE_EN, TIMG(WDTCONFIG0));
+#endif
   pbl_writel(0U, TIMG(WDTWPROTECT));
 }
 
 void watchdog_start(void) {
   watchdog_feed();
-  prv_write(WDT_EN | WDT_STG0_RESET_SYS | WDT_USE_XTAL | WDT_CPU_RST_LEN | WDT_SYS_RST_LEN);
+  prv_write(WDT_EN | WDT_STG0_RESET_SYS | WDT_CLOCK_SELECT | WDT_CPU_RST_LEN | WDT_SYS_RST_LEN);
 }
 
 void watchdog_stop(void) {

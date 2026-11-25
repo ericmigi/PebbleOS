@@ -3,6 +3,12 @@
 
 #include "app.h"
 
+#if defined(CONFIG_SHELL) && defined(CONFIG_DISPLAY_UC8279_X4)
+#include <stdio.h>
+#include <applib/fonts/fonts.h>
+#include <applib/graphics/graphics.h>
+#endif
+
 #ifdef CONFIG_TEXT_DETAIL
 #include <applib/graphics/text_detail.h>
 #endif
@@ -22,7 +28,29 @@
 
 PBL_PROFILER_NODE_DEFINE(render_app);
 
-static void prv_render_app(void) {
+#if defined(CONFIG_SHELL) && defined(CONFIG_DISPLAY_UC8279_X4)
+static void prv_bench_draw(GContext *ctx, uint8_t sequence) {
+  if (!sequence || sequence == UINT8_MAX) {
+    return;
+  }
+  GDrawState saved = ctx->draw_state;
+  char label[16];
+  snprintf(label, sizeof(label), "Frame %03u", (unsigned)sequence);
+  GSize size = graphics_context_get_framebuffer_size(ctx);
+  GRect bounds = GRect(2, size.h - 28, 100, 26);
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_fill_rect(ctx, &bounds);
+  graphics_context_set_text_color(ctx, GColorBlack);
+  graphics_draw_text(ctx, label, fonts_get_system_font("RESOURCE_ID_GOTHIC_18"), bounds,
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, nullptr);
+  ctx->draw_state = saved;
+}
+#endif
+
+static void prv_render_app(uint8_t sequence) {
+#if defined(CONFIG_SHELL) && defined(CONFIG_DISPLAY_UC8279_X4)
+  uint32_t start = (uint32_t)sys_get_ticks();
+#endif
   WindowStack *stack = app_state_get_window_stack();
   GContext *ctx = app_state_get_graphics_context();
 #ifdef CONFIG_TEXT_DETAIL
@@ -41,10 +69,16 @@ static void prv_render_app(void) {
     }
   }
 
+#if defined(CONFIG_SHELL) && defined(CONFIG_DISPLAY_UC8279_X4)
+  prv_bench_draw(ctx, sequence);
+#endif
   *app_state_get_framebuffer_render_pending() = true;
 
   PebbleEvent event = {
     .type = PEBBLE_RENDER_READY_EVENT,
+#if defined(CONFIG_SHELL) && defined(CONFIG_DISPLAY_UC8279_X4)
+    .render = {.ticks = (uint32_t)sys_get_ticks() - start, .sequence = sequence},
+#endif
   };
   sys_send_pebble_event_to_kernel(&event);
 }
@@ -77,7 +111,7 @@ void app_request_render(void) {
 }
 
 //! Tasks that have to be done in between each event.
-static PBL_NOINLINE void event_loop_upkeep(void) {
+static PBL_NOINLINE void event_loop_upkeep(uint8_t sequence) {
   // Check to see if the most recent event caused us to pop our final window. If that's the case, we
   // need to kill ourselves.
   if (app_window_stack_count() == 0) {
@@ -93,7 +127,7 @@ static PBL_NOINLINE void event_loop_upkeep(void) {
 
   // Check to see if handling the previous event requires us to rerender ourselves.
   if (prv_app_is_render_scheduled() && !*app_state_get_framebuffer_render_pending()) {
-    prv_render_app();
+    prv_render_app(sequence);
   }
 }
 
@@ -261,7 +295,11 @@ void app_event_loop_common(void) {
   }
   prv_legacy2_status_bar_timer_subscribe(); // a no-op on sdk3+ applications
 
-  event_loop_upkeep();
+#ifdef CONFIG_SERVICE_COMPOSITOR_COALESCE_FRAMES
+  bool skipped_frame = false;
+#endif
+  uint8_t bench_sequence = 0;
+  event_loop_upkeep(bench_sequence);
 
   // Event loop:
   while (1) {
@@ -277,8 +315,30 @@ void app_event_loop_common(void) {
     } else if (event.type == PEBBLE_CALLBACK_EVENT) {
       prv_app_callback_handler(&event);
     } else if (event.type == PEBBLE_RENDER_REQUEST_EVENT) {
-      app_request_render();
+#if defined(CONFIG_SHELL) && defined(CONFIG_DISPLAY_UC8279_X4)
+      if (event.render.sequence) {
+        bench_sequence = event.render.sequence;
+      }
+#endif
+#ifdef CONFIG_SERVICE_COMPOSITOR_COALESCE_FRAMES
+      if (event.render.reuse_frame) {
+        // A later draw may already be with KernelMain. Otherwise return its skipped raster
+        // without rerunning the app's draw callbacks. Upkeep handles a newly dirty window.
+        if (skipped_frame && !*app_state_get_framebuffer_render_pending() &&
+            !prv_app_is_render_scheduled()) {
+          *app_state_get_framebuffer_render_pending() = true;
+          PebbleEvent ready = {.type = PEBBLE_RENDER_READY_EVENT, .render.reuse_frame = true};
+          sys_send_pebble_event_to_kernel(&ready);
+        }
+      } else
+#endif
+      {
+        app_request_render();
+      }
     } else if (event.type == PEBBLE_RENDER_FINISHED_EVENT) {
+#ifdef CONFIG_SERVICE_COMPOSITOR_COALESCE_FRAMES
+      skipped_frame = event.render.reuse_frame;
+#endif
       *app_state_get_framebuffer_render_pending() = false;
     } else {
       event_service_client_handle_event(&event);
@@ -287,7 +347,7 @@ void app_event_loop_common(void) {
     mcu_fpu_cleanup();
     event_cleanup(&event);
 
-    event_loop_upkeep();
+    event_loop_upkeep(bench_sequence);
   }
 }
 

@@ -56,6 +56,7 @@ static uint32_t s_peak;
 static uint32_t s_dropped;
 static bool s_overflow[2];
 static bool s_test;
+static bool s_grey_supported = true;
 
 static uint8_t s_band[BAND_ROWS][ROW_BYTES];
 static bool s_band_any[BAND_ROWS];
@@ -75,41 +76,41 @@ static void prv_forget(unsigned owner) {
   pbl_irq_unlock();
 }
 
-bool text_detail_ink_light(void) {
-  return s_mode == TextDetailModeGrey || s_mode == TextDetailModeSubpixelGrey;
+static bool prv_grey_enabled(void) {
+  return s_grey_supported && (s_mode == TextDetailModeGrey || s_mode == TextDetailModeSubpixelGrey);
 }
 
-void text_detail_add_glyph(const GBitmap *dest, const FontInfo *font, uint32_t codepoint,
+bool text_detail_add_glyph(const GBitmap *dest, const FontInfo *font, uint32_t codepoint,
                            GPoint origin, uint8_t height, const GRect *clip) {
   // Only the system's fonts outlive the frame: an app's could be gone by the grey pass
-  if (!text_detail_ink_light() || font->base.app_num != SYSTEM_APP) {
-    return;
+  if (!prv_grey_enabled() || font->base.app_num != SYSTEM_APP) {
+    return false;
   }
   unsigned owner;
   if (pebble_task_get_current() == PebbleTask_App) {
     const PebbleProcessMd *md = app_manager_get_current_app_md();
     if (!md || md->is_unprivileged || dest->addr != app_state_get_framebuffer()->buffer ||
         dest->bounds.size.w != PBL_DISPLAY_WIDTH || dest->bounds.size.h != PBL_DISPLAY_HEIGHT) {
-      return;
+      return false;
     }
     owner = 0;
   } else {
     if (dest->addr != compositor_get_framebuffer()->buffer) {
-      return;
+      return false;
     }
     owner = OWNER_KERNEL;
   }
   pbl_irq_lock();
   if (s_overflow[owner]) {
     pbl_irq_unlock();
-    return;
+    return false;
   }
   if (s_count == CONFIG_TEXT_DETAIL_GLYPHS) {
-    // A frame whose text does not fit gets no grey, rather than some
+    // Further glyphs use monochrome edges. Already accepted glyphs still get their grey pass.
     s_overflow[owner] = true;
     s_dropped++;
     pbl_irq_unlock();
-    return;
+    return false;
   }
   s_glyphs[s_count++] = (Glyph){
     .font = font,
@@ -121,6 +122,11 @@ void text_detail_add_glyph(const GBitmap *dest, const FontInfo *font, uint32_t c
   s_peak = PBL_MAX(s_peak, s_count);
   s_band_index = -1;
   pbl_irq_unlock();
+  return true;
+}
+
+void text_detail_app_unload(void) {
+  prv_forget(0);
 }
 
 void text_detail_kernel_frame_begin(bool app_hidden) {
@@ -198,7 +204,7 @@ static void prv_fill_band(const TextDetailFrame *frame, int band) {
     const Glyph g = s_glyphs[i];
     pbl_irq_unlock();
     const bool kernel = (g.code & CODE_OWNER) != 0U;
-    if ((!kernel && !frame->app) || s_overflow[kernel ? OWNER_KERNEL : 0]) {
+    if (!kernel && !frame->app) {
       continue;
     }
     // Rows 2y to 2(y + h) at panel resolution
@@ -246,7 +252,7 @@ static void prv_fill_band(const TextDetailFrame *frame, int band) {
 
 bool text_detail_row(const TextDetailFrame *frame, uint16_t y, const uint8_t *fb_row,
                      uint8_t *cells) {
-  if (!frame->grey || y >= ROWS || (!text_detail_ink_light() && !s_test)) {
+  if (!frame->grey || y >= ROWS || (!prv_grey_enabled() && !s_test)) {
     return false;
   }
   const int band = y / BAND_ROWS;
@@ -264,7 +270,7 @@ bool text_detail_row(const TextDetailFrame *frame, uint16_t y, const uint8_t *fb
 bool text_detail_wants_grey(void) {
   // A grey pass follows: its bands are of the frame now shown
   s_band_index = -1;
-  return s_test || (text_detail_ink_light() && s_count > 0);
+  return s_grey_supported && (s_test || (prv_grey_enabled() && s_count > 0));
 }
 
 void text_detail_test(void) {
@@ -276,8 +282,13 @@ TextDetailMode text_detail_get_mode(void) {
   return s_mode;
 }
 
+void text_detail_set_grey_supported(bool supported) {
+  s_grey_supported = supported;
+}
+
 void text_detail_set_mode(TextDetailMode mode) {
   if (mode < TextDetailModeCount) {
+    s_test = false;
     s_mode = mode;
   }
 }

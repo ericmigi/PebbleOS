@@ -59,8 +59,16 @@ static void prv_input_cb(const struct pbl_input_event *evt, void *user_data) {
     return;
   }
 
+  uint16_t code = evt->code;
+  if (code == PBL_INPUT_KEY_HOME) {
+#ifdef CONFIG_BOARD_XTEINK_X4_PRO
+    code = PBL_INPUT_KEY_SELECT;
+#else
+    code = PBL_INPUT_KEY_BACK;
+#endif
+  }
   for (ButtonId key = 0; key < NUM_BUTTONS; key++) {
-    if (s_codes[key] != evt->code) {
+    if (s_codes[key] != code) {
       continue;
     }
 

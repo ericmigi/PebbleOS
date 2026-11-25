@@ -8,6 +8,7 @@
 #include <pbl/devicetree.h>
 #include <pbl/drivers/flash/esp32s3.h>
 #include <pbl/kernel/irq.h>
+#include <pbl/kernel/mmio.h>
 #include <pbl/kernel/section.h>
 #include <pbl/util/math.h>
 
@@ -48,6 +49,12 @@ struct rom_spiflash_chip {
 
 #define CHUNK_SIZE 256U
 
+#define EXTMEM_CACHE_STATE 0x600c4130U
+#define ICACHE_STATE_MASK  0x000fffU
+#define DCACHE_STATE_MASK  0xfff000U
+#define ICACHE_STATE_IDLE  0x000001U
+#define DCACHE_STATE_IDLE  0x001000U
+
 // Shared I/D MMU table (64 KiB pages); bit 14 marks an entry invalid on ESP32-S3.
 #define MMU_TABLE   0x600c5000U
 #define MMU_INVALID (1U << 14)
@@ -56,7 +63,12 @@ struct rom_spiflash_chip {
 PBL_SECTION_RAM static int prv_rom_call(rom_fn_t fn, uint32_t a0, uint32_t a1, uint32_t a2,
                                         uint32_t addr, uint32_t len) {
   uint32_t icache = ROM_CACHE_SUSPEND_ICACHE();
+  // The S3 ROM suspend routines can return before the cache is idle.
+  while ((pbl_readl(EXTMEM_CACHE_STATE) & ICACHE_STATE_MASK) != ICACHE_STATE_IDLE) {
+  }
   uint32_t dcache = ROM_CACHE_SUSPEND_DCACHE();
+  while ((pbl_readl(EXTMEM_CACHE_STATE) & DCACHE_STATE_MASK) != DCACHE_STATE_IDLE) {
+  }
   int ret = fn(a0, a1, a2);
 
   for (uint32_t page = addr / MMU_PAGE;

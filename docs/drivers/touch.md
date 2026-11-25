@@ -17,6 +17,7 @@ coordinates from the devicetree. It is powered while it has users.
 
 | Driver | Compatible | Kconfig |
 | --- | --- | --- |
+| Goodix GT911 | `goodix,gt911` | `CONFIG_TOUCH_GT911` |
 | Hynitron CST816 | `hynitron,cst816s` | `CONFIG_TOUCH_CST816` |
 | FocalTech FT6x36 | `focaltech,ft6236` | `CONFIG_TOUCH_FT6236` |
 | QEMU Touchscreen | `qemu,pebble-touch` | `CONFIG_TOUCH_QEMU` |

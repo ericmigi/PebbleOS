@@ -41,7 +41,11 @@ static int prv_cmd_charger(const struct pbl_shell *sh, size_t argc, char **argv)
   pbl_shell_print(sh, "online: %s", online ? "yes" : "no");
   pbl_shell_print(sh, "status: %s", s_status_names[status]);
   pbl_shell_print(sh, "voltage: %" PRId32 " mV", meas.voltage_mv);
-  pbl_shell_print(sh, "current: %" PRId32 " uA", meas.current_ua);
+  if (meas.current_unavailable) {
+    pbl_shell_print(sh, "current: unavailable");
+  } else {
+    pbl_shell_print(sh, "current: %" PRId32 " uA", meas.current_ua);
+  }
   pbl_shell_print(sh, "temperature: %" PRId32 " mC", meas.temp_mc);
 
   return 0;

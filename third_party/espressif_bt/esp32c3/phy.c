@@ -27,6 +27,8 @@
 #include <pbl/kernel/work.h>
 #include <pbl/logging/logging.h>
 
+#include <esp32c3_bt.h>
+
 PBL_LOG_MODULE_DECLARE(espressif_bt, CONFIG_ESP32C3_BT_LOG_LEVEL);
 
 // ROM: ets_delay_us(), calibrated by the SoC init
@@ -191,8 +193,7 @@ void esp_wifi_bt_power_domain_on(void) {
 
 static esp_phy_modem_t s_phy_modem_flag;
 
-/* PLL tracking (phy_common.c): every second once the PHY is on. ESP-IDF serialises it with
- * enabling the PHY, which here happens once, before it starts. */
+/* PLL tracking runs only while the radio PHY is enabled. */
 
 #define PHY_TRACK_PLL_PERIOD_MS 1000U
 
@@ -224,9 +225,11 @@ static void esp_phy_load_cal_and_init(void) {
   // Before anything else: without it the PHY init turns the USB PHY off, and with it the
   // USB-Serial-JTAG console, the only way into the board
 #if CONFIG_ESP_PHY_ENABLE_USB
+  esp_bt_init_stage(EspBtStage_UsbPll);
   phy_bbpll_en_usb(true);
 #endif
 
+  esp_bt_init_stage(EspBtStage_Calibrate);
   int ret = register_chipv7_phy(init_data, cal_data, PHY_RF_CAL_FULL);
   PBL_LOG_INFO("RF calibration: %d, data version %02x%02x%02x%02x", ret, cal_data->version[0],
                cal_data->version[1], cal_data->version[2], cal_data->version[3]);
@@ -249,4 +252,19 @@ void esp_phy_enable(esp_phy_modem_t modem) {
     phy_module_disable();
   }
   s_phy_modem_flag |= modem;
+}
+
+void esp_phy_disable(esp_phy_modem_t modem) {
+  if (!(s_phy_modem_flag & modem)) {
+    return;
+  }
+  s_phy_modem_flag &= ~modem;
+  if (s_phy_modem_flag == 0) {
+    extern void phy_close_rf(void);
+    extern void phy_xpd_tsens(void);
+    pbl_delayed_work_cancel_sync(&s_track_pll_work);
+    phy_close_rf();
+    phy_xpd_tsens();
+    wifi_bt_common_module_disable();
+  }
 }

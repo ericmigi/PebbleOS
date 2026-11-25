@@ -117,7 +117,7 @@ static size_t prv_get_worker_segment_size(const PebbleProcessMd *app_md) {
 }
 
 static size_t prv_get_worker_stack_size(const PebbleProcessMd *app_md) {
-#ifdef CONFIG_APP_NATIVE_RISCV32
+#ifdef CONFIG_APP_NATIVE_ALIASED
   // As for apps: the firmware calls run on it, and the worker loads 4 KiB aligned after it
   if ((app_md->process_storage == ProcessStorageFlash) && process_metadata_runs_natively(app_md)) {
     return 4 * 1024;

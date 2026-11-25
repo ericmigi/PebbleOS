@@ -114,6 +114,11 @@ bool resource_storage_flash_bytes_are_readonly(const void *bytes) {
 
 static const uint8_t *resource_storage_system_bank_readonly_bytes(ResourceStoreEntry *entry) {
 #ifdef CONFIG_MMAP_RESOURCES
+  const uint32_t length = BANK.end - BANK.begin;
+  if (entry->offset > length || entry->length > length - entry->offset ||
+      BANK.end > CONFIG_FLASH_SIZE) {
+    return nullptr;
+  }
   // Bank is XIP-mapped and readable by unprivileged code too.
   return (const uint8_t *)(uintptr_t)(CONFIG_FLASH_BASE + BANK.begin + entry->offset);
 #else

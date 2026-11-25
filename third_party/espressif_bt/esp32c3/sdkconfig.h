@@ -9,8 +9,12 @@
 
 #pragma once
 
+#ifdef CONFIG_SOC_ESP32S3
+#define CONFIG_IDF_TARGET_ESP32S3 1
+#else
 #define CONFIG_IDF_TARGET_ESP32C3   1
 #define CONFIG_ESP32C3_REV_MIN_FULL 3
+#endif
 
 // Controller (esp_bt.h, bt.c)
 #define CONFIG_BT_CTRL_MODE_EFF                 1

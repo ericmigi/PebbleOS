@@ -16,6 +16,12 @@ config RTC_SHELL
     help
       The rtc shell command, to read and set the RTC directly.
 
+config RTC_PCF8563
+    bool "PCF8563 / BM8563 I2C RTC"
+    default y
+    depends on DT_HAS_NXP_PCF8563_ENABLED
+    select I2C
+
 config RTC_RETAINED
     bool "Retained RAM"
     default y if SOC_NRF52

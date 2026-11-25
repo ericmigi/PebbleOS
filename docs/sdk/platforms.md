@@ -7,7 +7,7 @@ A platform is what apps are built against. It is a name and a description:
 | Display | width and height; rectangular or round; colour (8-bit) or black and white (1-bit) |
 | Features | `microphone`, `smartstrap`, `smartstrap_power`, `health`, `compass`, `touch`, `rgb_backlight`, `speaker`, `barometer` |
 | Limits | what an app may take: code and memory, worker memory, resources, the largest font glyph |
-| ABI | what app binaries are compiled for: `armv7m`, Cortex-M3 Thumb code with soft float, or `riscv32`, RV32IMC code with soft float (xteinkx4) |
+| ABI | what app binaries are compiled for: `armv7m`, Cortex-M3 Thumb code with soft float, `riscv32`, RV32IMC code with soft float (xteinkx4), or `xtensa`, ESP32-S3 LX7 windowed ABI (xteinkx4pro) |
 
 The name labels the platform's directory in the SDK and in a `.pbw`.
 Everything the builds need to know of a platform follows from its
@@ -21,7 +21,12 @@ The firmware's platforms:
 | Flint | 144 × 168, black and white | Pebble 2 Duo |
 | Gabbro | 260 × 260 round, colour | Pebble Round 2 |
 | Cyberdeck | 400 × 240, black and white | Cyberdeck |
+| xteinkx4pro | 240 × 400, black and white, `xtensa` | Xteink X4 Pro, BOOX Picco and qemu_esp32s3 |
 | xteinkx4 | 240 × 400, black and white, `riscv32` | Xteink X4, its 480 × 800 e-paper panel at two panel pixels per pixel |
+
+For the X4 Pro hardware SDK, external CMake builds, and console installation,
+see {doc}`building`. The native PBW directory is `xteinkx4pro/`.
+Native apps run with the firmware's memory privileges.
 
 ## Where platforms are defined
 

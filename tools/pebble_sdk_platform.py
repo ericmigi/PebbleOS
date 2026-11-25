@@ -32,7 +32,7 @@ import re
 
 DESCRIPTOR_VERSION = 1
 
-ABIS = ("armv7m", "riscv32")
+ABIS = ("armv7m", "riscv32", "xtensa")
 
 # What the binaries of an ABI are built with: the prefix of its toolchain's
 # tools, the flags apps compile and link with, and how far above its data a
@@ -44,6 +44,17 @@ ABI_TOOLCHAINS = {
         "prefix": "arm-none-eabi-",
         "flags": ["-mcpu=cortex-m3", "-mthumb", "-fPIE"],
         "code_offset": 0,
+    },
+    "xtensa": {
+        "prefix": "xtensa-esp32s3-elf-",
+        "flags": [
+            "-mabi=windowed",
+            "-mlongcalls",
+            "-mtext-section-literals",
+            "-fno-pic",
+            "-fshort-enums",
+        ],
+        "code_offset": 0x6F0000,
     },
     "riscv32": {
         "prefix": "riscv32-esp-elf-",

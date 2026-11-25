@@ -214,6 +214,7 @@ PlatformType process_metadata_get_app_sdk_platform(const PebbleProcessMd *md);
 typedef enum {
   PLATFORM_ABI_ARMV7M = 1,  //!< Cortex-M3 Thumb, soft float
   PLATFORM_ABI_RISCV32 = 2, //!< RV32IMC, soft float, code PROCESS_RISCV32_CODE_OFFSET above data
+  PLATFORM_ABI_XTENSA = 3,  //!< ESP32-S3 Xtensa LX7 windowed ABI
 } PebblePlatformAbi;
 
 //! How far above its data a riscv32 binary's code is linked: the ESP32-C3 fetches instructions

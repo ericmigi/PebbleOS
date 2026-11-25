@@ -72,6 +72,18 @@ pbl_clar_test(test_text_render
   OVERRIDES dummy_board
 )
 
+pbl_clar_test(test_text_grey_scale2
+  PLATFORMS flint
+  DEFINES CONFIG_FRAMEBUFFER_SCALE2=1 CONFIG_TEXT_DETAIL=1 CONFIG_TEXT_DETAIL_GLYPHS=1
+          CONFIG_TEXT_DETAIL_DEFAULT_MODE=3
+  MODULES gtypes
+  SOURCES
+    pebble/applib/graphics/text_render.c
+    pebble/applib/graphics/text_grey.c
+    pebble/applib/fonts/codepoint.c
+  OVERRIDES dummy_board
+)
+
 pbl_clar_test(test_text_resources
   MODULES resources
   SOURCES

@@ -119,8 +119,7 @@ xtensa_vectors:
 
 	/* 0x3c0: DoubleExceptionVector */
 	.org xtensa_vectors + 0x3c0
-	wsr.excsave1	a0
-	j	xtensa_trap_entry
+	j	.Ldouble_exception_reset
 
 	.org xtensa_vectors + 0x400
 
@@ -130,6 +129,25 @@ xtensa_vectors:
  */
 	.section .ramfunc.text.trap, "ax"
 	.balign 4
+	.literal_position
+.Ldouble_exception_reset:
+	/* A nested exception may have interrupted a stack spill. Drop the old windows and stack. */
+	movi	a2, 0
+	wsr.windowbase	a2
+	rsync
+	movi	a2, 1
+	wsr.windowstart	a2
+	rsync
+	movi	a1, _estack
+	addi	a1, a1, -16
+	movi	a2, PS_WOE_UM_INT3
+	wsr.ps	a2
+	rsync
+	movi	a4, pbl_soc_reset
+	callx4	a4
+1:
+	j	1b
+
 	.literal_position
 xtensa_trap_entry:
 	/* Fast path for EXCCAUSE_ALLOCA (5): underflow the caller window so movsp succeeds */
@@ -164,6 +182,8 @@ xtensa_trap_entry:
 	s32i	a2, a1, XT_FRAME_PS
 	rsr.sar	a2
 	s32i	a2, a1, XT_FRAME_SAR
+	rsr.scompare1	a2
+	s32i	a2, a1, XT_FRAME_SCOMPARE1
 	rsr.lbeg	a2
 	s32i	a2, a1, XT_FRAME_LBEG
 	rsr.lend	a2
@@ -413,6 +433,8 @@ xtensa_trap_restore:
 	wsr.epc1	a2
 	l32i	a2, a1, XT_FRAME_SAR
 	wsr.sar	a2
+	l32i	a2, a1, XT_FRAME_SCOMPARE1
+	wsr.scompare1	a2
 	l32i	a2, a1, XT_FRAME_LBEG
 	wsr.lbeg	a2
 	l32i	a2, a1, XT_FRAME_LEND

@@ -49,6 +49,13 @@ config SAMSA_MAX_OBJS
     int "Converted objects a process can have"
     default 1024
 
+config SAMSA_BIND_SDK_DISPATCH
+    bool "Accelerate the standard ARM SDK import dispatcher"
+    default y if BOARD_XTEINK_X4_PRO || BOARD_XTEINK_X4
+    help
+      Recognize the ARM SDK's shared import stub and perform its register
+      restore and table lookup in one step. Other imports run normally.
+
 config SAMSA_CACHE_ENTRIES
     int "Decoded instructions a process keeps"
     range 0 1024

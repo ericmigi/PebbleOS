@@ -42,10 +42,10 @@ include(sdk)
 
 # Third-party apps call the firmware through the SDK shims. The recovery
 # firmware runs none. A firmware runs them on its CPU when they are of its
-# ABI (Cortex-M, or RISC-V with APP_NATIVE_RISCV32), and otherwise only with
+# ABI (Cortex-M, RISC-V or Xtensa), and otherwise only with
 # Samsa interpreting them. Either way the apps are the watch's, so the SDK to
 # build them with can be packaged from all of these.
-if(NOT CONFIG_RECOVERY_FW AND (CONFIG_CPU_CORTEX_M OR CONFIG_SAMSA OR CONFIG_APP_NATIVE_RISCV32))
+if(NOT CONFIG_RECOVERY_FW AND (CONFIG_CPU_CORTEX_M OR CONFIG_SAMSA OR CONFIG_APP_NATIVE_ALIASED))
   pbl_native_sdk()
   add_dependencies(pbl_generated_headers pbl_native_sdk)
   set(PBL_FIRMWARE_SOURCES ${PBL_PEBBLE_AUTO_C})

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+compatible: i2c-gpio
+config: I2C_GPIO
+class: i2c
+define: PBL_I2C_GPIO_DEFINE
+args:
+  - name: true
+  - gpio: scl
+  - gpio: sda
+  - prop: i2c-gpio,delay-us
+    default: 5

@@ -41,7 +41,7 @@ static int prv_configure(const struct pbl_gpio_port *port, uint8_t pin, uint32_t
   const struct pbl_gpio_esp32c3 *gpio = prv_port(port);
   uint32_t pad = IO_MUX_FUN_IE | PBL_FIELD_PREP(IO_MUX_MCU_SEL_MASK, IO_MUX_FUNC_GPIO);
 
-  if ((flags & (PBL_GPIO_INPUT | PBL_GPIO_OUTPUT)) == 0U) {
+  if (!esp32_gpio_pad_available(pin) || (flags & (PBL_GPIO_INPUT | PBL_GPIO_OUTPUT)) == 0U) {
     return -EINVAL;
   }
   if (ESP32C3_GPIO_IS_USB(pin)) {
@@ -79,6 +79,10 @@ static int prv_configure(const struct pbl_gpio_port *port, uint8_t pin, uint32_t
 static int prv_get(const struct pbl_gpio_port *port, uint8_t pin) {
   const struct pbl_gpio_esp32c3 *gpio = prv_port(port);
 
+  if (!esp32_gpio_pad_available(pin)) {
+    return -EINVAL;
+  }
+
   if (pin < 32U) {
     return (pbl_readl(gpio->base + ESP32C3_GPIO_IN_OFFSET) & PBL_BIT(pin)) != 0U;
   }
@@ -87,6 +91,10 @@ static int prv_get(const struct pbl_gpio_port *port, uint8_t pin) {
 
 static int prv_set(const struct pbl_gpio_port *port, uint8_t pin, bool level) {
   const struct pbl_gpio_esp32c3 *gpio = prv_port(port);
+
+  if (!esp32_gpio_pad_available(pin)) {
+    return -EINVAL;
+  }
 
   if (level) {
     prv_bank_write(gpio, ESP32C3_GPIO_OUT_W1TS_OFFSET, ESP32C3_GPIO_OUT1_W1TS_OFFSET, pin);
@@ -106,6 +114,10 @@ const struct pbl_gpio_port_ops pbl_gpio_esp32c3_ops = {
 static int prv_intc_configure(const struct pbl_intc *intc, uint32_t hwirq, uint32_t type) {
   const struct pbl_gpio_esp32c3 *gpio = prv_intc_port(intc);
   uint32_t hw;
+
+  if (!esp32_gpio_pad_available(hwirq)) {
+    return -EINVAL;
+  }
 
   switch (type) {
     case PBL_IRQ_TYPE_EDGE_RISING:

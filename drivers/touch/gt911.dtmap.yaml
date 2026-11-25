@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: goodix,gt911
+config: TOUCH_GT911
+class: touch
+define: PBL_GT911_DEFINE
+args:
+  - parent: i2c
+  - reg: 0
+  - irq: 0
+  - gpio: irq
+  - gpio: reset
+  - supply: AVDD28
+  - prop: touchscreen-size-x
+  - prop: touchscreen-size-y

@@ -86,12 +86,13 @@ extern const struct pbl_pinctrl_controller_ops pbl_pinctrl_esp32c3_ops;
  * @param _name Name.
  * @param _base IO_MUX registers.
  * @param _matrix GPIO matrix registers.
+ * @param _num_pads Number of GPIO pad indices.
  */
-#define PBL_PINCTRL_ESP32C3_DEFINE(sym, _name, _base, _matrix)                                \
-  PBL_DEVICE_STATE_DEFINE(sym);                                                               \
-  PBL_DEVICE_INSTANCE(sym, struct pbl_pinctrl_esp32c3, struct pbl_pinctrl_controller, ctrl) { \
-    .ctrl = PBL_PINCTRL_CONTROLLER_INIT(sym, _name, nullptr, &pbl_pinctrl_esp32c3_ops, 22),   \
-    .base = (_base), .matrix = (_matrix),                                                     \
+#define PBL_PINCTRL_ESP32C3_DEFINE(sym, _name, _base, _matrix, _num_pads)                          \
+  PBL_DEVICE_STATE_DEFINE(sym);                                                                    \
+  PBL_DEVICE_INSTANCE(sym, struct pbl_pinctrl_esp32c3, struct pbl_pinctrl_controller, ctrl) {      \
+    .ctrl = PBL_PINCTRL_CONTROLLER_INIT(sym, _name, nullptr, &pbl_pinctrl_esp32c3_ops, _num_pads), \
+    .base = (_base), .matrix = (_matrix),                                                          \
   }
 
 /** @} */

@@ -8,6 +8,12 @@ menuconfig I2C
 
 if I2C
 
+config I2C_GPIO
+    bool "GPIO I2C controller"
+    default y
+    depends on DT_HAS_I2C_GPIO_ENABLED
+    select GPIO
+
 config I2C_NRF5
     bool "Nordic nRF5 I2C Controller"
     default y

@@ -682,6 +682,11 @@ typedef struct PebbleWorkoutEvent {
 
 typedef struct PBL_PACKED PBL_ALIGNED(sizeof(void *)) {
   union PBL_PACKED {
+    struct {
+      uint32_t ticks;   // App window draw time in debug images.
+      uint8_t sequence; // Nonzero for a changing-content benchmark request and its response.
+      bool reuse_frame; // Release, request or re-publish a completed frame skipped during scanout.
+    } render;
     PebblePanicEvent panic;
     PebbleButtonEvent button;
     PebbleSysNotificationEvent sys_notification;

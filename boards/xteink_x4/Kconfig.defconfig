@@ -9,3 +9,6 @@ config RESOURCES_BOARD
 choice NIMBLE_HCI
     default NIMBLE_HCI_ESP32C3 if ESP32C3_BT
 endchoice
+
+config DISPLAY_SSD1677_MOTION_FRAMES
+    default 2

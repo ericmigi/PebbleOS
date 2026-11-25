@@ -51,7 +51,7 @@ extern const uint8_t __FLASH_size__[];
 static const struct pbl_mpu_region s_kernel_regions[] = {
   {
     .name = "firmware",
-#ifdef CONFIG_ARMV8_M_MAINLINE
+#if defined(CONFIG_ARMV8_M_MAINLINE) || defined(CONFIG_CPU_XTENSA)
     .base = CONFIG_FLASH_BASE + CONFIG_FLASH_OFFSET,
     .size = CONFIG_FW_FLASH_SIZE,
 #else

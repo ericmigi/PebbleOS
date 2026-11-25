@@ -34,6 +34,9 @@ def gen_function_pointer_array(functions):
 
     output.extend(f"  {f}," for f in function_ptrs)
     output.append("};")
+    output.append(
+        "const size_t g_pbl_system_tbl_count = sizeof(g_pbl_system_tbl) / sizeof(*g_pbl_system_tbl);"
+    )
     output.append("")
 
     return "\n".join(output)

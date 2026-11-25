@@ -39,7 +39,9 @@
 #include <devicetree/regs.h>
 #include <esp32c3_bt.h>
 #include <hardware/esp32c3_systimer.h>
+#ifndef CONFIG_SOC_ESP32S3
 #include <intmatrix.h>
+#endif
 
 PBL_LOG_MODULE_DEFINE(espressif_bt, CONFIG_ESP32C3_BT_LOG_LEVEL);
 
@@ -142,6 +144,8 @@ extern int btdm_osi_funcs_register(void *osi_funcs);
 /* Initialise and De-initialise */
 extern int btdm_controller_init(esp_bt_controller_config_t *config_opts);
 extern int btdm_controller_enable(uint8_t mode);
+extern bool btdm_power_state_active(void);
+extern void btdm_controller_disable(void);
 extern uint8_t btdm_controller_get_mode(void);
 extern const char *btdm_controller_get_compile_version(void);
 extern void btdm_controller_rom_data_init(void);
@@ -199,6 +203,20 @@ static void prv_intr_trampoline(void *arg) {
   }
 }
 
+#ifdef CONFIG_SOC_ESP32S3
+static void prv_radio_irq(pbl_irq_t source) {
+  for (uint32_t i = 0; i < s_intr_count; i++) {
+    if (s_intr[i].source == source) {
+      prv_intr_trampoline(&s_intr[i]);
+      return;
+    }
+  }
+}
+PBL_IRQ_CONNECT(BT_BB, 1, prv_radio_irq, PBL_SOC_IRQN_BT_BB, 0);
+PBL_IRQ_CONNECT(RWBT, 1, prv_radio_irq, PBL_SOC_IRQN_RWBT, 0);
+PBL_IRQ_CONNECT(RWBLE, 1, prv_radio_irq, PBL_SOC_IRQN_RWBLE, 0);
+#endif
+
 bool esp32c3_bt_intr_stats(uint32_t i, uint32_t *source, uint32_t *count) {
   if (i >= s_intr_count) {
     return false;
@@ -236,7 +254,14 @@ static int interrupt_alloc_wrapper(int cpu_id, int source, intr_handler_t handle
   intr->source = (pbl_irq_t)source;
   intr->fn = handler;
   intr->arg = arg;
+#ifdef CONFIG_SOC_ESP32S3
+  ret =
+      (source == PBL_SOC_IRQN_BT_BB || source == PBL_SOC_IRQN_RWBT || source == PBL_SOC_IRQN_RWBLE)
+          ? 0
+          : -EINVAL;
+#else
   ret = esp32c3_irq_attach((pbl_irq_t)source, prv_intr_trampoline, intr);
+#endif
   PBL_LOG_DBG("interrupt source %d: %d", source, ret);
   if (ret != 0) {
     return ret;
@@ -251,7 +276,11 @@ static int interrupt_alloc_wrapper(int cpu_id, int source, intr_handler_t handle
 }
 
 static int interrupt_free_wrapper(void *handle) {
+#ifdef CONFIG_SOC_ESP32S3
+  pbl_irq_disable(*(pbl_irq_t *)handle);
+#else
   esp32c3_irq_detach(*(pbl_irq_t *)handle);
+#endif
   return 0;
 }
 
@@ -651,6 +680,24 @@ static int64_t get_time_us_wrapper(void) {
   return (int64_t)(now / 16U);
 }
 
+static int64_t prv_sample_cpu_clock(uint32_t *cycles) {
+  pbl_irq_lock();
+  int64_t us = get_time_us_wrapper();
+  *cycles = pbl_cycle_get_32();
+  pbl_irq_unlock();
+  return us;
+}
+
+uint32_t esp_bt_measured_cpu_mhz(void) {
+  uint32_t start_cycles, end_cycles;
+  int64_t start_us = prv_sample_cpu_clock(&start_cycles);
+  int64_t elapsed;
+  do {
+    elapsed = prv_sample_cpu_clock(&end_cycles) - start_us;
+  } while (elapsed < 1000);
+  return (uint32_t)((end_cycles - start_cycles + elapsed / 2) / elapsed);
+}
+
 static void assert_wrapper(void) {
   PBL_LOG_ERR("controller assert");
 }
@@ -735,7 +782,9 @@ static int btdm_low_power_mode_init(esp_bt_controller_config_t *cfg) {
   bool set_div_ret;
 
   // Modem sleep off: the low power clock is the main crystal, which stays on
+  esp_bt_init_stage(EspBtStage_LpClock);
   select_src_ret = btdm_lpclk_select_src(BTDM_LPCLK_SEL_XTAL);
+  esp_bt_init_stage(EspBtStage_LpDiv);
   set_div_ret = btdm_lpclk_set_div(ESP32C3_XTAL_HZ / MHZ);
   if (!select_src_ret || !set_div_ret) {
     return -EIO;
@@ -746,16 +795,24 @@ static int btdm_low_power_mode_init(esp_bt_controller_config_t *cfg) {
   return 0;
 }
 
+static void prv_light_sleep_set_blocked(bool block);
+
 int esp32c3_bt_controller_init(void) {
   esp_bt_controller_config_t cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
   int err;
 
+  if (btdm_controller_status == BTDM_STATUS_INITED) {
+    return 0;
+  }
   if (btdm_controller_status != BTDM_STATUS_IDLE) {
     return -EALREADY;
   }
 
+  esp_bt_init_stage(EspBtStage_Power);
+  prv_light_sleep_set_blocked(true);
   esp_bt_power_domain_on();
 
+  esp_bt_init_stage(EspBtStage_Rom);
   btdm_controller_rom_data_init();
 #ifdef CONFIG_ESP32C3_BT_LOG_LEVEL_DEBUG
   // The controller prints its asserts' file and line through ets_printf() above 0
@@ -769,28 +826,36 @@ int esp32c3_bt_controller_init(void) {
   }
 
   memcpy(osi_funcs_p, &osi_funcs_ro, sizeof(struct osi_funcs_t));
+  esp_bt_init_stage(EspBtStage_Osi);
   if (btdm_osi_funcs_register(osi_funcs_p) != 0) {
     return -EINVAL;
   }
 
   PBL_LOG_INFO("BT controller compile version [%s]", btdm_controller_get_compile_version());
 
-  /* Must call periph_module_enable(BT) before any step that may goto error */
+  PBL_LOG_DBG("Enabling Bluetooth clocks and releasing controller reset");
+  esp_bt_init_stage(EspBtStage_Clocks);
   periph_bt_module_enable();
+  esp_bt_init_stage(EspBtStage_Reset);
   periph_bt_module_reset();
 
+  PBL_LOG_DBG("Selecting XTAL controller clock");
   err = btdm_low_power_mode_init(&cfg);
   if (err != 0) {
     PBL_LOG_ERR("Low power module initialization failed");
     return err;
   }
 
+  PBL_LOG_DBG("Initializing link-layer controller");
+  esp_bt_init_stage(EspBtStage_ControllerInit);
   err = btdm_controller_init(&cfg);
   if (err != 0) {
     PBL_LOG_ERR("btdm_controller_init %d", err);
     return -ENOMEM;
   }
 
+  PBL_LOG_DBG("Configuring HCI vendor commands");
+  esp_bt_init_stage(EspBtStage_Features);
   scan_stack_enableAdvFlowCtrlVsCmd(true);
   adv_stack_enableClearLegacyAdvVsCmd(true);
   advFilter_stack_enableDupExcListVsCmd(true);
@@ -833,20 +898,39 @@ int esp32c3_bt_controller_enable(void) {
   prv_light_sleep_set_blocked(true);
 
   /* Notice the init order: esp_phy_enable() -> bt_bb_v2_init_cmplx() -> coex_pti_v2() */
+  PBL_LOG_DBG("Enabling radio PHY");
+  esp_bt_init_stage(EspBtStage_Phy);
   esp_phy_enable(PHY_MODEM_BT);
 
   // Disable pll track by default in BLE controller on ESP32-C3 and ESP32-S3
   sdk_config_extend_set_pll_track(false);
 
+  esp_bt_init_stage(EspBtStage_Enable);
   if (btdm_controller_enable(ESP_BT_MODE_BLE) != 0) {
-    prv_light_sleep_set_blocked(false);
+    esp_phy_disable(PHY_MODEM_BT);
     return -EIO;
   }
 
+  esp_bt_init_stage(EspBtStage_Coex);
   coex_pti_v2();
 
   btdm_controller_status = BTDM_STATUS_ENABLED;
 
+  return 0;
+}
+
+int esp32c3_bt_controller_disable(void) {
+  if (btdm_controller_status != BTDM_STATUS_ENABLED) {
+    return 0;
+  }
+  // Modem sleep is disabled. Only shut down a controller that is awake.
+  if (!btdm_power_state_active()) {
+    return -EBUSY;
+  }
+  btdm_controller_disable();
+  esp_phy_disable(PHY_MODEM_BT);
+  btdm_controller_status = BTDM_STATUS_INITED;
+  prv_light_sleep_set_blocked(false);
   return 0;
 }
 
@@ -879,8 +963,8 @@ int esp32c3_bt_vhci_register(const struct esp32c3_bt_vhci_callbacks *cb) {
     return -EINVAL;
   }
   // One host only: the NimBLE transport or the shell, whichever came first
-  if (s_cb.notify_host_recv != NULL) {
-    return s_cb.notify_host_recv == cb->recv ? 0 : -EBUSY;
+  if (s_cb.notify_host_recv != NULL && s_cb.notify_host_recv != cb->recv) {
+    return -EBUSY;
   }
   s_cb.notify_host_send_available = cb->send_available;
   s_cb.notify_host_recv = cb->recv;

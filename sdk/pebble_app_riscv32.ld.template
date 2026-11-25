@@ -1,7 +1,6 @@
-/* riscv32 apps: the image is laid out as pebble_app.ld.template lays it out,
- * but its code is linked @CODE_OFFSET@ above where it sits in the image,
- * which is where the CPU fetches the RAM the app is loaded to. Everything
- * else is linked where it sits, and code reaches it there: pc-relative. */
+/* Native RISC-V and Xtensa app code executes through an instruction alias
+ * of the data RAM. The text VMA includes that alias offset while the flat
+ * image packs text immediately after the platform descriptor. */
 
 ENTRY(main)
 EXTERN(pbl_process_entry)
@@ -38,6 +37,7 @@ SECTIONS
      * before it; its code is aligned to no more than 16 bytes. */
     .text CODE_OFFSET + ALIGN(16) : ALIGN(16)
     {
+        *(.literal .literal.*)
         *(.text)
         *(.text.*)
     } AT> APP

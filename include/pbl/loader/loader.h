@@ -67,6 +67,9 @@ struct pbl_loader_source {
 /** @brief Marks a relocation table entry that names a RISC-V @c lui, not a slot. */
 #define PBL_LOADER_RISCV_HI20_ENTRY (1U << 31)
 
+/** Xtensa long-call literals encode a firmware import as this base plus its byte offset. */
+#define PBL_LOADER_XTENSA_IMPORT_BASE 0x10000000U
+
 /** @brief Image layout. */
 struct pbl_loader_image {
   /** Size of the file part, stored at source offset 0. */
@@ -92,6 +95,9 @@ struct pbl_loader_image {
    * immediate; the lower 12 bits of the address are then those the code was linked with.
    */
   bool riscv_hi20;
+  /** Optional native Xtensa SDK imports, indexed by words from PBL_LOADER_XTENSA_IMPORT_BASE. */
+  const void *const *imports;
+  size_t import_count;
 };
 
 /**

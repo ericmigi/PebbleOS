@@ -15,5 +15,6 @@ serialized per bus.
 
 | Driver | Compatible | Kconfig |
 | --- | --- | --- |
+| GPIO single-master I2C | `i2c-gpio` | `CONFIG_I2C_GPIO` |
 | Nordic nRF5 I2C Controller | `nordic,nrf52832-twim` | `CONFIG_I2C_NRF5` |
 | SiFli SF32LB I2C Controller | `sifli,sf32lb52-i2c` | `CONFIG_I2C_SF32LB` |

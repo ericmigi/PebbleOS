@@ -19,8 +19,11 @@ endforeach()
 # Platforms of another ABI build with its toolchain, through a compiler
 # launcher (pebble.cmake): next to the SDK, on PATH, or where PlatformIO
 # installs Espressif's.
+file(GLOB _pebble_xtensa_dirs "$ENV{HOME}/.espressif/tools/xtensa-esp-elf/*/xtensa-esp-elf/bin")
 foreach(tool gcc objcopy)
   string(TOUPPER ${tool} var)
+  find_program(PEBBLE_XTENSA_${var} xtensa-esp32s3-elf-${tool}
+    HINTS ${_pebble_toolchain}/../../xtensa-esp-elf/bin ${_pebble_xtensa_dirs})
   find_program(PEBBLE_RISCV32_${var} riscv32-esp-elf-${tool}
     HINTS ${_pebble_toolchain}/../../riscv32-esp-elf/bin
           $ENV{HOME}/.platformio/packages/toolchain-riscv32-esp/bin)

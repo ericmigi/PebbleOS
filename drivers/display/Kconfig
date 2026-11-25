@@ -97,6 +97,25 @@ config DISPLAY_SSD1677
       Support for the SSD1677 e-paper controller on SPI, with a
       data/command line and a BUSY input.
 
+config DISPLAY_UC8279_X4
+    bool "Probe X4 Pro panels for the UltraChip UC8279"
+    depends on DISPLAY_SSD1677 && PINCTRL
+    default y if BOARD_XTEINK_X4_PRO
+    help
+      Identify the controller on X4 Pro display modules. A UC8279 uses
+      its built-in monochrome waveforms and an offset of 120 gate lines.
+      The probe requires the SPI clock and data GPIOs in the display node.
+
+config DISPLAY_SSD1677_MOTION_FRAMES
+    int "SSD1677 differential drive frames during small animations"
+    depends on DISPLAY_SSD1677
+    range 0 2
+    default 0
+    help
+      Shorten the differential drive for consecutive small monochrome
+      changes. The normal waveform handles isolated and large changes.
+      Zero uses the normal waveform for every update.
+
 config DISPLAY_SSD1677_FRAME_COPY
     bool "SSD1677 keeps a copy of the frame shown"
     depends on DISPLAY_SSD1677

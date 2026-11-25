@@ -434,8 +434,13 @@ pbl_clar_test(test_vibe_score_info
 
 pbl_clar_test(test_touch
   SOURCES
+    drivers/base/device.c
+    drivers/touch/touch.c
+    subsys/input/input.c
     pebble/services/touch/touch.c
     tests/fakes/fake_events.c
+  DEFINES
+    CONFIG_DEVICE_LOG_LEVEL=0
 )
 
 pbl_clar_test(test_touch_session

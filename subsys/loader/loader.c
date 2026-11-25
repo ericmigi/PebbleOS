@@ -108,6 +108,16 @@ static int prv_apply(const struct pbl_loader_image *img, uint8_t *dst, const uin
 
     uint32_t value;
     memcpy(&value, &dst[target], sizeof(value));
+    if (img->imports && value >= PBL_LOADER_XTENSA_IMPORT_BASE) {
+      const uint32_t offset = value - PBL_LOADER_XTENSA_IMPORT_BASE;
+      const size_t index = offset / sizeof(uint32_t);
+      if (offset % sizeof(uint32_t) || index >= img->import_count || !img->imports[index]) {
+        return -EINVAL;
+      }
+      const uint32_t imported = (uint32_t)(uintptr_t)img->imports[index];
+      memcpy(&dst[target], &imported, sizeof(imported));
+      continue;
+    }
     if (!prv_value_in_image(img, value)) {
       PBL_LOG_WRN("Invalid relocation value[%zu]: 0x%" PRIx32, i, value);
       return -EINVAL;

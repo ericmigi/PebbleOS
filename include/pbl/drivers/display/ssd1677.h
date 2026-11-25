@@ -11,6 +11,9 @@
 #include <pbl/drivers/intc.h>
 #include <pbl/drivers/spi.h>
 #include <pbl/kernel/mutex.h>
+#ifdef CONFIG_DISPLAY_UC8279_X4
+#include <pbl/kernel/thread.h>
+#endif
 #include <pbl/kernel/timer.h>
 #include <pbl/kernel/work.h>
 
@@ -68,8 +71,56 @@ struct pbl_display_ssd1677_cell {
   uint8_t levels;
 };
 
+#ifdef CONFIG_DISPLAY_UC8279_X4
+enum uc8279_drive {
+  UC8279_DRIVE_NONE,
+  UC8279_DRIVE_FULL,
+  UC8279_DRIVE_PARTIAL,
+  UC8279_DRIVE_GREY,
+  UC8279_DRIVE_TRANSITION,
+  UC8279_DRIVE_MOTION,
+};
+#endif
+
 struct pbl_display_ssd1677_state {
   const struct pbl_display *disp;
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  uint8_t panel_id[2][6];
+  bool uc8279;
+  bool power_off_pending;
+  bool last_was_grey;
+  bool grey_hash_valid;
+  uint32_t grey_hash;
+  enum uc8279_drive last_drive;
+  uint32_t completed_drives;
+  uint16_t unsettled_pulses;
+  uint32_t full_mono_drives;
+  bool motion_override;
+  uint32_t motion_drives;
+#ifdef CONFIG_SHELL
+  uint32_t sparse_updates;
+  uint32_t sparse_regions;
+  uint32_t sparse_bytes_saved; // Both planes, cumulative
+  uint32_t measured_motion_drives;
+  uint32_t motion_busy_ms;
+  uint32_t motion_min_busy_ms;
+#endif
+  uint8_t pulse_frames;
+  uint8_t motion_left;
+  bool motion_text_clock;
+  uint32_t tile_crc[25][15]; // 32x32-pixel tiles of the portrait framebuffer
+  uint16_t last_window_width;
+  uint16_t last_window_height;
+  struct pbl_thread panel_thread;
+  struct pbl_sem frame_ready;
+  struct pbl_display_buffer next_frame;
+  uint8_t *next_grey_levels;
+  bool next_grey;
+  bool next_retains_grey;
+  uint16_t next_y0;
+  uint16_t next_y1;
+  uint8_t panel_stack[3072 + CONFIG_KERNEL_STACK_GUARD_SIZE] PBL_ALIGNED(CONFIG_KERNEL_STACK_ALIGN);
+#endif
   struct pbl_mutex lock;
   struct pbl_delayed_work idle;
   struct pbl_display_ssd1677_wave wave;
@@ -86,7 +137,12 @@ struct pbl_display_ssd1677_state {
   bool stale_valid;
   // Rows changed by fast refreshes since the last top up or clean refresh, in dirty
   bool dirty_valid;
-  uint16_t updates;
+  uint32_t updates;
+  uint8_t motion_frames;
+  uint8_t topup_extra;
+  bool short_drive;
+  uint32_t clean_due_ms;
+  uint32_t last_user_start_ms;
   // Without a frame copy: the framebuffer of the last update, the re-sync of both planes after a
   // refresh, before its completion, and whether it is still to run
   const uint8_t *frame;
@@ -103,6 +159,11 @@ struct pbl_display_ssd1677_state {
   uint16_t last_write_ms;
   uint16_t last_refresh_ms;
   uint16_t last_post_ms;
+#ifdef CONFIG_SHELL
+  uint32_t completed_updates;
+  uint32_t first_update_ms;
+  uint32_t last_update_ms;
+#endif
   uint32_t refresh_start_ms;
   // Planes re-synced after a refresh: 0 both, 1 the old one only, 2 the new one only
   uint8_t resync_planes;
@@ -123,6 +184,11 @@ struct pbl_display_ssd1677 {
   struct pbl_gpio reset;
   /** BUSY input. */
   struct pbl_gpio busy;
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  struct pbl_gpio probe_clock;
+  struct pbl_gpio probe_data;
+  const struct pbl_pinctrl_state *probe_restore;
+#endif
   /** Copy of the last frame; nullptr without, the framebuffer is read instead. */
   uint8_t *shadow;
   /** Without a frame copy: CRC-32 of each row shown. */
@@ -211,8 +277,23 @@ int pbl_display_ssd1677_grey(const struct pbl_display *disp, const uint8_t *old_
  */
 void pbl_display_ssd1677_grey_tune(uint8_t light, uint8_t dark, uint8_t frame_rate, uint8_t tail);
 
+#ifdef CONFIG_DISPLAY_UC8279_X4
+/** Count successfully completed physical panel waveforms. */
+bool pbl_display_ssd1677_text_grey_supported(const struct pbl_display *disp);
+uint32_t pbl_display_uc8279_completed_drives(const struct pbl_display *disp);
+/** Check for a pending idle cleanup. Arm a full refresh when requested. */
+bool pbl_display_uc8279_motion_settle(const struct pbl_display *disp, bool arm);
+#endif
+
 /** @cond INTERNAL_HIDDEN */
 extern const struct pbl_display_ops pbl_display_ssd1677_ops;
+
+#if defined(CONFIG_DISPLAY_UC8279_X4) && defined(CONFIG_SHELL)
+/** Supply the 480 visible controller gates of each absolute image plane in scan order. */
+typedef int (*uc8279_image_read_fn)(void *ctx, unsigned plane, unsigned gate, uint8_t *data,
+                                    unsigned gates);
+int pbl_display_uc8279_image(uc8279_image_read_fn read, void *ctx);
+#endif
 
 #define SSD1677_SCAN_WIDTH(_pw, _ph, _rot) (((_rot) % 180) ? (_ph) : (_pw))
 // Framebuffer rows of grey levels read per band by a grey update without a frame copy: a multiple
@@ -267,10 +348,16 @@ extern const struct pbl_display_ops pbl_display_ssd1677_ops;
 
 // Width, height and scale as the devicetree describes them, before PBL_DISPLAY_FRAMEBUFFER_SCALE
 #define PBL_SSD1677_FB(_n) ((_n) * PBL_DISPLAY_FRAMEBUFFER_SCALE)
-#define PBL_DISPLAY_SSD1677_DEFINE(                                                                \
-    sym, _name, _bus, _cs, _max_hz, _mode, _dc, _reset, _busy, _width, _height, _panel_width,      \
-    _panel_height, _scale, _rotation, _full_interval, _fast_frames, _fast_differential,            \
-    _fast_frame_rate, _vsh1, _vsh2, _vsl, _topup_frames, _full_on_idle, _idle_ms, _power_off_ms)   \
+#ifdef CONFIG_DISPLAY_UC8279_X4
+#define SSD1677_PROBE_FIELDS(...) __VA_ARGS__
+#else
+#define SSD1677_PROBE_FIELDS(...)
+#endif
+#define PBL_DISPLAY_SSD1677_DEFINE(sym, _name, _bus, _cs, _max_hz, _mode, _dc, _reset, _busy,      \
+                                   _width, _height, _panel_width, _panel_height, _scale,           \
+                                   _rotation, _full_interval, _fast_frames, _fast_differential,    \
+                                   _fast_frame_rate, _vsh1, _vsh2, _vsl, _topup_frames,            \
+                                   _full_on_idle, _idle_ms, _power_off_ms, ...)                    \
   static_assert((_scale) % PBL_DISPLAY_FRAMEBUFFER_SCALE == 0,                                     \
                 "scale not a multiple of the framebuffer's");                                      \
   static_assert((_rotation) % 90 == 0 && (_rotation) < 360, "rotation of 0, 90, 180 or 270");      \
@@ -342,7 +429,7 @@ extern const struct pbl_display_ops pbl_display_ssd1677_ops;
     .fast_frames = (_fast_frames), .fast_differential = (_fast_differential) != 0,                 \
     .fast_frame_rate = (_fast_frame_rate), .source = {(_vsh1), (_vsh2), (_vsl)},                   \
     .topup_frames = (_topup_frames), .full_on_idle = (_full_on_idle) != 0, .idle_ms = (_idle_ms),  \
-    .power_off_ms = (_power_off_ms),                                                               \
+    .power_off_ms = (_power_off_ms), SSD1677_PROBE_FIELDS(__VA_ARGS__)                             \
   }
 
 /** @} */

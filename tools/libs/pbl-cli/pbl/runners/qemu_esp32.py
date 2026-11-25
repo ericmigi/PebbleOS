@@ -130,13 +130,12 @@ class QemuEsp32Runner(Runner):
             if machine == "esp32s3"
             else "PEBBLE_QEMU_ESP32_BIN"
         )
-        qemu = os.getenv(env_var) or os.getenv("PEBBLE_QEMU_ESP32_BIN")
-        if (
-            qemu
-            and os.path.isfile(qemu)
-            and os.access(qemu, os.X_OK)
-            and (env_var == "PEBBLE_QEMU_ESP32_BIN" or os.path.basename(qemu) == binary)
-        ):
+        qemu = os.getenv(env_var)
+        if not qemu and machine == "esp32s3":
+            generic = os.getenv("PEBBLE_QEMU_ESP32_BIN")
+            if generic and os.path.basename(generic) == binary:
+                qemu = generic
+        if qemu and os.path.isfile(qemu) and os.access(qemu, os.X_OK):
             return qemu
         qemu = shutil.which(binary)
         if not qemu:
@@ -145,11 +144,11 @@ class QemuEsp32Runner(Runner):
             )
         return qemu
 
-    def _flash_image(self, build):
+    def _flash_image(self, build, image=None):
         """Write the firmware, and the system resources at their partition,
         into the flash image, keeping the rest of an image already there:
         the filesystem survives a restart, as on a watch."""
-        image = build.join(FLASH_IMAGE)
+        image = image or build.join(FLASH_IMAGE)
         if self.cfg.dry_run:
             return image
         firmware = build.bin

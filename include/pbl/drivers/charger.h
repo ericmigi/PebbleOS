@@ -52,8 +52,11 @@ struct pbl_charger_measurements {
   int32_t voltage_mv;
   /** Current in uA, positive while discharging. */
   int32_t current_ua;
+  bool current_unavailable;
   /** Temperature in millidegrees Celsius. */
   int32_t temp_mc;
+  /** State of charge in percent, or -1 when unavailable. */
+  int16_t soc_percent;
 };
 
 /** @brief Charger listener. */

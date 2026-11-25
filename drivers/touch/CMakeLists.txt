@@ -3,6 +3,7 @@
 
 pbl_library()
 pbl_library_sources(touch.c)
+pbl_library_sources_ifdef(CONFIG_TOUCH_GT911 gt911.c)
 pbl_library_sources_ifdef(CONFIG_TOUCH_CST816 cst816/cst816.c)
 pbl_library_sources_ifdef(CONFIG_TOUCH_FT6236 ft6236.c)
 pbl_library_sources_ifdef(CONFIG_TOUCH_QEMU qemu.c)

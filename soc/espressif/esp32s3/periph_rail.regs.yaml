@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+config: BOARD_BOOX_PICCO
+props:
+  - label: periph_rail
+    prop: gpios
+    cell: 1

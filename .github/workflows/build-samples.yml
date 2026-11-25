@@ -112,6 +112,8 @@ jobs:
       # Espressif's toolchain and QEMU, at the versions ESP-IDF 5.5.5 pins
       - name: Install the Espressif toolchain and QEMU
         if: startsWith(matrix.board, 'qemu_esp32')
+        env:
+          ESP_ARCH: ${{ matrix.board == 'qemu_esp32s3' && 'xtensa' || 'riscv32' }}
         run: |
           apt-get update
           apt-get install -y --no-install-recommends curl xz-utils \
@@ -124,11 +126,16 @@ jobs:
             tar xf pkg.tar.xz
             rm pkg.tar.xz
           }
-          fetch https://github.com/espressif/crosstool-NG/releases/download/esp-14.2.0_20260121/riscv32-esp-elf-14.2.0_20260121-x86_64-linux-gnu.tar.xz \
-            b3fce4b04dd15a9f0ed1c209b5a2f389c04eff92ed85e4cc0ebc275b7d95e95a
-          fetch https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20260417/qemu-riscv32-softmmu-esp_develop_9.2.2_20260417-x86_64-linux-gnu.tar.xz \
-            547f03e04701a92cbb699f7f7d015adc1f5b5ef93cbb94c0dd9b7107e2d84e77
-          echo /opt/espressif/riscv32-esp-elf/bin >> "$GITHUB_PATH"
+          if [ "$ESP_ARCH" = xtensa ]; then
+            gcc_sha=da31f36d79d4e99f24e55a90a71e65d5694714f16199960bf7885724b706a48c
+            qemu_sha=0eecb2a34a5586c0e59110f77b9343b7b336e82fdb0e1a30e1dc1bab8a547e35
+          else
+            gcc_sha=b3fce4b04dd15a9f0ed1c209b5a2f389c04eff92ed85e4cc0ebc275b7d95e95a
+            qemu_sha=547f03e04701a92cbb699f7f7d015adc1f5b5ef93cbb94c0dd9b7107e2d84e77
+          fi
+          fetch "https://github.com/espressif/crosstool-NG/releases/download/esp-14.2.0_20260121/${ESP_ARCH}-esp-elf-14.2.0_20260121-x86_64-linux-gnu.tar.xz" "$gcc_sha"
+          fetch "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20260417/qemu-${ESP_ARCH}-softmmu-esp_develop_9.2.2_20260417-x86_64-linux-gnu.tar.xz" "$qemu_sha"
+          echo "/opt/espressif/${ESP_ARCH}-esp-elf/bin" >> "$GITHUB_PATH"
           echo /opt/espressif/qemu/bin >> "$GITHUB_PATH"
 
       # Runs them too, and checks what they print, on the emulator.

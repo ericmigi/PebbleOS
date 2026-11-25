@@ -20,6 +20,8 @@ config PLATFORM_FLINT
     bool "Flint"
 config PLATFORM_XTEINKX4
     bool "Xteink X4"
+config PLATFORM_XTEINKX4PRO
+    bool "Xteink X4 Pro and BOOX Picco"
 config PLATFORM_GABBRO
     bool "Gabbro"
 endchoice
@@ -44,6 +46,7 @@ config PLATFORM_ABI
 
 config PLATFORM_ABI_ID
     int
+    default 3 if PLATFORM_ABI = "xtensa"
     default 2 if PLATFORM_ABI = "riscv32"
     default 1
     help

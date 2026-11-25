@@ -3,7 +3,6 @@
 
 import os
 import shutil
-import socket
 import subprocess
 import tempfile
 import time
@@ -44,27 +43,25 @@ class QemuEsp32Adapter(DeviceAdapter):
 
         cfg = _Cfg()
         cfg.build = BuildDir(self.build.path, self.build.topdir)
-        built = cfg.build.join(FLASH_IMAGE)
-        if os.path.exists(built):
-            os.unlink(built)
+        self.machine = cfg.build.board_spec.qemu["machine"]
         runner = QemuEsp32Runner.__new__(QemuEsp32Runner)
         runner.cfg = cfg
         image = os.path.join(self.workdir, FLASH_IMAGE)
-        shutil.move(runner._flash_image(cfg.build), image)
-        return image
+        if os.path.exists(image):
+            os.unlink(image)
+        return runner._flash_image(cfg.build, image=image)
 
     def _start(self):
-        qemu = os.getenv("PEBBLE_QEMU_ESP32_BIN") or shutil.which("qemu-system-riscv32")
-        if not qemu:
-            raise HarnessError("no Espressif QEMU: set PEBBLE_QEMU_ESP32_BIN or PATH")
+        from pbl.runners.qemu_esp32 import QemuEsp32Runner
+
         command = [
-            qemu,
-            "-machine", "esp32c3",
+            QemuEsp32Runner._qemu(self.machine),
+            "-machine", self.machine,
             "-display", "none",
             "-monitor", f"unix:{self.monitor_socket},server=on,wait=off",
             "-serial", f"tcp:127.0.0.1:{self.console_port},server=on,wait=off,nodelay=on",
             *(["-serial", self._bt_hci] if self._bt_hci else []),
-            "-icount", "3",
+            *(["-icount", "3"] if self.machine == "esp32c3" else []),
             "-drive", f"file={self._flash},if=mtd,format=raw",
         ]  # fmt: skip
         self._log.write(" ".join(command) + "\n")
@@ -83,12 +80,14 @@ class QemuEsp32Adapter(DeviceAdapter):
                     f"{os.path.join(self.workdir, 'qemu.log')}"
                 )
             try:
-                socket.create_connection(("127.0.0.1", self.console_port), 1).close()
-                return
+                # Opening the single-client UART here can reset the actual test connection.
+                if "serial0:" in self._monitor("info chardev"):
+                    return
             except OSError:
-                if time.monotonic() > deadline:
-                    raise HarnessError("QEMU did not open its console port") from None
-                time.sleep(0.05)
+                pass
+            if time.monotonic() > deadline:
+                raise HarnessError("QEMU did not open its console port")
+            time.sleep(0.05)
 
     def _device_launch(self):
         self._sockdir = tempfile.mkdtemp(prefix="pbl-qemu-")

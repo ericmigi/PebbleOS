@@ -93,7 +93,24 @@ pbl_table_addr:
 .word 0xA8A8A8A8
 """
 
+# Absolute SDK symbols force GCC long calls through literals. The firmware
+# resolves those words at load time, preserving the caller's register window,
+# stack arguments, and function pointer identity.
+XTENSA_IMPORT = """
+.global %(function_name)s
+.set %(function_name)s, 0x10000000 + %(offset)d
+"""
+
+XTENSA_FOOTER = """
+.data
+.align 4
+.global pbl_table_addr
+pbl_table_addr:
+.word 0xA8A8A8A8
+"""
+
 SHIMS = {
+    "xtensa": ("", XTENSA_IMPORT, XTENSA_FOOTER),
     "armv7m": (SHIM_PREAMBLE, SHIM_TEMPLATE, SHIM_FOOTER),
     "riscv32": (RISCV32_SHIM_PREAMBLE, RISCV32_SHIM_TEMPLATE, RISCV32_SHIM_FOOTER),
 }

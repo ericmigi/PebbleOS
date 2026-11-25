@@ -326,8 +326,8 @@ bool process_metadata_runs_natively(const PebbleProcessMd *md) {
 #if defined(CONFIG_CPU_CORTEX_M) || defined(UNITTEST)
   // The unit tests are of a watch
   return process_metadata_get_abi(md) == PLATFORM_ABI_ARMV7M;
-#elif defined(CONFIG_APP_NATIVE_RISCV32)
-  return process_metadata_get_abi(md) == PLATFORM_ABI_RISCV32;
+#elif defined(CONFIG_APP_NATIVE_ALIASED)
+  return process_metadata_get_abi(md) == CONFIG_PLATFORM_ABI_ID;
 #else
   return false;
 #endif

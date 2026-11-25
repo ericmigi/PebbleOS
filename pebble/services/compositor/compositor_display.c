@@ -1,13 +1,20 @@
 /* SPDX-FileCopyrightText: 2024 Google LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include "epd_bench.h"
+
 #include <errno.h>
 #include <inttypes.h>
+#include <stdatomic.h>
 #include <string.h>
 
 #include <pbl/analytics/analytics.h>
 #include <pbl/board.h>
 #include <pbl/drivers/display.h>
+#ifdef CONFIG_DISPLAY_UC8279_X4
+#include <pbl/drivers/display/ssd1677.h>
+#include <process_management/app_manager.h>
+#endif
 #include <pbl/kernel/assert.h>
 #include <pbl/kernel/irq.h>
 #include <pbl/kernel/malloc.h>
@@ -21,6 +28,9 @@
 #include <applib/graphics/gtypes.h>
 #include <kernel/events.h>
 #include <kernel/pebble_tasks.h>
+#if defined(CONFIG_TEXT_DETAIL) && defined(CONFIG_FRAMEBUFFER_SCALE2) && defined(CONFIG_SHELL)
+#include <process_management/process_manager.h>
+#endif
 
 #ifdef CONFIG_TEXT_DETAIL
 #include <pbl/services/evented_timer.h>
@@ -32,6 +42,16 @@ static void (*s_update_complete_handler)(bool success);
 // From the start of a flush until its completion has run here, after the display's own: a flush
 // started in between would have its dirty rows reset by the previous one's completion
 static bool s_flush_pending;
+
+#ifdef CONFIG_SERVICE_BOOT_SPLASH_POWER_OFF
+static atomic_bool s_powering_off;
+
+void compositor_display_prepare_shutdown(void) {
+  // Block further composition and idle grey refinements, including queued flush completions.
+  s_powering_off = true;
+  s_flush_pending = true;
+}
+#endif
 
 static uint64_t s_flush_start_ticks;
 static uint32_t s_flush_count;
@@ -112,6 +132,9 @@ static void prv_corners_apply(FrameBuffer *fb, bool mask) {
 #ifdef CONFIG_TEXT_DETAIL
 // Text edges of the frame on the display, at panel resolution
 static TextDetailFrame s_detail_frame;
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+static bool s_retains_grey;
+#endif
 static EventedTimerID s_grey_timer = EVENTED_TIMER_INVALID_ID;
 
 static bool prv_detail_row(const struct pbl_display_detail *detail, uint16_t y, uint8_t *cells) {
@@ -129,23 +152,48 @@ static struct pbl_display_detail s_detail = {.row = prv_detail_row};
 
 static void prv_send(uint16_t y0, uint16_t y1, bool grey);
 
+static uint32_t prv_refine_delay(void) {
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  // A one-second watchface tick is still active. A full cleanup between ticks visibly inverts it.
+  if (pbl_display_uc8279_motion_settle(DISPLAY, false)) {
+    return 3000U;
+  }
+#endif
+  return GREY_IDLE_MS;
+}
+
 static void prv_grey_refine(void *data) {
   s_grey_timer = EVENTED_TIMER_INVALID_ID;
-  if (s_flush_pending || !text_detail_wants_grey()) {
+  if (s_flush_pending || epd_bench_active()) {
+    return;
+  }
+  bool grey = text_detail_wants_grey();
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  if (pbl_display_uc8279_motion_settle(DISPLAY, true)) {
+    grey = false;
+  } else
+#endif
+  if (!grey) {
     return;
   }
   s_flush_pending = true;
   s_flush_y0 = 0;
   s_flush_y1 = PBL_DISPLAY_HEIGHT * FRAMEBUFFER_SCALE - 1;
   s_flush_start_ticks = pbl_uptime_ticks();
-  prv_send(s_flush_y0, s_flush_y1, true);
+  prv_send(s_flush_y0, s_flush_y1, grey);
 }
 #endif
 
 static void prv_flush_finish(void *data) {
+#ifdef CONFIG_SERVICE_BOOT_SPLASH_POWER_OFF
+  if (s_powering_off) {
+    return;
+  }
+#endif
   bool success = (data == nullptr);
 
   s_flush_pending = false;
+  epd_bench_finish(success);
 
 #ifdef CONFIG_BOARD_DISPLAY_CORNERS
   prv_corners_apply(compositor_get_framebuffer(), false);
@@ -160,9 +208,13 @@ static void prv_flush_finish(void *data) {
   framebuffer_reset_dirty(compositor_get_framebuffer());
 
 #ifdef CONFIG_TEXT_DETAIL
-  if (success && !s_detail.grey && text_detail_wants_grey()) {
+  bool refine = text_detail_wants_grey();
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  refine |= pbl_display_uc8279_motion_settle(DISPLAY, false);
+#endif
+  if (success && !epd_bench_active() && !s_detail.grey && refine) {
     s_grey_timer =
-        evented_timer_register_or_reschedule(s_grey_timer, GREY_IDLE_MS, prv_grey_refine, nullptr);
+        evented_timer_register_or_reschedule(s_grey_timer, prv_refine_delay(), prv_grey_refine, nullptr);
   }
 #endif
 
@@ -174,6 +226,11 @@ static void prv_flush_finish(void *data) {
 // The display reports synchronously from compositor_display_update(), or from its interrupt or
 // a thread of its own, which hand the end to KernelMain
 static void prv_flush_done(int status, void *arg) {
+#ifdef CONFIG_SERVICE_BOOT_SPLASH_POWER_OFF
+  if (s_powering_off) {
+    return;
+  }
+#endif
   void *data = (status == 0) ? nullptr : (void *)1;
   const bool isr = pbl_in_isr();
 
@@ -204,6 +261,11 @@ void compositor_display_init(void) {
   const enum pbl_display_format format = PBL_DISPLAY_FORMAT_ARGB2222;
 #endif
   const struct pbl_display_props *props = pbl_display_get_props(DISPLAY);
+#if defined(CONFIG_TEXT_DETAIL) && defined(CONFIG_FRAMEBUFFER_SCALE2) && defined(CONFIG_DISPLAY_UC8279_X4)
+  if (DISPLAY->ops == &pbl_display_ssd1677_ops) {
+    text_detail_set_grey_supported(pbl_display_ssd1677_text_grey_supported(DISPLAY));
+  }
+#endif
 
   PBL_ASSERTN((props->width == PBL_DISPLAY_WIDTH * FRAMEBUFFER_SCALE) &&
               (props->height == PBL_DISPLAY_HEIGHT * FRAMEBUFFER_SCALE) &&
@@ -226,9 +288,31 @@ void compositor_display_init(void) {
 }
 
 void compositor_display_update(void (*handle_update_complete_cb)(bool success)) {
+#ifdef CONFIG_SERVICE_BOOT_SPLASH_POWER_OFF
+  if (s_powering_off) {
+    return;
+  }
+#endif
   FrameBuffer *fb = compositor_get_framebuffer();
   if (!framebuffer_is_dirty(fb)) {
-    return;
+#if defined(CONFIG_TEXT_DETAIL) && defined(CONFIG_FRAMEBUFFER_SCALE2)
+    // Removing all text detail can change the visible panel without changing a B/W bit.
+    bool wants_grey = text_detail_wants_grey();
+    if (wants_grey) {
+      // Two glyph runs can have identical binary silhouettes and different edge levels.
+      compositor_get_text_detail_frame(&s_detail_frame);
+      if (s_grey_timer == EVENTED_TIMER_INVALID_ID) {
+        s_grey_timer = evented_timer_register(prv_refine_delay(), false, prv_grey_refine, nullptr);
+      }
+      return;
+    }
+    if (s_retains_grey) {
+      framebuffer_dirty_all(fb);
+    } else
+#endif
+    {
+      return;
+    }
   }
   // Every flush drops the mirror; the compositor restores it after an app frame's flush
   compositor_app_framebuffer_mirror_invalidate();
@@ -236,6 +320,11 @@ void compositor_display_update(void (*handle_update_complete_cb)(bool success)) 
   // The display's rows, FRAMEBUFFER_SCALE per row of the dirty rectangle
   s_flush_y0 = fb->dirty_rect.origin.y * FRAMEBUFFER_SCALE;
   s_flush_y1 = (fb->dirty_rect.origin.y + fb->dirty_rect.size.h) * FRAMEBUFFER_SCALE - 1;
+  if (epd_bench_active()) {
+    epd_bench_prepare(fb);
+    s_flush_y0 = PBL_MIN(s_flush_y0, 96);
+    s_flush_y1 = PBL_MAX(s_flush_y1, 167);
+  }
   s_update_complete_handler = handle_update_complete_cb;
   s_flush_start_ticks = pbl_uptime_ticks();
   s_flush_pending = true;
@@ -255,7 +344,12 @@ void compositor_display_update(void (*handle_update_complete_cb)(bool success)) 
     .pitch = FRAMEBUFFER_BYTES_PER_ROW,
   };
 
-  if (pbl_display_update(DISPLAY, &buf, s_flush_y0, s_flush_y1, prv_flush_done, nullptr) != 0) {
+  uint32_t start = epd_bench_active() ? pbl_cycle_get_32() : 0;
+  int ret = pbl_display_update(DISPLAY, &buf, s_flush_y0, s_flush_y1, prv_flush_done, nullptr);
+  if (epd_bench_active()) {
+    epd_bench_submit_time(pbl_cycle_get_32() - start);
+  }
+  if (ret != 0) {
     prv_flush_finish((void *)1);
   }
 #endif
@@ -264,13 +358,28 @@ void compositor_display_update(void (*handle_update_complete_cb)(bool success)) 
 #ifdef CONFIG_TEXT_DETAIL
 static void prv_send(uint16_t y0, uint16_t y1, bool grey) {
   s_detail.grey = grey;
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+  s_retains_grey = grey || text_detail_wants_grey();
+#endif
   struct pbl_display_buffer buf = {
     .data = (uint8_t *)framebuffer_get_line(compositor_get_framebuffer(), 0),
+#ifdef CONFIG_DISPLAY_UC8279_X4
+    .continuous = !grey && !text_detail_wants_grey() && app_manager_is_watchface_running(),
+#endif
     .pitch = FRAMEBUFFER_BYTES_PER_ROW,
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+    .detail = s_retains_grey ? &s_detail : nullptr,
+#else
     .detail = &s_detail,
+#endif
   };
 
-  if (pbl_display_update(DISPLAY, &buf, y0, y1, prv_flush_done, nullptr) != 0) {
+  uint32_t start = epd_bench_active() ? pbl_cycle_get_32() : 0;
+  int ret = pbl_display_update(DISPLAY, &buf, y0, y1, prv_flush_done, nullptr);
+  if (epd_bench_active()) {
+    epd_bench_submit_time(pbl_cycle_get_32() - start);
+  }
+  if (ret != 0) {
     prv_flush_finish((void *)1);
   }
 }
@@ -313,6 +422,11 @@ static const char *const s_mode_names[TextDetailModeCount] = {
 };
 
 static void prv_redraw(void *data) {
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+  // Re-rasterize the provisional edge pixels with the newly selected threshold.
+  PebbleEvent request = {.type = PEBBLE_RENDER_REQUEST_EVENT};
+  process_manager_send_event_to_process(PebbleTask_App, &request);
+#endif
   compositor_redraw();
 }
 

@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/mmc/esp,esp32s3-sdmmc.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif ESP32-S3 native SDMMC controller
+
+maintainers:
+  - Core Devices <firmware@repebble.com>
+
+properties:
+  compatible:
+    const: esp,esp32s3-sdmmc
+  reg:
+    maxItems: 1
+  pinctrl-0: true
+  pinctrl-names:
+    const: default
+  power-gpios:
+    maxItems: 1
+
+required: [compatible, reg, pinctrl-0]
+additionalProperties: false

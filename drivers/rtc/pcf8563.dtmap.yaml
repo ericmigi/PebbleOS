@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+compatible: nxp,pcf8563
+config: RTC_PCF8563
+class: rtc
+define: PCF8563_DEFINE
+args:
+  - parent: i2c
+  - reg: 0

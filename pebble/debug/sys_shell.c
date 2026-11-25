@@ -34,8 +34,20 @@ static int prv_cmd_reset(const struct pbl_shell *sh, size_t argc, char **argv) {
   pbl_reboot();
 }
 
-static int prv_cmd_poweroff(const struct pbl_shell *sh, size_t argc, char **argv) {
+#ifdef CONFIG_SERVICE_BOOT_SPLASH_POWER_OFF
+static void prv_poweroff_cb(void *context) {
   pbl_power_off();
+}
+#endif
+
+static int prv_cmd_poweroff(const struct pbl_shell *sh, size_t argc, char **argv) {
+#ifdef CONFIG_SERVICE_BOOT_SPLASH_POWER_OFF
+  // The display prepare handlers need the system workqueue during shutdown.
+  launcher_task_add_callback(prv_poweroff_cb, nullptr);
+  return 0;
+#else
+  pbl_power_off();
+#endif
 }
 
 static int prv_cmd_powercut(const struct pbl_shell *sh, size_t argc, char **argv) {

@@ -14,6 +14,12 @@ static char s_serial[2U * SERIAL_BYTES + 1U];
 static char s_empty[1];
 
 char *otp_get_slot(const uint8_t index) {
+#ifdef CONFIG_BOARD_XTEINK_X4_PRO
+  static char board_revision[] = "x4pro";
+  if (index == OTP_HWVER) {
+    return board_revision;
+  }
+#endif
   if (index != OTP_SERIAL) {
     return s_empty;
   }

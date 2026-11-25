@@ -2,9 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Simulated roles for peripherals awaiting ESP32-S3 hardware drivers
-backlight:
-  symbol: POSIX_BACKLIGHT
-  include: pbl/drivers/backlight/posix.h
 accel:
   symbol: SIM_ACCEL
   include: pbl/drivers/imu/sim.h
@@ -20,9 +17,3 @@ mic:
 die_temp:
   symbol: SIM_TEMP
   include: pbl/drivers/temp/sim.h
-rtc:
-  symbol: RETAINED_RTC
-  include: pbl/drivers/rtc/retained.h
-charger:
-  symbol: SIM_CHARGER
-  include: pbl/drivers/charger/sim.h

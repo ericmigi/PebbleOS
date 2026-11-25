@@ -357,9 +357,27 @@ void test_compositor__app_render_busy(void) {
   compositor_app_render_ready();
   cl_assert_equal_i(s_count_display_update, 0);
 
-  // Now fake the display update completeing. The app should know draw.
+#ifdef CONFIG_SERVICE_COMPOSITOR_COALESCE_FRAMES
+  for (uint8_t i = 1; i <= 20; i++) {
+    s_app_framebuffer_data[0] = i;
+    s_render_pending = true;
+    compositor_app_render_ready();
+    cl_assert_equal_i(s_last_event.type, PEBBLE_RENDER_FINISHED_EVENT);
+    cl_assert(s_last_event.render.reuse_frame);
+    cl_assert(!s_render_pending);
+    cl_assert_equal_i(s_framebuffer_data[0], 0);
+  }
+#endif
+  // Once the panel completes, a released app framebuffer must be acquired again.
   s_display_update_in_progress = false;
   prv_handle_display_update_complete(true /* success */);
+#ifdef CONFIG_SERVICE_COMPOSITOR_COALESCE_FRAMES
+  cl_assert_equal_i(s_count_display_update, 0);
+  cl_assert_equal_i(s_last_event.type, PEBBLE_RENDER_REQUEST_EVENT);
+  cl_assert(s_last_event.render.reuse_frame);
+  compositor_app_render_ready();
+  cl_assert_equal_i(s_framebuffer_data[0], 20);
+#endif
   cl_assert_equal_i(s_count_display_update, 1);
 
   // Subsequent app updates should now draw straight through.
@@ -401,7 +419,11 @@ void test_compositor__modal_transition_cancels_deferred_app(void) {
   s_render_pending = true;
   compositor_app_render_ready();
   cl_assert_equal_i(s_count_display_update, 0);
-  cl_assert_equal_i(s_render_pending, true);
+#ifdef CONFIG_SERVICE_COMPOSITOR_COALESCE_FRAMES
+  cl_assert(!s_render_pending);
+#else
+  cl_assert(s_render_pending);
+#endif
 
   // Now transition to a modal. The app framebuffer should be released. No animation should be
   // started.

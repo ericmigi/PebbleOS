@@ -3,6 +3,7 @@
 
 pbl_library()
 pbl_library_sources(rtc.c)
+pbl_library_sources_ifdef(CONFIG_RTC_PCF8563 pcf8563.c)
 pbl_library_sources_ifdef(CONFIG_RTC_RETAINED retained.c)
 pbl_library_sources_ifdef(CONFIG_RTC_SF32LB sf32lb.c)
 pbl_library_sources_ifdef(CONFIG_RTC_QEMU qemu.c)

@@ -8,7 +8,7 @@ import os.path
 import sys
 from shutil import copy2
 from struct import pack, unpack
-from subprocess import PIPE, Popen
+from subprocess import PIPE, Popen, check_output
 
 import stm32_crc
 from pbpack import ResourcePack
@@ -129,8 +129,34 @@ def get_nm_output(elf_file, prefix="arm-none-eabi-"):
     return [line.split() for line in nm_output.splitlines()]
 
 
+def _loaded_relocations(elf_file, prefix):
+    """Relocations in the sections packed into an app image."""
+    output = check_output([prefix + "readelf", "-rW", elf_file], text=True)
+    loaded = False
+    for line in output.splitlines():
+        if line.startswith("Relocation section '"):
+            loaded = line.split("'")[1].startswith(
+                (".rela.text", ".rela.rodata", ".rela.data")
+            )
+            continue
+        columns = line.split()
+        if loaded and len(columns) >= 3 and columns[2].startswith("R_"):
+            yield columns
+
+
 def elf_symbol_names(elf_file, prefix="arm-none-eabi-"):
-    return [line[-1] for line in get_nm_output(elf_file, prefix)]
+    symbols = get_nm_output(elf_file, prefix)
+    if prefix != "xtensa-esp32s3-elf-":
+        return [line[-1] for line in symbols]
+    # All the SDK's absolute import symbols appear in nm. Only literals
+    # referencing a symbol in the loaded image are uses of its SDK function.
+    names = {line[-1] for line in symbols if line[-2].upper() != "A"}
+    names.update(
+        columns[4]
+        for columns in _loaded_relocations(elf_file, prefix)
+        if len(columns) >= 5 and columns[2] == "R_XTENSA_32"
+    )
+    return names
 
 
 def inject_metadata(
@@ -144,7 +170,7 @@ def inject_metadata(
     toolchain_prefix="arm-none-eabi-",
     code_offset=0,
 ):
-    """code_offset: how far above its place in the image code is linked (riscv32), which
+    """code_offset: how far above its place in the image code is linked, which
     addresses of code in the header and the relocation table do not include."""
     if max_binary_size is None:
         max_binary_size = MAX_APP_BINARY_SIZE
@@ -231,34 +257,28 @@ def inject_metadata(
     def image_offset(addr):
         return addr - code_offset if code_offset and addr >= code_offset else addr
 
-    def get_riscv_relocate_entries(elf_file):
+    def get_aliased_relocate_entries(elf_file):
         """The slots and lui instructions to relocate, as image offsets; a lui has bit 31 set."""
-        output = (
-            Popen([toolchain_prefix + "readelf", "-rW", elf_file], stdout=PIPE)
-            .communicate()[0]
-            .decode("utf8")
-        )
         entries = []
-        reading_section = False
-        for line in output.splitlines():
-            if line.startswith("Relocation section '"):
-                # Those of what is loaded; not of debug information
-                reading_section = line.startswith(
-                    (
-                        "Relocation section '.rela.text",
-                        "Relocation section '.rela.rodata",
-                        "Relocation section '.rela.data",
-                    )
-                )
-                continue
-            columns = line.split()
-            if (
-                not reading_section
-                or len(columns) < 3
-                or not columns[2].startswith("R_")
-            ):
-                continue
+        for columns in _loaded_relocations(elf_file, toolchain_prefix):
             offset = image_offset(int(columns[0], 16))
+            if toolchain_prefix == "xtensa-esp32s3-elf-":
+                reloc = columns[2]
+                if reloc in ("R_XTENSA_32", "R_XTENSA_PLT"):
+                    entries.append(offset)
+                elif reloc not in (
+                    "R_XTENSA_SLOT0_OP",
+                    "R_XTENSA_ASM_EXPAND",
+                    "R_XTENSA_ASM_SIMPLIFY",
+                    "R_XTENSA_NONE",
+                    "R_XTENSA_DIFF8",
+                    "R_XTENSA_DIFF16",
+                    "R_XTENSA_DIFF32",
+                ):
+                    raise InvalidBinaryError(
+                        f"unsupported Xtensa relocation {reloc} at 0x{offset:x}"
+                    )
+                continue
             if columns[2] == RISCV_SLOT_RELOC:
                 # At any offset: a pointer in a packed struct need not be aligned
                 entries.append(offset)
@@ -276,7 +296,7 @@ def inject_metadata(
     def get_relocate_entries(elf_file):
         """returns a list of all the locations requiring an offset"""
         if toolchain_prefix != "arm-none-eabi-":
-            return get_riscv_relocate_entries(elf_file)
+            return get_aliased_relocate_entries(elf_file)
         entries = []
 
         # Non-PIC libraries also embed absolute pointers in .text literal pools.
@@ -379,7 +399,9 @@ def inject_metadata(
         struct_version = read_value_at_offset(STRUCT_VERSION_ADDR, "<BB", 2)
         wide_sizes = struct_version >= FIRST_WIDE_SIZE_STRUCT_VERSION
         max_size_field = (
-            MAX_PROCESS_INFO_SIZE_FIELD if wide_sizes else MAX_PROCESS_INFO_SIZE_FIELD_16
+            MAX_PROCESS_INFO_SIZE_FIELD
+            if wide_sizes
+            else MAX_PROCESS_INFO_SIZE_FIELD_16
         )
         size_bits = 24 if wide_sizes else 16
 

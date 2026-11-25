@@ -39,7 +39,7 @@ config NIMBLE_HCI_UART
       nRF52840 dongle running an H4 HCI firmware.
 
 config NIMBLE_HCI_ESP32C3
-    bool "ESP32-C3 controller over VHCI"
+    bool "ESP32-C3/S3 controller over VHCI"
     depends on ESP32C3_BT
     help
       Talk H4 HCI to the ESP32-C3's own controller, Espressif's library,

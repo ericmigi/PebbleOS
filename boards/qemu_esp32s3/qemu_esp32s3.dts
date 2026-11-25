@@ -33,6 +33,15 @@
 	};
 };
 
+// Espressif QEMU models a 240 MHz CPU and 80 MHz APB.
+&cpu0 {
+	clock-frequency = <240000000>;
+};
+
+&clk_apb {
+	clock-frequency = <80000000>;
+};
+
 &uart0 {
 	current-speed = <115200>;
 	status = "okay";

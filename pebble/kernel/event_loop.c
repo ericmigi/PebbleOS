@@ -1,6 +1,7 @@
 /* SPDX-FileCopyrightText: 2024 Google LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include <services/compositor/epd_bench.h>
 #include "event_loop.h"
 
 #include "events.h"
@@ -273,6 +274,9 @@ static PBL_NOINLINE void prv_minimal_event_handler(PebbleEvent *e) {
       return;
 
     case PEBBLE_RENDER_READY_EVENT:
+      if (!e->render.reuse_frame) {
+        epd_appbench_ready(e->render.ticks, e->render.sequence);
+      }
       compositor_app_render_ready();
       return;
 

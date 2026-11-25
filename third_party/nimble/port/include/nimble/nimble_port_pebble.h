@@ -15,6 +15,11 @@
  */
 void nimble_port_pebble_init(void);
 
+#ifdef CONFIG_NIMBLE_HCI_ESP32C3
+int nimble_port_pebble_hci_resume(void);
+void nimble_port_pebble_hci_suspend(void);
+#endif
+
 #ifdef CONFIG_NIMBLE_STORE_CONFIG
 /**
  * @brief Install NimBLE's config store, for the keys of bonded peers and their CCCDs.

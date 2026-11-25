@@ -176,6 +176,11 @@ void compositor_app_render_ready(void);
  */
 FrameBuffer *compositor_get_framebuffer(void);
 
+#ifdef CONFIG_SERVICE_BOOT_SPLASH_POWER_OFF
+//! Give the system framebuffer to the final power-off drawing on KernelMain.
+FrameBuffer *compositor_take_shutdown_framebuffer(void);
+#endif
+
 /**
  * @brief Get the system framebuffer as a bitmap.
  *

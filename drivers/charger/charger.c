@@ -77,6 +77,8 @@ int pbl_charger_get_measurements(const struct pbl_charger *charger,
   int ret;
 
   prv_lock(charger);
+  meas->soc_percent = -1;
+  meas->current_unavailable = false;
   ret = charger->ops->get_measurements(charger, meas);
   prv_unlock(charger);
 

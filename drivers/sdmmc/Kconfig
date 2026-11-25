@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+config SDMMC_ESP32S3
+    bool "ESP32-S3 SD card reader"
+    default y
+    depends on SHELL && DT_HAS_ESP_ESP32S3_SDMMC_ENABLED
+    select PINCTRL
+    select GPIO
+    help
+      Native one-bit SDMMC card identification and read-only FAT access with the sd shell command.

@@ -67,6 +67,24 @@ class TestInjectMetadata(unittest.TestCase):
         )
         return result
 
+    def test_xtensa_permissions_use_imports_referenced_in_the_image(self):
+        symbols = [
+            ["006f0100", "T", "main"],
+            ["10000000", "A", "window_create"],
+            ["10000004", "A", "health_service_peek_current_activities"],
+        ]
+        relocs = """Relocation section '.rela.text' contains 1 entry:
+006f00fc 00012301 R_XTENSA_32 10000000 window_create + 0
+Relocation section '.rela.debug_info' contains 1 entry:
+00000100 00012401 R_XTENSA_32 10000004 health_service_peek_current_activities + 0
+"""
+        with (
+            patch.object(inject_metadata, "get_nm_output", return_value=symbols),
+            patch.object(inject_metadata, "check_output", return_value=relocs),
+        ):
+            names = inject_metadata.elf_symbol_names("app.elf", "xtensa-esp32s3-elf-")
+        self.assertEqual(names, {"main", "window_create"})
+
     def test_wide_load_size_boundary(self):
         for load_size in (0xFFFF, 0x10000):
             with self.subTest(load_size=load_size):

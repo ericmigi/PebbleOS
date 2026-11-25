@@ -41,6 +41,12 @@ config CHARGER_ADC
       A charger seen only through a presence pin and the battery voltage
       on an ADC channel (coredevices,adc-charger).
 
+config CHARGER_X4_PRO
+    bool "X4 Pro CW2017 fuel gauge and charge status"
+    default y
+    depends on DT_HAS_XTEINK_X4_PRO_CHARGER_ENABLED && SOC_ESP32S3
+    select I2C
+
 config CHARGER_SIM
     bool "Simulator"
     default y if SOC_QEMU_PEBBLE || SOC_POSIX
