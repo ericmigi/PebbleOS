@@ -161,6 +161,25 @@ void test_bitblt_palette_1bit__2bit_palette_to_1bit_offset(void) {
   gbitmap_destroy(src_bitmap);
 }
 
+// A source that is the destination's own storage sees each pixel as written so far:
+// pixel 7 reads the bit pixel 0 just set.
+void test_bitblt_palette_1bit__in_place(void) {
+  memset(s_dest_data, 0, sizeof(s_dest_data));
+  s_dest_data[0] = 0x80;
+  GColor palette[] = {GColorBlack, GColorWhite};
+  GBitmap src_bitmap = {
+    .addr = s_dest_data,
+    .row_size_bytes = 16,
+    .info.format = GBitmapFormat1BitPalette,
+    .info.version = GBITMAP_VERSION_CURRENT,
+    .bounds = GRect(0, 0, 8, 1),
+    .palette = palette,
+  };
+
+  bitblt_bitmap_into_bitmap(&s_dest_bitmap, &src_bitmap, GPointZero, GCompOpAssign, GColorWhite);
+  cl_assert_equal_i(s_dest_data[0], 0x81);
+}
+
 void test_bitblt_palette_1bit__get_1bit_graphics_grayscale_pattern(void) {
   cl_assert_equal_i(graphics_private_get_1bit_grayscale_pattern(GColorWhite, 0), 0xFFFFFFFF);
   cl_assert_equal_i(graphics_private_get_1bit_grayscale_pattern(GColorWhite, 1), 0xFFFFFFFF);

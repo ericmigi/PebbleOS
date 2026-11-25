@@ -3,7 +3,6 @@
 
 #include <pbl/kernel/assert.h>
 #include <pbl/logging/logging.h>
-#include <pbl/util/bitops.h>
 #include <pbl/util/size.h>
 #include <pbl/util/testing.h>
 
@@ -90,6 +89,21 @@ void bitblt_bitmap_into_bitmap_tiled_palette_to_1bit(GBitmap *dest_bitmap,
   const uint8_t src_bpp = gbitmap_get_bits_per_pixel(gbitmap_get_format(src_bitmap));
   const uint8_t src_palette_size = 1 << src_bpp;
   PBL_ASSERTN(src_palette_size <= MAX_SUPPORTED_PALETTE_ENTRIES);
+  switch (compositing_mode) {
+    case GCompOpAssign:
+    case GCompOpSet:
+    case GCompOpTint:
+    case GCompOpTintLuminance:
+      break;
+    default:
+      PBL_LOG_DBG("Only the assign, set and tint modes are allowed for palettized bitmaps");
+      return;
+  }
+  // A source in the destination's own storage must see each pixel written
+  // before the next is read
+  const uint8_t *const dest_bytes = dest_bitmap->addr;
+  const bool in_place = src < dest_bytes + (size_t)dest_bitmap->row_size_bytes * dest_y_end &&
+                        dest_bytes < src + (size_t)src_bitmap->row_size_bytes * src_end_y;
   // The bitblt loops:
   int16_t src_y = src_begin_y + src_origin_offset.y;
   int16_t dest_y = dest_rect.origin.y;
@@ -103,7 +117,8 @@ void bitblt_bitmap_into_bitmap_tiled_palette_to_1bit(GBitmap *dest_bitmap,
     }
     uint8_t dest_shift = dest_shift_at_line_begin;
 
-    RowLookUp look_up = look_ups[dest_y % 2];
+    const RowLookUp *look_up = &look_ups[dest_y % 2];
+    const uint8_t *src_row = src + (uint32_t)src_y * src_bitmap->row_size_bytes;
 
     int16_t src_x = src_begin_x + src_origin_offset.x;
     int16_t row_bits_left = dest_rect.size.w;
@@ -112,33 +127,30 @@ void bitblt_bitmap_into_bitmap_tiled_palette_to_1bit(GBitmap *dest_bitmap,
     const uint32_t *dest_block_end = dest_block + num_dest_blocks_per_row;
 
     while (dest_block != dest_block_end) {
+      // The pixels of this word, written once: which bits change, and to what
+      uint32_t mask = 0;
+      uint32_t bits = 0;
       uint8_t dest_x = dest_shift;
       while (dest_x < 32 && row_bits_left > 0) {
         if (src_x >= src_end_x) { // Wrap horizontally
           src_x = src_begin_x;
         }
-        uint8_t cindex = raw_image_get_value_for_bitdepth(src, src_x, src_y,
-                                                          src_bitmap->row_size_bytes, src_bpp);
-        uint32_t mask = 0;
-        pbl_bitset32_update(&mask, dest_x, look_up.transparent_mask[cindex]);
-
-        // This can be optimized by performing actions on the current word all at once
-        // instead of iterating through each pixel
-        switch (compositing_mode) {
-          case GCompOpAssign:
-          case GCompOpSet:
-          case GCompOpTint:
-          case GCompOpTintLuminance:
-            *dest_block = (*dest_block & ~mask) | (look_up.palette_pattern[cindex] & mask);
-            break;
-          default:
-            PBL_LOG_DBG("Only the assign, set and tint modes are allowed for palettized bitmaps");
-            return;
+        const uint32_t src_bit = (uint32_t)src_x * src_bpp;
+        const uint8_t cindex =
+            (src_row[src_bit / 8] >> (8 - src_bpp - src_bit % 8)) & (src_palette_size - 1);
+        if (look_up->transparent_mask[cindex]) {
+          const uint32_t bit = 1u << dest_x;
+          mask |= bit;
+          bits |= look_up->palette_pattern[cindex] & bit;
+          if (in_place) {
+            *dest_block = (*dest_block & ~mask) | bits;
+          }
         }
         dest_x++;
         row_bits_left--;
         src_x++;
       }
+      *dest_block = (*dest_block & ~mask) | bits;
       dest_shift = 0;
       dest_block++;
     }
