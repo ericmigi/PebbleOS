@@ -453,6 +453,56 @@ static PBL_SECTION_RAM void prv_map_row_quarter1(const struct pbl_display_ssd167
   }
 }
 
+/*
+ * Eight controller rows at once, for prv_map_row_quarter1 without grey or rows to invert: the
+ * columns across[0..7] of one framebuffer byte. Each RAM byte position gathers one byte of each of
+ * its 8 framebuffer rows and transposes the 8x8 bits (Hacker's Delight, transpose8): one load per
+ * row for all 8 controller rows instead of 8 loads for each.
+ */
+static PBL_SECTION_RAM void prv_map_block_quarter1(const struct pbl_display_ssd1677 *epd,
+                                                   const struct plane_src *src,
+                                                   const int32_t across[8], uint32_t x0,
+                                                   uint32_t len, uint8_t *out) {
+  uint32_t pitch = (epd->disp.props.width + 7U) / 8U;
+  const uint8_t *col = &src->frame[(uint32_t)across[0] / 8U];
+  const int16_t *along = &epd->along[x0 * 8U];
+  uint32_t inv = src->invert ? 0xFFU : 0U;
+
+  for (uint32_t i = 0U; i < len; i++, along += 8) {
+    uint32_t x = ((uint32_t)col[(uint32_t)along[0] * pitch] << 24) |
+                 ((uint32_t)col[(uint32_t)along[1] * pitch] << 16) |
+                 ((uint32_t)col[(uint32_t)along[2] * pitch] << 8) |
+                 (uint32_t)col[(uint32_t)along[3] * pitch];
+    uint32_t y = ((uint32_t)col[(uint32_t)along[4] * pitch] << 24) |
+                 ((uint32_t)col[(uint32_t)along[5] * pitch] << 16) |
+                 ((uint32_t)col[(uint32_t)along[6] * pitch] << 8) |
+                 (uint32_t)col[(uint32_t)along[7] * pitch];
+    uint32_t t;
+
+    t = (x ^ (x >> 7)) & 0x00AA00AAU;
+    x = x ^ t ^ (t << 7);
+    t = (y ^ (y >> 7)) & 0x00AA00AAU;
+    y = y ^ t ^ (t << 7);
+    t = (x ^ (x >> 14)) & 0x0000CCCCU;
+    x = x ^ t ^ (t << 14);
+    t = (y ^ (y >> 14)) & 0x0000CCCCU;
+    y = y ^ t ^ (t << 14);
+    t = (x & 0xF0F0F0F0U) | ((y >> 4) & 0x0F0F0F0FU);
+    y = ((x << 4) & 0xF0F0F0F0U) | (y & 0x0F0F0F0FU);
+    x = t;
+
+    // Column k of the result, most significant first, is bit 7 - k of the framebuffer byte
+    const uint8_t cols[8] = {
+      (uint8_t)(x >> 24), (uint8_t)(x >> 16), (uint8_t)(x >> 8), (uint8_t)x,
+      (uint8_t)(y >> 24), (uint8_t)(y >> 16), (uint8_t)(y >> 8), (uint8_t)y,
+    };
+
+    for (uint32_t j = 0U; j < 8U; j++) {
+      out[j * len + i] = (uint8_t)(cols[7U - (uint32_t)across[j] % 8U] ^ inv);
+    }
+  }
+}
+
 // A window of a frame, scaled and turned, to a RAM plane; rows a scale-up repeats are mapped once,
 // unless detail tells them apart, and several go out per transfer
 static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint8_t ram,
@@ -503,6 +553,25 @@ static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint8_t ram,
   for (uint32_t cy = w->y0; ret == 0 && cy <= w->y1; cy++) {
     int32_t across = display_geometry_across(&g, flip, cy);
     uint8_t *row = &epd->row[fill];
+
+    // Eight rows that are the columns of one framebuffer byte fill a transfer at once
+    if (quarter1 && src->levels == nullptr && src->xor_rows == nullptr && fill == 0U &&
+        cy + 7U <= w->y1 && cap == 8U * len) {
+      int32_t cols[8];
+      bool block = true;
+
+      for (uint32_t j = 0U; j < 8U; j++) {
+        cols[j] = display_geometry_across(&g, flip, cy + j);
+        block = block && cols[j] >= 0 && cols[j] / 8 == cols[0] / 8;
+      }
+      if (block) {
+        prv_map_block_quarter1(epd, src, cols, w->x0, len, row);
+        ret = pbl_spi_write(&epd->spi, epd->row, 8U * len);
+        prev = INT32_MIN;
+        cy += 7U;
+        continue;
+      }
+    }
 
     if (fill != 0U && across == prev && !prev_cells) {
       memcpy(row, row - len, len);
