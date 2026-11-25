@@ -24,6 +24,34 @@ void graphics_private_set_bit_1bit(GBitmap *bitmap, int x, int y, bool white);
 uint32_t graphics_private_double_bits16(uint16_t bits);
 #endif
 
+#ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
+//! What graphics_private_scaled2_begin() changed in a context
+typedef struct {
+  GBitmap dest_bitmap;
+  GRect drawing_box;
+  GRect clip_box;
+} GScaled2Scope;
+
+//! When @p ctx draws into a framebuffer at twice its size, lets a drawing routine draw at that
+//! size: the bitmap, drawing box and clip box become the stored pixels', so points and lengths
+//! passed on must be twice as large (graphics_private_scaled2_point()).
+//! @return false, and nothing changed, when the framebuffer is not at twice its size
+bool graphics_private_scaled2_begin(GContext *ctx, GScaled2Scope *saved);
+
+//! Ends what graphics_private_scaled2_begin() started
+void graphics_private_scaled2_end(GContext *ctx, const GScaled2Scope *saved);
+
+//! Where the centre of pixel @p p is at twice the size, in the pixels of that size
+static inline GPointPrecise graphics_private_scaled2_point(GPoint p) {
+  return GPointPrecise(p.x * 16 + 4, p.y * 16 + 4);
+}
+
+//! A precise point at twice the size, as graphics_private_scaled2_point()
+static inline GPointPrecise graphics_private_scaled2_precise(GPointPrecise p) {
+  return GPointPrecise(p.x.raw_value * 2 + 4, p.y.raw_value * 2 + 4);
+}
+#endif
+
 //! Draws horizontal line with antialiased starting and ending pixel
 //! Will adjust to the drawing_box and clip_box
 //! Note: this only works for lines where x1 < x2

@@ -62,6 +62,35 @@ void graphics_private_set_bit_1bit(GBitmap *bitmap, int x, int y, bool white) {
   pbl_bitset8_update(line, x, white);
 }
 
+#ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
+static GRect prv_double_rect(GRect r) {
+  return GRect(2 * r.origin.x, 2 * r.origin.y, 2 * r.size.w, 2 * r.size.h);
+}
+
+bool graphics_private_scaled2_begin(GContext *ctx, GScaled2Scope *saved) {
+  if (!gbitmap_is_scaled2(&ctx->dest_bitmap)) {
+    return false;
+  }
+  *saved = (GScaled2Scope){
+    .dest_bitmap = ctx->dest_bitmap,
+    .drawing_box = ctx->draw_state.drawing_box,
+    .clip_box = ctx->draw_state.clip_box,
+  };
+  ctx->dest_bitmap = gbitmap_scaled2_get_stored(&saved->dest_bitmap);
+  ctx->draw_state.drawing_box = prv_double_rect(saved->drawing_box);
+  ctx->draw_state.clip_box = prv_double_rect(saved->clip_box);
+  ctx->scaled2 = true;
+  return true;
+}
+
+void graphics_private_scaled2_end(GContext *ctx, const GScaled2Scope *saved) {
+  ctx->dest_bitmap = saved->dest_bitmap;
+  ctx->draw_state.drawing_box = saved->drawing_box;
+  ctx->draw_state.clip_box = saved->clip_box;
+  ctx->scaled2 = false;
+}
+#endif
+
 uint32_t graphics_private_double_bits16(uint16_t bits) {
   uint32_t v = bits;
   v = (v | (v << 8)) & 0x00FF00FFU;

@@ -621,6 +621,15 @@ GBitmap *graphics_context_get_bitmap(GContext *ctx) {
 
 void graphics_context_mark_dirty_rect(GContext *ctx, GRect rect) {
   PBL_ASSERTN(ctx);
+#ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
+  if (ctx->scaled2) {
+    // Every pixel any stored pixel of the rectangle belongs to
+    const int16_t x0 = rect.origin.x >> 1;
+    const int16_t y0 = rect.origin.y >> 1;
+    rect = GRect(x0, y0, ((rect.origin.x + rect.size.w + 1) >> 1) - x0,
+                 ((rect.origin.y + rect.size.h + 1) >> 1) - y0);
+  }
+#endif
   if (ctx->parent_framebuffer) {
     framebuffer_mark_dirty_rect(ctx->parent_framebuffer, rect);
   }

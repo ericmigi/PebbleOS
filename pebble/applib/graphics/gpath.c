@@ -6,6 +6,10 @@
 #include "graphics.h"
 #include "graphics_private.h"
 
+#ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
+#define GPATH_SCALED2_MAX_POINTS 32
+#endif
+
 #include <string.h>
 
 #include <pbl/util/math.h>
@@ -122,6 +126,20 @@ static void prv_gpath_draw_filled_cb(GContext *ctx, int16_t y, Fixed_S16_3 x_ran
 
 static void prv_fill_points(GContext *ctx, const GPointUnaligned *points, size_t num_points,
                             int32_t rotation, GPoint offset) {
+#ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
+  // At twice the size, each point at the centre of its pixel there; longer paths as 2x2 blocks
+  GScaled2Scope saved;
+  if (num_points <= GPATH_SCALED2_MAX_POINTS && graphics_private_scaled2_begin(ctx, &saved)) {
+    GPoint scaled[GPATH_SCALED2_MAX_POINTS];
+    for (size_t i = 0; i < num_points; i++) {
+      const GPoint p = rotate_offset_point(&points[i], rotation, &offset);
+      scaled[i] = GPointFromGPointPrecise(graphics_private_scaled2_point(p));
+    }
+    prv_fill_points(ctx, scaled, num_points, 0, GPointZero);
+    graphics_private_scaled2_end(ctx, &saved);
+    return;
+  }
+#endif
 #if PBL_COLOR
   // This algorithm makes sense only in 8bit mode...
   if (ctx->draw_state.antialiased) {

@@ -35,6 +35,12 @@ typedef struct GContext {
   //! When the frame buffer accessed directly all graphics functions using this
   //! context are locked
   bool lock;
+
+#ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
+  //! Drawing at the stored size of a framebuffer at twice its size
+  //! (graphics_private_scaled2_begin()): dirty rectangles are halved
+  bool scaled2;
+#endif
 } GContext;
 
 //! @internal

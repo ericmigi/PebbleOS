@@ -279,6 +279,16 @@ config FRAMEBUFFER_SCALE2
       Text in fonts stored at panel resolution is drawn at it; everything
       else is drawn as 2x2 blocks.
 
+config FRAMEBUFFER_SCALE2_SHAPES
+    bool "Draw shapes at twice the display's resolution"
+    default y
+    depends on FRAMEBUFFER_SCALE2
+    help
+      Slanted lines, circles, arcs and paths, and the PDC icons made of
+      them, at the framebuffer's resolution rather than as 2x2 blocks.
+      Costs about 0.7 M instructions on a launcher frame with its icons
+      (about 20 %).
+
 config TEXT_DETAIL
     bool "Text edges at panel resolution and in grey"
     default y

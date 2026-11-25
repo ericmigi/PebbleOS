@@ -357,6 +357,15 @@ static bool prv_calc_far_points(GPointPrecise *p0, GPointPrecise *p1, Fixed_S16_
 
 void prv_draw_stroked_line_precise(GContext *ctx, GPointPrecise p0, GPointPrecise p1,
                                    uint8_t width) {
+#ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
+  GScaled2Scope saved;
+  if (width <= UINT8_MAX / 2 && graphics_private_scaled2_begin(ctx, &saved)) {
+    prv_draw_stroked_line_precise(ctx, graphics_private_scaled2_precise(p0),
+                                  graphics_private_scaled2_precise(p1), 2 * width);
+    graphics_private_scaled2_end(ctx, &saved);
+    return;
+  }
+#endif
   // This function will draw thick line on the screen using following technique:
   // - calculate offset points of the line
   // - calculate margin for the round caps at the end of the line
@@ -743,6 +752,18 @@ void graphics_draw_line(GContext *ctx, GPoint p0, GPoint p1) {
   if (ctx->lock) {
     return;
   }
+#ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
+  // A slanted line at twice the size, as wide as it is here; others are exact as 2x2 blocks
+  const uint8_t stroke_width = ctx->draw_state.stroke_width;
+  GScaled2Scope saved;
+  if (p0.x != p1.x && p0.y != p1.y && stroke_width <= UINT8_MAX / 2 &&
+      graphics_private_scaled2_begin(ctx, &saved)) {
+    prv_draw_stroked_line_precise(ctx, graphics_private_scaled2_point(p0),
+                                  graphics_private_scaled2_point(p1), 2 * PBL_MAX(stroke_width, 1));
+    graphics_private_scaled2_end(ctx, &saved);
+    return;
+  }
+#endif
 
 #if PBL_COLOR
   if (ctx->draw_state.antialiased) {

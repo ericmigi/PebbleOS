@@ -3,6 +3,7 @@
 
 #include "graphics_circle.h"
 
+#include "framebuffer.h"
 #include "graphics.h"
 #include "graphics_circle_private.h"
 #include "graphics_private.h"
@@ -493,11 +494,38 @@ PBL_T_STATIC void graphics_circle_draw_stroked_non_aa(GContext *ctx, GPoint p, u
 }
 
 // Lifted directly from: http://en.wikipedia.org/wiki/Midpoint_circle_algorithm
+#ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
+static void prv_fill_oval_precise(GContext *ctx, GPointPrecise center, Fixed_S16_3 radius_outer_x,
+                                  Fixed_S16_3 radius_outer_y, Fixed_S16_3 radius_inner_x,
+                                  Fixed_S16_3 radius_inner_y, int32_t angle_start,
+                                  int32_t angle_end);
+
+// The pixels between two radii, in eighths, of the centre of pixel p, through the oval filler,
+// which draws them at twice the size
+static void prv_fill_ring_scaled2(GContext *ctx, GPoint p, int16_t outer, int16_t inner) {
+  const GPointPrecise c = GPointPrecise(p.x * 8 + 4, p.y * 8 + 4);
+  prv_fill_oval_precise(ctx, c, Fixed_S16_3(outer), Fixed_S16_3(outer), Fixed_S16_3(inner),
+                        Fixed_S16_3(inner), 0, TRIG_MAX_ANGLE);
+}
+#endif
+
 void graphics_draw_circle(GContext *ctx, GPoint p, uint16_t radius) {
   PBL_ASSERTN(ctx);
   if (ctx->lock) {
     return;
   }
+#ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
+  if (radius > 0 && gbitmap_is_scaled2(&ctx->dest_bitmap)) {
+    // The ring the stroke covers, in the stroke color
+    const int16_t r = (int16_t)(radius * 8 + 4);
+    const int16_t half = (int16_t)(PBL_MAX(ctx->draw_state.stroke_width, 1) * 4);
+    const GColor fill = ctx->draw_state.fill_color;
+    ctx->draw_state.fill_color = ctx->draw_state.stroke_color;
+    prv_fill_ring_scaled2(ctx, p, r + half, PBL_MAX(0, r - half));
+    ctx->draw_state.fill_color = fill;
+    return;
+  }
+#endif
 
   if (radius == 0) {
     // Special case radius 0 to fill a circle with radius equal to half the stroke width
@@ -793,6 +821,19 @@ static void prv_fill_oval_precise(GContext *ctx, GPointPrecise center, Fixed_S16
                                   Fixed_S16_3 radius_outer_y, Fixed_S16_3 radius_inner_x,
                                   Fixed_S16_3 radius_inner_y, int32_t angle_start,
                                   int32_t angle_end) {
+#ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
+  // Its coordinates are between pixels: at twice the size, everything is twice as large
+  GScaled2Scope saved;
+  if (graphics_private_scaled2_begin(ctx, &saved)) {
+    const GPointPrecise c = GPointPrecise(2 * center.x.raw_value, 2 * center.y.raw_value);
+    prv_fill_oval_precise(ctx, c, Fixed_S16_3(2 * radius_outer_x.raw_value),
+                          Fixed_S16_3(2 * radius_outer_y.raw_value),
+                          Fixed_S16_3(2 * radius_inner_x.raw_value),
+                          Fixed_S16_3(2 * radius_inner_y.raw_value), angle_start, angle_end);
+    graphics_private_scaled2_end(ctx, &saved);
+    return;
+  }
+#endif
   // Drawing config calculation
   const EllipsisDrawConfig config = prv_calc_draw_config_ellipsis(angle_start, angle_end);
 
@@ -1320,6 +1361,13 @@ void graphics_fill_circle(GContext *ctx, GPoint p, uint16_t radius) {
     return;
   }
 
+#ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
+  if (gbitmap_is_scaled2(&ctx->dest_bitmap)) {
+    // The pixels whose centres are within radius + 1/2 of the centre's
+    prv_fill_ring_scaled2(ctx, p, (int16_t)(radius * 8 + 4), 0);
+    return;
+  }
+#endif
 #if PBL_COLOR
   if (ctx->draw_state.antialiased) {
     graphics_internal_circle_quadrant_fill_aa(ctx, p, radius, GCornersAll);
