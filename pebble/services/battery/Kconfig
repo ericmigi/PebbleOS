@@ -62,6 +62,14 @@ config SERVICE_BATTERY_LOW_POWER_PERCENT
     help
       Battery percentage below which the watch enters low power mode.
 
+config SERVICE_BATTERY_CRITICAL_POWER_OFF
+    bool "Power off on a critical battery"
+    default y
+    help
+      Power off once the battery reads empty without a charger for the
+      standby delay. Off, the watch only shows the critical battery
+      state and runs until the battery gives out.
+
 config SERVICE_BATTERY_CAPACITY_HOURS
     int "Battery life (hours)"
     range 1 65535
