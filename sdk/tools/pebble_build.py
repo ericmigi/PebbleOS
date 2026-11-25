@@ -470,7 +470,10 @@ def configure(args):
     installed = _installed_platforms(sdk_root)
     # In the order they are asked for; an entry may ask for capabilities, and
     # so for several platforms.
-    requested = info.get("targetPlatforms") or installed
+    # A platform of another ABI than ARM (folio) is only built for when named:
+    # its binaries need a toolchain of their own.
+    arm = [p for p in installed if pebble_platforms[p]["ABI"] == "armv7m"]
+    requested = info.get("targetPlatforms") or arm
     app_memory = _app_memory(info)
     platforms, names = [], []
     if info.get("flexible") and project_type == "moddable":
@@ -481,7 +484,11 @@ def configure(args):
         names = [p for p in platforms if p in pebble_platforms]
     else:
         for selector in requested:
-            matched = [p for p in installed if platform_matches(p, [selector])]
+            matched = [
+                p
+                for p in installed
+                if platform_matches(p, [selector]) and (p in arm or p == selector)
+            ]
             platforms += [p for p in matched if p not in platforms]
             # What installs the pbw only knows platforms by name.
             by_name = selector in pebble_platforms or not matched

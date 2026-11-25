@@ -78,8 +78,11 @@ def _get_supported_platforms(ctx):
     ]
     # A directory of the SDK that is not a platform holds what platforms
     # share: the headers and library of an ABI, the tools.
+    # waf builds ARM code only: platforms of another ABI (folio) build with CMake.
     supported_platforms = [
-        name for name in os.listdir(ctx.env.PEBBLE_SDK_ROOT) if name in pebble_platforms
+        name
+        for name in os.listdir(ctx.env.PEBBLE_SDK_ROOT)
+        if name in pebble_platforms and pebble_platforms[name]["ABI"] == "armv7m"
     ]
 
     invalid_platforms = []
@@ -198,6 +201,16 @@ def get_target_platforms(ctx):
     :return: list of target platforms for the build
     """
     supported_platforms = _get_supported_platforms(ctx)
+    other_abi = [
+        p
+        for p in ctx.env.REQUESTED_PLATFORMS or []
+        if p in pebble_platforms and pebble_platforms[p]["ABI"] != "armv7m"
+    ]
+    if other_abi:
+        Logs.warn(
+            f"Not building {', '.join(other_abi)}: its apps are not ARM code, which waf builds "
+            "alone. Build with CMake (pebble convert-project) for them."
+        )
     if not ctx.env.REQUESTED_PLATFORMS:
         target_platforms = supported_platforms
     else:
