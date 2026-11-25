@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+# The power latch's pin and the charger's USB input, read with interrupts locked
+config: SOC_ESP32C3_POWER_OFF
+labels:
+  - gpio
+  - rtc_cntl
+props:
+  - label: power_latch
+    prop: gpios
+    cell: 1
+  - label: charger
+    prop: gpios
+    cell: 1

@@ -11,6 +11,17 @@ config SOC_ESP32C3_POWER_LATCH
       powers itself from the battery through it stays on once the power
       button is released. The device that owns the pin keeps it high.
 
+config SOC_ESP32C3_POWER_OFF
+    bool "Power off by dropping the power latch"
+    default y
+    depends on SOC_ESP32C3_POWER_LATCH && $(dt_has_nodelabel,charger)
+    select SOC_HAS_POWER_OFF
+    help
+      Power off by driving the power latch low, which disconnects the
+      battery once the power button is up. The input of the charger
+      node tells USB power, which keeps the board on regardless: then
+      the chip resets instead, as without this.
+
 config SOC_ESP32C3_FLASH_CLOCK_DIV
     int "Flash clock divider"
     range 1 4
