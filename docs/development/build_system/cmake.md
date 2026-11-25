@@ -113,7 +113,8 @@ pbl_library_ramfunc(${ramfunc_sources})
 
 `pbl_linker_sources(location file... [SORT_KEY key])`
 : Include linker script fragments at a hook point: `memory`, `rom-start`,
-  `ram-sections`, `ramfunc` or `footer`. Fragments are included sorted by
+  `ram-sections`, `ramfunc`, `data` (input sections of the initialized kernel
+  data) or `footer`. Fragments are included sorted by
   sort key, then by registration order.
 
 `pbl_iterable_section(tag [UNSORTED] [RAMFUNC])`

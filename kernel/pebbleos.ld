@@ -18,8 +18,8 @@
  * sections; 'rom-start' and 'ram-sections' take output sections placed
  * right after the vector table and ahead of the kernel RAM sections
  * respectively; 'ramfunc' takes input section patterns for the .ramfunc
- * output section; 'footer' takes standalone top-level commands after the
- * main SECTIONS block.
+ * output section, 'data' those for the initialized kernel data; 'footer'
+ * takes standalone top-level commands after the main SECTIONS block.
  */
 
 #include <memory.ld>
