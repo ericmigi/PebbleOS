@@ -52,7 +52,8 @@ config SERVICE_BATTERY_LOG_RECORDS
     default 2880
     help
       Records of 8 bytes, one a minute, in each of the two files the log
-      keeps: 2880 (two days per file) keeps between two and four days.
+      keeps: 2880 (two days per file) keeps between two and four days, at
+      least the last 48 hours.
 
 config SERVICE_BATTERY_LOW_POWER_PERCENT
     int "Low power threshold (%)"
