@@ -181,6 +181,34 @@ config WATCHFACE_BEZEL
       are small enough that a watchface drawn to the whole display would
       be too large.
 
+choice SYSTEM_UI_FONT_CHOICE
+    prompt "Typeface of the system UI"
+    default SYSTEM_UI_FONT_NOTO_SANS_CONDENSED if PLATFORM_FOLIO
+    default SYSTEM_UI_FONT_GOTHIC
+    help
+      The system's own windows and the built-in apps that fill the display
+      draw their Gothic text in this typeface, on Gothic's line heights.
+      Third-party apps and framed watchfaces keep Gothic, as their layouts
+      are made for its metrics.
+
+config SYSTEM_UI_FONT_GOTHIC
+    bool "Gothic"
+
+config SYSTEM_UI_FONT_NOTO_SANS_CONDENSED
+    bool "Noto Sans Condensed"
+    select SYSTEM_UI_FONT
+
+config SYSTEM_UI_FONT_PLEX_SANS_CONDENSED
+    bool "IBM Plex Sans Condensed"
+    select SYSTEM_UI_FONT
+
+endchoice
+
+config SYSTEM_UI_FONT
+    bool
+    help
+      The system UI has a typeface of its own, the UI_SANS_* fonts.
+
 config ORIENTATION_MANAGER
     bool "Orientation manager UI"
     help
