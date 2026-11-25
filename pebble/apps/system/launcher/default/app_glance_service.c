@@ -426,6 +426,14 @@ void launcher_app_glance_service_play_glance_for_app_node(LauncherAppGlanceServi
   LauncherAppGlance *glance = prv_fetch_from_cache_or_load_glance_for_node(node, service);
   PBL_ASSERTN(glance);
   kino_player_set_reel(glance_reel_player, glance->reel, false /* take_ownership */);
+#ifdef CONFIG_PLATFORM_ANIMATION_INSTANT
+  // Playing would end at once, in a second render after the selection's: show the end in that one
+  const uint32_t duration = kino_reel_get_duration(glance->reel);
+  if (duration != PLAY_DURATION_INFINITE) {
+    kino_reel_set_elapsed(glance->reel, duration);
+    return;
+  }
+#endif
   kino_player_play(glance_reel_player);
 }
 
