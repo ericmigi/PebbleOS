@@ -23,9 +23,9 @@ config MCU_SF32LB
       Support for SiFli SF32LB MCU information.
 
 config MCU_ESP32C3
-    bool "Espressif ESP32-C3"
-    default y if SOC_ESP32C3
-    depends on SOC_ESP32C3
+    bool "Espressif ESP32-C3 / ESP32-S3"
+    default y if SOC_ESP32C3 || SOC_ESP32S3
+    depends on SOC_ESP32C3 || SOC_ESP32S3
     help
       Support for ESP32-C3 MCU information: the unique ID is the factory
       MAC address in eFuse, read without writing anything.

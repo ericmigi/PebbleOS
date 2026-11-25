@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+# The SoC interrupt controller: its cells are the peripheral source number
+compatible: esp,esp32s3-intmatrix
+config: SOC_ESP32S3
+provides:
+  irq: "{0}"

@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_ESP32S3
+    bool "Espressif ESP32-S3"
+    select SOC_FAMILY_ESPRESSIF
+    select CPU_XTENSA_LX7
+    select RAMFUNC
+    select SOC_HAS_RESET
+    select TIMER_ESP32C3_SYSTIMER
+    help
+      Espressif ESP32-S3, dual-core Xtensa LX7 (running on Core 0) booted
+      from flash via a 4 KiB 0xE9 IRAM XIP trampoline header, with code at
+      0x42001000 and read-only data through 0x3c000000.
