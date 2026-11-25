@@ -121,8 +121,13 @@ int esp32c3_bt_start(void) {
   s_state |= STATE_IN_PROGRESS;
   prv_state_store();
   prv_wdt_arm(CONFIG_ESP32C3_BT_CONFIRM_TIMEOUT_S);
+#ifdef CONFIG_ESP32C3_BT_REQUIRE_CONFIRM
   PBL_LOG_INFO("Bluetooth bring-up: confirm within %u s or the chip resets",
                (unsigned int)CONFIG_ESP32C3_BT_CONFIRM_TIMEOUT_S);
+#else
+  PBL_LOG_DBG("Bluetooth bring-up: the chip resets if it hangs for %u s",
+              (unsigned int)CONFIG_ESP32C3_BT_CONFIRM_TIMEOUT_S);
+#endif
 
   const size_t heap_before = pbl_heap_used(pbl_malloc_heap());
   ret = esp32c3_bt_controller_init();
