@@ -72,12 +72,35 @@ struct pbl_display_props {
   const uint8_t *round_mask;
 };
 
+/**
+ * @brief Panel-resolution detail of some pixels of a mono framebuffer shown at twice its size.
+ *
+ * A display that shows each framebuffer pixel as 2x2 panel pixels may draw a pixel's four panel
+ * pixels individually instead, each at one of four levels (0 white to 3 black): the pixel's
+ * detail. Text edges use it, for panel-resolution shapes and grey levels. Displays that cannot
+ * show it ignore it and show the framebuffer as is.
+ */
+struct pbl_display_detail {
+  /**
+   * Fill @p cells with the detail of row @p y: 0 for a pixel shown as the framebuffer has it,
+   * else the levels of its panel pixels, two bits each: top left in bits 0-1, top right in 2-3,
+   * bottom left in 4-5, bottom right in 6-7. Returns false, leaving @p cells as they are, for a
+   * row without detail.
+   */
+  bool (*row)(const struct pbl_display_detail *detail, uint16_t y, uint8_t *cells);
+  /** Grey levels in the detail: on panels where grey takes a pass of its own, this update only
+   *  adds them to rows the panel already shows. */
+  bool grey;
+};
+
 /** @brief Framebuffer handed to an update. */
 struct pbl_display_buffer {
   /** First row. */
   uint8_t *data;
   /** Bytes from one row to the next. */
   uint32_t pitch;
+  /** Detail of the rows, or NULL. */
+  const struct pbl_display_detail *detail;
 };
 
 /**
