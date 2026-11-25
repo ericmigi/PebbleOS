@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include <pbl/console/console.h>
+#include <pbl/drivers/watchdog.h>
 #include <pbl/kernel/compiler.h>
 #include <pbl/kernel/init.h>
 #include <pbl/kernel/irq.h>
@@ -196,6 +197,10 @@ void pbl_soc_early_init(void) {
   pbl_writel(RTC_STORE_VAL(APB_HZ >> 12), RTC_CNTL(STORE5));
 
   ROM_ETS_INSTALL_PUTC1(prv_rom_putc);
+
+  // Ours, fed by the task watchdog
+  watchdog_init();
+  watchdog_start();
 }
 
 void pbl_soc_reset(void) {
