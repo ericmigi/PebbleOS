@@ -229,8 +229,8 @@ static bool prv_rows_differ(const uint8_t *a, const uint8_t *b, size_t byte0, si
 
 //! Narrows rect, in app framebuffer coordinates, to the rows where the app framebuffer differs
 //! from the system framebuffer, which still holds the previous frame copied to origin. False when
-//! no row differs.
-static bool prv_narrow_to_changed_rows(GRect *rect, GPoint origin) {
+//! no row differs. With @p copy, also copies the bytes of rect's columns of each differing row.
+static bool prv_narrow_to_changed_rows(GRect *rect, GPoint origin, bool copy) {
   // Compared as stored: FRAMEBUFFER_SCALE rows and columns per pixel
   const int s = FRAMEBUFFER_SCALE;
   GBitmap app_bitmap = compositor_get_app_framebuffer_as_bitmap();
@@ -246,7 +246,7 @@ static bool prv_narrow_to_changed_rows(GRect *rect, GPoint origin) {
   int16_t last = -1;
   for (int16_t y = rect->origin.y; y < grect_get_max_y(rect); y++) {
     bool differ = false;
-    for (int r = 0; r < s && !differ; r++) {
+    for (int r = 0; r < s && (copy || !differ); r++) {
       const GBitmapDataRowInfo app_row = gbitmap_get_data_row_info(&app_bitmap, y * s + r);
       const GBitmapDataRowInfo sys_row =
           gbitmap_get_data_row_info(&sys_bitmap, (y + origin.y) * s + r);
@@ -259,7 +259,12 @@ static bool prv_narrow_to_changed_rows(GRect *rect, GPoint origin) {
       const size_t byte0 = ((size_t)x0 * CONFIG_SCREEN_COLOR_DEPTH_BITS) / 8;
       const size_t byte1 =
           ((size_t)x1 * CONFIG_SCREEN_COLOR_DEPTH_BITS + CONFIG_SCREEN_COLOR_DEPTH_BITS - 1) / 8;
-      differ = prv_rows_differ(app_row.data, sys_row.data + sys_byte_offset, byte0, byte1);
+      if (prv_rows_differ(app_row.data, sys_row.data + sys_byte_offset, byte0, byte1)) {
+        differ = true;
+        if (copy) {
+          memcpy(sys_row.data + sys_byte_offset + byte0, app_row.data + byte0, byte1 - byte0 + 1);
+        }
+      }
     }
     if (differ) {
       if (first < 0) {
@@ -316,9 +321,14 @@ static bool prv_render_app_dirty_rect(const AppFrameFit *fit) {
   // The comparison alone decides what changed, whatever the app marked
   rect = app_rect;
 #endif
-  if (!grect_is_empty(&rect) && prv_narrow_to_changed_rows(&rect, origin)) {
+  // On 1-bit displays the rows that differ are copied as they are compared: whole bytes, whose
+  // pixels beside rect are the app's too, as the origin is byte aligned
+  const bool copy = PBL_IF_BW_ELSE(true, false);
+  if (!grect_is_empty(&rect) && prv_narrow_to_changed_rows(&rect, origin, copy)) {
     rect.origin = gpoint_add(rect.origin, origin);
-    prv_scaled_app_fb_copy(rect, true /* copy_relative_to_origin */, 0 /* offset_y */, fit);
+    if (!copy) {
+      prv_scaled_app_fb_copy(rect, true /* copy_relative_to_origin */, 0 /* offset_y */, fit);
+    }
     framebuffer_mark_dirty_rect(&s_framebuffer, rect);
   }
 
