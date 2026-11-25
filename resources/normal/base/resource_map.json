@@ -2661,6 +2661,186 @@
       "type": "pdc",
       "name": "WEATHER_REPORT_PAPER",
       "file": "normal/base/images/Pebble_80x80_Weather_report.svg"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_14",
+      "file": "normal/base/ttf/NotoSans-Condensed.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 13,
+      "config": "CONFIG_SYSTEM_UI_FONT_NOTO_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_14_BOLD",
+      "file": "normal/base/ttf/NotoSans-CondensedBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 12,
+      "config": "CONFIG_SYSTEM_UI_FONT_NOTO_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_18",
+      "file": "normal/base/ttf/NotoSans-Condensed.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 15,
+      "config": "CONFIG_SYSTEM_UI_FONT_NOTO_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_18_BOLD",
+      "file": "normal/base/ttf/NotoSans-CondensedBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 15,
+      "config": "CONFIG_SYSTEM_UI_FONT_NOTO_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_24",
+      "file": "normal/base/ttf/NotoSans-Condensed.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 20,
+      "config": "CONFIG_SYSTEM_UI_FONT_NOTO_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_24_BOLD",
+      "file": "normal/base/ttf/NotoSans-CondensedSemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 20,
+      "config": "CONFIG_SYSTEM_UI_FONT_NOTO_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_28",
+      "file": "normal/base/ttf/NotoSans-Condensed.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 26,
+      "config": "CONFIG_SYSTEM_UI_FONT_NOTO_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_28_BOLD",
+      "file": "normal/base/ttf/NotoSans-CondensedSemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 25,
+      "config": "CONFIG_SYSTEM_UI_FONT_NOTO_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_36",
+      "file": "normal/base/ttf/NotoSans-Condensed.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 31,
+      "config": "CONFIG_SYSTEM_UI_FONT_NOTO_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_36_BOLD",
+      "file": "normal/base/ttf/NotoSans-CondensedSemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 31,
+      "config": "CONFIG_SYSTEM_UI_FONT_NOTO_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_14",
+      "file": "normal/base/ttf/IBMPlexSansCondensed-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 13,
+      "config": "CONFIG_SYSTEM_UI_FONT_PLEX_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_14_BOLD",
+      "file": "normal/base/ttf/IBMPlexSansCondensed-Bold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 13,
+      "config": "CONFIG_SYSTEM_UI_FONT_PLEX_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_18",
+      "file": "normal/base/ttf/IBMPlexSansCondensed-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 16,
+      "config": "CONFIG_SYSTEM_UI_FONT_PLEX_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_18_BOLD",
+      "file": "normal/base/ttf/IBMPlexSansCondensed-Bold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 16,
+      "config": "CONFIG_SYSTEM_UI_FONT_PLEX_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_24",
+      "file": "normal/base/ttf/IBMPlexSansCondensed-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 20,
+      "config": "CONFIG_SYSTEM_UI_FONT_PLEX_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_24_BOLD",
+      "file": "normal/base/ttf/IBMPlexSansCondensed-SemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 20,
+      "config": "CONFIG_SYSTEM_UI_FONT_PLEX_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_28",
+      "file": "normal/base/ttf/IBMPlexSansCondensed-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 26,
+      "config": "CONFIG_SYSTEM_UI_FONT_PLEX_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_28_BOLD",
+      "file": "normal/base/ttf/IBMPlexSansCondensed-SemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 26,
+      "config": "CONFIG_SYSTEM_UI_FONT_PLEX_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_36",
+      "file": "normal/base/ttf/IBMPlexSansCondensed-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 32,
+      "config": "CONFIG_SYSTEM_UI_FONT_PLEX_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_36_BOLD",
+      "file": "normal/base/ttf/IBMPlexSansCondensed-SemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 32,
+      "config": "CONFIG_SYSTEM_UI_FONT_PLEX_SANS_CONDENSED"
     }
   ],
   "timeline": [
