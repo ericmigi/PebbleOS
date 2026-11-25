@@ -88,9 +88,9 @@ static bool prv_version_copy_flash_fw_metadata(FirmwareMetadata *out_metadata,
 }
 
 bool version_copy_recovery_fw_metadata(FirmwareMetadata *out_metadata) {
-#if defined(CONFIG_QEMU) || defined(CONFIG_SOC_POSIX)
-  // QEMU and native builds have no recovery firmware. Report the running one,
-  // so the phone app does not treat the emulator as a watch without PRF.
+#if defined(CONFIG_QEMU) || defined(CONFIG_SOC_POSIX) || !defined(CONFIG_FIRMWARE_UPDATE)
+  // QEMU, native builds and boards that take no firmware update have no recovery firmware.
+  // Report the running one, so the phone app does not treat them as a watch without PRF.
   version_copy_running_fw_metadata(out_metadata);
   out_metadata->is_recovery_firmware = true;
   return true;
