@@ -315,6 +315,9 @@ if __name__ == "__main__":
         "--internal-sdk-build", action="store_true", help="build internal SDK"
     )
     parser.add_argument("--autoconf", help="Kconfig autoconf.h to predefine while parsing")
+    parser.add_argument(
+        "--no-shim-lib", action="store_true", help="leave libpebble.a out"
+    )
 
     options = parser.parse_args()
 
@@ -357,6 +360,7 @@ if __name__ == "__main__":
         options.platform_name,
         internal_sdk_build=options.internal_sdk_build,
         autoconf=options.autoconf,
+        build_shim_lib=not options.no_shim_lib,
     )
 
     expand_compiler_macros(pbl_root_dir, sdk_include_dir)

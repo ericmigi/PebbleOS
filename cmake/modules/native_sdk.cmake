@@ -38,13 +38,20 @@ for f in files:
     ${sdk_dir}/include/pebble_process_info.h
     ${sdk_dir}/include/pebble_worker.h
     ${sdk_dir}/include/pebble_worker_sdk_version.h
-    ${sdk_dir}/lib/libpebble.a
   )
+  # A host build runs apps with Samsa, as ARM code: it has no toolchain for
+  # the library of another ABI, and no use for it.
+  set(lib_args "")
+  if(CONFIG_SOC_POSIX AND NOT CONFIG_PLATFORM_ABI STREQUAL "armv7m")
+    set(lib_args --no-shim-lib)
+  else()
+    list(APPEND outputs ${sdk_dir}/lib/libpebble.a)
+  endif()
 
   add_custom_command(
     OUTPUT ${outputs}
     COMMAND ${PBL_TOOLCHAIN_ENV} ${PYTHON_EXECUTABLE} ${script} --sdk-dir=${sdk_dir}
-            --autoconf ${PROJECT_BINARY_DIR}/autoconf.h
+            --autoconf ${PROJECT_BINARY_DIR}/autoconf.h ${lib_args}
             ${symbols} ${PBL_BASE} ${PROJECT_BINARY_DIR}
             ${PBL_PLATFORM_NAME}
     DEPENDS ${script} ${symbols} ${headers}
