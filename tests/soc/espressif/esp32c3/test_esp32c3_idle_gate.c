@@ -103,6 +103,9 @@ void test_esp32c3_idle_gate__slow_clock_math(void) {
   cl_assert_equal_i(esp32c3_idle_cal_to_period(1000U, 1024U), 0U);
   cl_assert_equal_i(esp32c3_idle_cal_to_period(2000000U, 1024U), 0U);
 
+  // Large cycle counts do not overflow uint64_t
+  cl_assert_equal_i(esp32c3_idle_cal_to_period(300000000U, 1000000U), 120U << 16);
+
   // Round-trip 10 s sleep within 1 slow clock tick (~118 SYSTIMER ticks)
   const uint64_t rtc_ticks = esp32c3_idle_ticks_to_rtc(MAX_TICKS, period);
   const uint64_t back = esp32c3_idle_rtc_to_ticks(0U, rtc_ticks, period);

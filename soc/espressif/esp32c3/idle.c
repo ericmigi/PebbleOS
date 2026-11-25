@@ -134,7 +134,9 @@ static void prv_systimer_resume(uint64_t value) {
 }
 
 static uint64_t prv_rtc_now(void) {
-  pbl_writel(RTC_CNTL_TIME_UPDATE, RTC(TIME_UPDATE));
+  // ESP32-C3 latches TIME_LOW0/TIME_HIGH0 synchronously on TIME_UPDATE (no TIME_VALID bit,
+  // matching ESP-IDF rtc_cntl_ll_get_rtc_time); preserve bits 27..29 of TIME_UPDATE_REG.
+  pbl_modifyl(0U, RTC_CNTL_TIME_UPDATE, RTC(TIME_UPDATE));
   return ((uint64_t)(pbl_readl(RTC(TIME_HIGH0)) & RTC_CNTL_TIME_HIGH0_MASK) << 32) |
          pbl_readl(RTC(TIME_LOW0));
 }
@@ -225,6 +227,8 @@ static void prv_pins_wake(void) {
 
 static void prv_pins_restore(void) {
   uint32_t mask = s_wake_pin_mask;
+  const bool clear_usb = (mask & PBL_BIT(USB_PIN)) != 0U &&
+                         PBL_FIELD_GET(GPIO_PIN_INT_ENA_MASK, s_saved_pins[USB_PIN]) == 0U;
 
   while (mask != 0U) {
     const uint32_t pin = (uint32_t)PBL_CTZ(mask);
@@ -233,8 +237,9 @@ static void prv_pins_restore(void) {
     mask &= mask - 1U;
   }
   s_wake_pin_mask = 0U;
-  // USB_PIN's interrupt is off: nothing to leave pending
-  pbl_writel(PBL_BIT(USB_PIN), GPIO(STATUS_W1TC));
+  if (clear_usb) {
+    pbl_writel(PBL_BIT(USB_PIN), GPIO(STATUS_W1TC));
+  }
 }
 
 /*
@@ -368,6 +373,7 @@ static uint32_t prv_cal_xtal_cycles(void) {
 
   // Out of reset cycling calibration may be running: end it quickly before one-shot calibration
   if ((pbl_readl(TIMG0(RTCCALICFG)) & TIMG_RTC_CALI_START_CYCLING) != 0U) {
+    pbl_modifyl(TIMG_RTC_CALI_START_CYCLING, 0U, TIMG0(RTCCALICFG));
     pbl_modifyl(TIMG_RTC_CALI_TIMEOUT_THRES_MASK,
                 PBL_FIELD_PREP(TIMG_RTC_CALI_TIMEOUT_THRES_MASK, 1U), TIMG0(RTCCALICFG2));
     (void)PBL_POLL_SLEEP_MS((pbl_readl(TIMG0(RTCCALICFG)) & TIMG_RTC_CALI_RDY) != 0U ||
@@ -400,7 +406,11 @@ static PBL_DELAYED_WORK_DEFINE(s_cal, prv_cal);
 
 // SYSTIMER ticks per slow cycle: 16 MHz from the 40 MHz crystal
 static void prv_cal(struct pbl_work *work) {
+  (void)work;
+
+  pbl_idle_state_block(SOC_ESP32C3_IDLE_LIGHT_SLEEP);
   const uint32_t period = esp32c3_idle_cal_to_period(prv_cal_xtal_cycles(), CAL_CYCLES);
+  pbl_idle_state_release(SOC_ESP32C3_IDLE_LIGHT_SLEEP);
 
   if (period != 0U) {
     s_slow_period = period;

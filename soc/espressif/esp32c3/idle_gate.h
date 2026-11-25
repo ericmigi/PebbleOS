@@ -66,13 +66,14 @@ static inline uint64_t esp32c3_idle_gate(uint64_t now, uint64_t target, bool usb
 
 // SYSTIMER ticks per slow clock cycle in 16.16 fixed point, 0 if out of range (40..400 kHz)
 static inline uint32_t esp32c3_idle_cal_to_period(uint32_t xtal_cycles, uint32_t cal_cycles) {
+  static_assert(ESP32C3_SYSTIMER_HZ * 5ULL == ESP32C3_IDLE_XTAL_HZ * 2ULL,
+                "SYSTIMER / XTAL ratio must be 2 / 5");
   if (cal_cycles == 0U || (uint64_t)xtal_cycles < (uint64_t)cal_cycles * 100U ||
       (uint64_t)xtal_cycles > (uint64_t)cal_cycles * 1000U) {
     return 0U;
   }
 
-  return (uint32_t)(((uint64_t)xtal_cycles * ESP32C3_SYSTIMER_HZ << 16) /
-                    ((uint64_t)ESP32C3_IDLE_XTAL_HZ * cal_cycles));
+  return (uint32_t)((((uint64_t)xtal_cycles * 2ULL) << 16) / (5ULL * cal_cycles));
 }
 
 // Convert a SYSTIMER sleep duration into RTC slow clock ticks
