@@ -132,6 +132,11 @@ xtensa_vectors:
 	.balign 4
 	.literal_position
 xtensa_trap_entry:
+	/* Fast path for EXCCAUSE_ALLOCA (5): underflow the caller window so movsp succeeds */
+	rsr.exccause	a0
+	addi	a0, a0, -5
+	beqz	a0, .Lalloca_exc
+
 	/* Allocate trap frame + 32B red zone below interrupted SP */
 	addi	a1, a1, -XT_FRAME_ALLOC
 	s32i	a2, a1, XT_FRAME_A2
@@ -437,6 +442,34 @@ xtensa_trap_restore:
 	l32i	a15, a1, XT_FRAME_A15
 	l32i	a1, a1, XT_FRAME_A1
 	rfe
+
+	/*
+	 * Alloca (movsp) exception handler: when the caller window is spilled to
+	 * [sp - 16], movsp traps so the caller can be underflowed back into the
+	 * register file before sp moves. Set PS.OWB = current WINDOWBASE, rotate
+	 * back by the caller's call increment (a0[31:30]), and enter the matching
+	 * WindowUnderflow vector whose rfwu resumes movsp.
+	 */
+.Lalloca_exc:
+	rsr.windowbase	a0
+	rotw	-1
+	rsr.ps	a2
+	extui	a3, a2, 8, 4
+	xor	a3, a3, a4
+	rsr.excsave1	a4
+	slli	a3, a3, 8
+	xor	a2, a2, a3
+	wsr.ps	a2
+	rsync
+	bbci	a4, 31, .Lalloca_uf4
+	rotw	-1
+	bbci	a8, 30, .Lalloca_uf8
+	rotw	-1
+	j	xtensa_vectors + 0x140
+.Lalloca_uf4:
+	j	xtensa_vectors + 0x040
+.Lalloca_uf8:
+	j	xtensa_vectors + 0x0c0
 
 /*
  * Thread entry trampoline (entered via rfe with a2 = entry, a3 = arg).
