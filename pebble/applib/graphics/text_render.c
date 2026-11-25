@@ -317,6 +317,24 @@ static PBL_NOINLINE void prv_render_scale2_glyph(GContext *ctx, const GlyphData 
 }
 #endif
 
+#ifdef CONFIG_TEXT_DETAIL
+// Records the edges a glyph of a FEATURE_EDGES font carries after its bitmap, those in the clip
+static PBL_NOINLINE void prv_record_edges(GContext *ctx, const GlyphData *glyph,
+                                          const GRect *target) {
+  GBitmap *dest = graphics_context_get_bitmap(ctx);
+  const int owner = text_detail_glyph_begin(dest);
+  if (owner < 0) {
+    return;
+  }
+  const uint8_t *data = (const uint8_t *)glyph->data +
+                        ((glyph->header.width_px * glyph->header.height_px + 31) / 32) * 4;
+  const uint16_t count = (uint16_t)(data[0] | (data[1] << 8));
+  const bool white = !gcolor_equal(ctx->draw_state.text_color, GColorBlack);
+  text_detail_add_edges(owner, target->origin, &ctx->draw_state.clip_box, data + 2, count, white);
+  text_detail_glyph_end(owner);
+}
+#endif
+
 // PRO TIP: if you have to modify this function, expect to waste the rest of your day on it
 void render_glyph(GContext *const ctx, const uint32_t codepoint, FontInfo *const font,
                   const GRect cursor) {
@@ -370,6 +388,12 @@ void render_glyph(GContext *const ctx, const uint32_t codepoint, FontInfo *const
   if (text_resources_glyph_is_scale2(&location)) {
     prv_render_scale2_glyph(ctx, glyph, &location, cursor);
     return;
+  }
+#endif
+
+#ifdef CONFIG_TEXT_DETAIL
+  if (text_resources_glyph_has_edges(&location)) {
+    prv_record_edges(ctx, glyph, &glyph_target);
   }
 #endif
 

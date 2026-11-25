@@ -317,6 +317,14 @@ static bool prv_load_glyph_bitmap(Codepoint codepoint, const FontResource *font_
     glyph_size_bytes = ((g->header.width_px * g->header.height_px * bits) + (8 - 1)) / 8;
   }
 
+  // A glyph with edges: its bitmap's words, then the count and the edges
+  const bool edges = HAS_FEATURE(font_res->md.version, VERSION_FIELD_FEATURE_EDGES);
+  size_t bitmap_words_bytes = 0;
+  if (edges && glyph_size_bytes) {
+    bitmap_words_bytes = ((g->header.width_px * g->header.height_px + 31) / 32) * 4;
+    glyph_size_bytes = bitmap_words_bytes + sizeof(uint16_t);
+  }
+
   PBL_ASSERT(glyph_size_bytes <= CACHE_GLYPH_SIZE,
              "text codepoint %" PRIx32 " is %zu bytes, overflowing %d max size", codepoint,
              glyph_size_bytes, CACHE_GLYPH_SIZE);
@@ -341,6 +349,20 @@ static bool prv_load_glyph_bitmap(Codepoint codepoint, const FontResource *font_
       PBL_LOG_WRN("Failed to load glyph bitmap from resources; cp: %" PRIx32 ", addr: %" PRIx32,
                   codepoint, bitmap_addr);
       return false;
+    }
+
+    if (edges) {
+      // The edges follow the count, which says how many to read
+      uint16_t count;
+      memcpy(&count, target + bitmap_words_bytes, sizeof(count));
+      const size_t edge_bytes = 3U * count;
+      if (glyph_size_bytes + edge_bytes > CACHE_GLYPH_SIZE ||
+          (edge_bytes && !sys_resource_load_range(font_res->app_num, font_res->resource_id,
+                                                  bitmap_addr + glyph_size_bytes,
+                                                  target + glyph_size_bytes, edge_bytes))) {
+        PBL_LOG_WRN("Failed to load glyph edges; cp: %" PRIx32, codepoint);
+        return false;
+      }
     }
 
     if (HAS_FEATURE(font_res->md.version, VERSION_FIELD_FEATURE_RLE4)) {
@@ -532,6 +554,12 @@ static bool prv_load_font_res(ResAppNum app_num, uint32_t resource_id, FontResou
       }
       if (header.features & FEATURE_SCALE2) {
         font_res->md.version |= VERSION_FIELD_FEATURE_SCALE2;
+      }
+      if (header.features & FEATURE_EDGES) {
+        if (header.features & FEATURE_RLE4) {
+          return false;
+        }
+        font_res->md.version |= VERSION_FIELD_FEATURE_EDGES;
       }
       if (header.features & FEATURE_AA2) {
         if (header.features & FEATURE_RLE4) {
@@ -876,6 +904,11 @@ GRect text_resources_get_glyph_frame(FontCache *font_cache, Codepoint codepoint,
 bool text_resources_glyph_is_scale2(const GlyphLocation *location) {
   return location->font_res &&
          HAS_FEATURE(location->font_res->md.version, VERSION_FIELD_FEATURE_SCALE2);
+}
+
+bool text_resources_glyph_has_edges(const GlyphLocation *location) {
+  return location->font_res &&
+         HAS_FEATURE(location->font_res->md.version, VERSION_FIELD_FEATURE_EDGES);
 }
 
 bool text_resources_glyph_is_aa2(const GlyphLocation *location) {
