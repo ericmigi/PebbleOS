@@ -29,7 +29,13 @@ def warning_for(name):
 
 
 def font_definition(
-    name, pixel_height=None, extended=False, regex="[0]", render_height=None, scale=1
+    name,
+    pixel_height=None,
+    extended=False,
+    regex="[0]",
+    render_height=None,
+    scale=1,
+    bits=1,
 ):
     definition = ResourceDefinition("font", name, TTF_PATH)
     definition.max_glyph_size = 256
@@ -42,6 +48,7 @@ def font_definition(
     definition.pixel_height = pixel_height
     definition.render_height = render_height
     definition.scale = scale
+    definition.bits = bits
     return definition
 
 
@@ -185,6 +192,21 @@ class TestBuildFontData(unittest.TestCase):
             FontResourceGenerator.build_font_data(
                 TTF_PATH, font_definition("UI_24", 20, extended=True, scale=2)
             )
+
+    def test_two_bits_of_coverage(self):
+        one = font_definition(
+            "UI_24", extended=True, regex="[H]", render_height=20, scale=2
+        )
+        two = font_definition(
+            "UI_24", extended=True, regex="[H]", render_height=20, scale=2, bits=2
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            mono = FontResourceGenerator.build_font_data(TTF_PATH, one)
+            aa = FontResourceGenerator.build_font_data(TTF_PATH, two)
+        # The coverage feature is set and the bitmaps take about twice the bytes
+        self.assertEqual(aa[9] & 0x10, 0x10)
+        self.assertEqual(mono[9] & 0x10, 0)
+        self.assertGreater(len(aa), len(mono))
 
     def test_pixel_height_refuses_a_boolean(self):
         # int() would turn true into a 1 pixel font

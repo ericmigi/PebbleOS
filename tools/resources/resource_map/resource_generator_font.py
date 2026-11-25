@@ -42,6 +42,7 @@ class FontResourceGenerator(ResourceGenerator):
         definition.render_height = definition_dict.get("renderHeight")
         definition.scale = definition_dict.get("scale", 1)
         definition.autohint = bool(definition_dict.get("autohint"))
+        definition.bits = definition_dict.get("bits", 1)
         return definition
 
     @staticmethod
@@ -136,6 +137,13 @@ class FontResourceGenerator(ResourceGenerator):
                 font.set_scale2()
             if getattr(definition, "autohint", False):
                 font.set_autohint()
+            bits = getattr(definition, "bits", 1) or 1
+            if bits not in (1, 2) or (bits == 2 and is_legacy):
+                raise ValueError(
+                    f"Font {definition.name}: bits must be 1, or 2 without 2.7"
+                )
+            if bits == 2:
+                font.set_bits2()
 
             if definition.character_regex is not None:
                 font.set_regex_filter(definition.character_regex)
