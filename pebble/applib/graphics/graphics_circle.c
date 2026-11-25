@@ -518,7 +518,8 @@ void graphics_draw_circle(GContext *ctx, GPoint p, uint16_t radius) {
   if (radius > 0 && gbitmap_is_scaled2(&ctx->dest_bitmap)) {
     // The ring the stroke covers, in the stroke color
     const int16_t r = (int16_t)(radius * 8 + 4);
-    const int16_t half = (int16_t)(PBL_MAX(ctx->draw_state.stroke_width, 1) * 4);
+    // The stroke as the 1x circle draws it: odd, rounded up
+    const int16_t half = (int16_t)(((ctx->draw_state.stroke_width / 2) * 2 + 1) * 4);
     const GColor fill = ctx->draw_state.fill_color;
     ctx->draw_state.fill_color = ctx->draw_state.stroke_color;
     prv_fill_ring_scaled2(ctx, p, r + half, PBL_MAX(0, r - half));

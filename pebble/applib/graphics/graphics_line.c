@@ -753,13 +753,13 @@ void graphics_draw_line(GContext *ctx, GPoint p0, GPoint p1) {
     return;
   }
 #ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
-  // A slanted line at twice the size, as wide as it is here; others are exact as 2x2 blocks
-  const uint8_t stroke_width = ctx->draw_state.stroke_width;
+  // A slanted 1-pixel line at twice the size, 2 pixels wide; wider lines get there through the
+  // stroked line, horizontal and vertical ones are exact as 2x2 blocks
   GScaled2Scope saved;
-  if (p0.x != p1.x && p0.y != p1.y && stroke_width <= UINT8_MAX / 2 &&
+  if (p0.x != p1.x && p0.y != p1.y && ctx->draw_state.stroke_width <= 1 &&
       graphics_private_scaled2_begin(ctx, &saved)) {
     prv_draw_stroked_line_precise(ctx, graphics_private_scaled2_point(p0),
-                                  graphics_private_scaled2_point(p1), 2 * PBL_MAX(stroke_width, 1));
+                                  graphics_private_scaled2_point(p1), 2);
     graphics_private_scaled2_end(ctx, &saved);
     return;
   }
