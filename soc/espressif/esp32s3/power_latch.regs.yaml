@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+# The pin of the board's power latch, driven high before devices initialize
+config: SOC_ESP32S3_POWER_LATCH
+labels:
+  - gpio
+  - io_mux
+props:
+  - label: power_latch
+    prop: gpios
+    cell: 1

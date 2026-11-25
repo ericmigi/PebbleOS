@@ -13,6 +13,7 @@
 #include <pbl/kernel/time.h>
 
 #include <devicetree/regs.h>
+#include <hardware/esp32c3_gpio.h>
 #include <hardware/esp32s3_system.h>
 #include <hardware/esp32s3_wdt.h>
 
@@ -82,7 +83,37 @@ static void prv_rom_putc(char c) {
 #endif
 }
 
+#ifdef CONFIG_SOC_ESP32S3_POWER_LATCH
+// Assert the board's power latch high before any peripherals initialize.
+static void prv_power_latch_hold(void) {
+  const uint32_t pin = PBL_DT_PROP_POWER_LATCH_GPIOS;
+
+#if PBL_DT_PROP_POWER_LATCH_GPIOS < 32U
+  pbl_writel(PBL_BIT(pin), PBL_DT_REG_GPIO + ESP32C3_GPIO_OUT_W1TS_OFFSET);
+#else
+  pbl_writel(PBL_BIT(pin - 32U), PBL_DT_REG_GPIO + ESP32C3_GPIO_OUT1_W1TS_OFFSET);
+#endif
+  pbl_writel(GPIO_FUNC_OUT_GPIO, PBL_DT_REG_GPIO + ESP32C3_GPIO_FUNC_OUT_SEL_CFG_OFFSET(pin));
+  pbl_modifyl(IO_MUX_MCU_SEL_MASK, PBL_FIELD_PREP(IO_MUX_MCU_SEL_MASK, IO_MUX_FUNC_GPIO),
+              PBL_DT_REG_IO_MUX + ESP32C3_IO_MUX_GPIO_OFFSET(pin));
+#if PBL_DT_PROP_POWER_LATCH_GPIOS < 32U
+  pbl_writel(PBL_BIT(pin), PBL_DT_REG_GPIO + ESP32C3_GPIO_ENABLE_W1TS_OFFSET);
+#else
+  pbl_writel(PBL_BIT(pin - 32U), PBL_DT_REG_GPIO + ESP32C3_GPIO_ENABLE1_W1TS_OFFSET);
+#endif
+#if PBL_DT_PROP_POWER_LATCH_GPIOS < 22U
+  pbl_modifyl(PBL_BIT(pin), 0U, RTC_CNTL(PAD_HOLD));
+#else
+  pbl_modifyl(PBL_BIT(pin - 21U), 0U, RTC_CNTL(DIG_PAD_HOLD));
+#endif
+}
+#endif
+
 void pbl_soc_early_init(void) {
+#ifdef CONFIG_SOC_ESP32S3_POWER_LATCH
+  prv_power_latch_hold();
+#endif
+
   // Disable ROM-armed watchdogs (TIMG0, TIMG1, RTC WDT, Super WDT)
   prv_timg_wdt_disable(PBL_DT_REG_TIMG0);
   prv_timg_wdt_disable(PBL_DT_REG_TIMG1);

@@ -7,19 +7,31 @@
 
 // GPIO matrix, the pins' levels, output enables, interrupts and signal routing
 
-#define ESP32C3_GPIO_NUM_PINS 22U
-
+#ifdef CONFIG_SOC_ESP32S3
+#define ESP32C3_GPIO_NUM_PINS 49U
+// ESP32-S3 USB-Serial-JTAG D- and D+ are GPIO19 and GPIO20
+#define ESP32C3_GPIO_IS_USB(pin) ((pin) == 19U || (pin) == 20U)
+#else
+#define ESP32C3_GPIO_NUM_PINS    22U
 // The USB-Serial-JTAG's D- and D+: reconfiguring them drops the console and esptool's reset
 #define ESP32C3_GPIO_IS_USB(pin) ((pin) == 18U || (pin) == 19U)
+#endif
 
-#define ESP32C3_GPIO_OUT_W1TS_OFFSET    0x0008
-#define ESP32C3_GPIO_OUT_W1TC_OFFSET    0x000c
-#define ESP32C3_GPIO_ENABLE_W1TS_OFFSET 0x0024
-#define ESP32C3_GPIO_ENABLE_W1TC_OFFSET 0x0028
-#define ESP32C3_GPIO_IN_OFFSET          0x003c
-#define ESP32C3_GPIO_STATUS_W1TC_OFFSET 0x004c
+#define ESP32C3_GPIO_OUT_W1TS_OFFSET     0x0008
+#define ESP32C3_GPIO_OUT_W1TC_OFFSET     0x000c
+#define ESP32C3_GPIO_OUT1_W1TS_OFFSET    0x0014
+#define ESP32C3_GPIO_OUT1_W1TC_OFFSET    0x0018
+#define ESP32C3_GPIO_ENABLE_W1TS_OFFSET  0x0024
+#define ESP32C3_GPIO_ENABLE_W1TC_OFFSET  0x0028
+#define ESP32C3_GPIO_ENABLE1_W1TS_OFFSET 0x0030
+#define ESP32C3_GPIO_ENABLE1_W1TC_OFFSET 0x0034
+#define ESP32C3_GPIO_IN_OFFSET           0x003c
+#define ESP32C3_GPIO_IN1_OFFSET          0x0040
+#define ESP32C3_GPIO_STATUS_W1TC_OFFSET  0x004c
+#define ESP32C3_GPIO_STATUS1_W1TC_OFFSET 0x0058
 // The status of the pins whose interrupt is enabled
 #define ESP32C3_GPIO_PCPU_INT_OFFSET            0x005c
+#define ESP32C3_GPIO_PCPU_INT1_OFFSET           0x0068
 #define ESP32C3_GPIO_PIN_OFFSET(n)              (0x0074 + 4U * (n))
 #define ESP32C3_GPIO_FUNC_IN_SEL_CFG_OFFSET(s)  (0x0154 + 4U * (s))
 #define ESP32C3_GPIO_FUNC_OUT_SEL_CFG_OFFSET(n) (0x0554 + 4U * (n))
@@ -38,15 +50,27 @@
 #define GPIO_INT_TYPE_HIGH    5U
 
 // An input signal reads a pin through the matrix when SEL is set
-#define GPIO_FUNC_IN_SEL_MASK PBL_GENMASK(4, 0)
-#define GPIO_FUNC_IN_INV      PBL_BIT(5)
-#define GPIO_FUNC_IN_SEL      PBL_BIT(6)
+#ifdef CONFIG_SOC_ESP32S3
+#define GPIO_FUNC_IN_SEL_MASK PBL_GENMASK(5, 0)
+#define GPIO_FUNC_IN_INV      PBL_BIT(6)
+#define GPIO_FUNC_IN_SEL      PBL_BIT(7)
+
+// Output signal 256 is the pin's own level in OUT; OEN_SEL takes the enable from ENABLE
+#define GPIO_FUNC_OUT_SEL_MASK PBL_GENMASK(8, 0)
+#define GPIO_FUNC_OUT_INV      PBL_BIT(9)
+#define GPIO_FUNC_OUT_OEN_SEL  PBL_BIT(10)
+#define GPIO_FUNC_OUT_GPIO     0x100U
+#else
+#define GPIO_FUNC_IN_SEL_MASK  PBL_GENMASK(4, 0)
+#define GPIO_FUNC_IN_INV       PBL_BIT(5)
+#define GPIO_FUNC_IN_SEL       PBL_BIT(6)
 
 // Output signal 128 is the pin's own level in OUT; OEN_SEL takes the enable from ENABLE
 #define GPIO_FUNC_OUT_SEL_MASK PBL_GENMASK(7, 0)
 #define GPIO_FUNC_OUT_INV      PBL_BIT(8)
 #define GPIO_FUNC_OUT_OEN_SEL  PBL_BIT(9)
 #define GPIO_FUNC_OUT_GPIO     0x80U
+#endif
 
 // IO_MUX, the pads: function, pulls, input enable and drive strength
 

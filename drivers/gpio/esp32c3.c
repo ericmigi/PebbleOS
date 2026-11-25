@@ -27,6 +27,15 @@ static inline void prv_putreg(const struct pbl_gpio_esp32c3 *gpio, uint32_t offs
   pbl_writel(value, gpio->base + offset);
 }
 
+static inline void prv_bank_write(const struct pbl_gpio_esp32c3 *gpio, uint32_t off0, uint32_t off1,
+                                  uint8_t pin) {
+  if (pin < 32U) {
+    prv_putreg(gpio, off0, PBL_BIT(pin));
+  } else {
+    prv_putreg(gpio, off1, PBL_BIT(pin - 32U));
+  }
+}
+
 // The level, the matrix and the pad come before the enable: an output starts at its level
 static int prv_configure(const struct pbl_gpio_port *port, uint8_t pin, uint32_t flags) {
   const struct pbl_gpio_esp32c3 *gpio = prv_port(port);
@@ -49,17 +58,17 @@ static int prv_configure(const struct pbl_gpio_port *port, uint8_t pin, uint32_t
   pbl_irq_lock();
   if ((flags & PBL_GPIO_OUTPUT) != 0U) {
     if ((flags & PBL_GPIO_OUTPUT_INIT_HIGH) != 0U) {
-      prv_putreg(gpio, ESP32C3_GPIO_OUT_W1TS_OFFSET, PBL_BIT(pin));
+      prv_bank_write(gpio, ESP32C3_GPIO_OUT_W1TS_OFFSET, ESP32C3_GPIO_OUT1_W1TS_OFFSET, pin);
     } else if ((flags & PBL_GPIO_OUTPUT_INIT_LOW) != 0U) {
-      prv_putreg(gpio, ESP32C3_GPIO_OUT_W1TC_OFFSET, PBL_BIT(pin));
+      prv_bank_write(gpio, ESP32C3_GPIO_OUT_W1TC_OFFSET, ESP32C3_GPIO_OUT1_W1TC_OFFSET, pin);
     }
     pbl_modifyl(GPIO_PIN_PAD_DRIVER, (flags & PBL_GPIO_OPEN_DRAIN) != 0U ? GPIO_PIN_PAD_DRIVER : 0U,
                 gpio->base + ESP32C3_GPIO_PIN_OFFSET(pin));
     prv_putreg(gpio, ESP32C3_GPIO_FUNC_OUT_SEL_CFG_OFFSET(pin), GPIO_FUNC_OUT_GPIO);
     pbl_modifyl(PAD_MASK, pad, gpio->io_mux + ESP32C3_IO_MUX_GPIO_OFFSET(pin));
-    prv_putreg(gpio, ESP32C3_GPIO_ENABLE_W1TS_OFFSET, PBL_BIT(pin));
+    prv_bank_write(gpio, ESP32C3_GPIO_ENABLE_W1TS_OFFSET, ESP32C3_GPIO_ENABLE1_W1TS_OFFSET, pin);
   } else {
-    prv_putreg(gpio, ESP32C3_GPIO_ENABLE_W1TC_OFFSET, PBL_BIT(pin));
+    prv_bank_write(gpio, ESP32C3_GPIO_ENABLE_W1TC_OFFSET, ESP32C3_GPIO_ENABLE1_W1TC_OFFSET, pin);
     pbl_modifyl(PAD_MASK, pad, gpio->io_mux + ESP32C3_IO_MUX_GPIO_OFFSET(pin));
   }
   pbl_irq_unlock();
@@ -68,12 +77,22 @@ static int prv_configure(const struct pbl_gpio_port *port, uint8_t pin, uint32_t
 }
 
 static int prv_get(const struct pbl_gpio_port *port, uint8_t pin) {
-  return (pbl_readl(prv_port(port)->base + ESP32C3_GPIO_IN_OFFSET) & PBL_BIT(pin)) != 0U;
+  const struct pbl_gpio_esp32c3 *gpio = prv_port(port);
+
+  if (pin < 32U) {
+    return (pbl_readl(gpio->base + ESP32C3_GPIO_IN_OFFSET) & PBL_BIT(pin)) != 0U;
+  }
+  return (pbl_readl(gpio->base + ESP32C3_GPIO_IN1_OFFSET) & PBL_BIT(pin - 32U)) != 0U;
 }
 
 static int prv_set(const struct pbl_gpio_port *port, uint8_t pin, bool level) {
-  prv_putreg(prv_port(port), level ? ESP32C3_GPIO_OUT_W1TS_OFFSET : ESP32C3_GPIO_OUT_W1TC_OFFSET,
-             PBL_BIT(pin));
+  const struct pbl_gpio_esp32c3 *gpio = prv_port(port);
+
+  if (level) {
+    prv_bank_write(gpio, ESP32C3_GPIO_OUT_W1TS_OFFSET, ESP32C3_GPIO_OUT1_W1TS_OFFSET, pin);
+  } else {
+    prv_bank_write(gpio, ESP32C3_GPIO_OUT_W1TC_OFFSET, ESP32C3_GPIO_OUT1_W1TC_OFFSET, pin);
+  }
 
   return 0;
 }
@@ -118,7 +137,8 @@ static int prv_intc_enable(const struct pbl_intc *intc, uint32_t hwirq) {
   const struct pbl_gpio_esp32c3 *gpio = prv_intc_port(intc);
 
   pbl_irq_lock();
-  prv_putreg(gpio, ESP32C3_GPIO_STATUS_W1TC_OFFSET, PBL_BIT(hwirq));
+  prv_bank_write(gpio, ESP32C3_GPIO_STATUS_W1TC_OFFSET, ESP32C3_GPIO_STATUS1_W1TC_OFFSET,
+                 (uint8_t)hwirq);
   pbl_modifyl(GPIO_PIN_INT_ENA_MASK, PBL_FIELD_PREP(GPIO_PIN_INT_ENA_MASK, GPIO_PIN_INT_ENA_CPU),
               gpio->base + ESP32C3_GPIO_PIN_OFFSET(hwirq));
   pbl_irq_unlock();
@@ -148,6 +168,18 @@ void pbl_gpio_esp32c3_irq_handler(const struct pbl_gpio_esp32c3 *gpio) {
     pbl_intc_dispatch(gpio->port.intc, (uint32_t)PBL_CTZ(pending));
     pending &= pending - 1U;
   }
+
+#ifdef CONFIG_SOC_ESP32S3
+  uint32_t pending1 = pbl_readl(gpio->base + ESP32C3_GPIO_PCPU_INT1_OFFSET);
+
+  if (pending1 != 0U) {
+    prv_putreg(gpio, ESP32C3_GPIO_STATUS1_W1TC_OFFSET, pending1);
+    while (pending1 != 0U) {
+      pbl_intc_dispatch(gpio->port.intc, 32U + (uint32_t)PBL_CTZ(pending1));
+      pending1 &= pending1 - 1U;
+    }
+  }
+#endif
 }
 
 int pbl_gpio_esp32c3_init(const struct pbl_device *dev) {

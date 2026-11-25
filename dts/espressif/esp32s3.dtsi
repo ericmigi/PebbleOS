@@ -17,11 +17,11 @@
 		};
 	};
 
-	// SRAM1 on the data bus, from 0x3fc88000 up to the ROM's reserved data/stack (~0x3fcdb700).
+	// SRAM1 on the data bus, from 0x3fc88000 up to the ROM's reserved data (0x3fcef81c).
 	// 0x3fc88000 aliases IRAM 0x40378000 (+0x6f0000) where .ramfunc and VECBASE run.
 	sram0: memory@3fc88000 {
 		device_type = "memory";
-		reg = <0x3fc88000 0x53000>;
+		reg = <0x3fc88000 0x67000>;
 	};
 
 	clocks {
@@ -47,6 +47,19 @@
 			status = "disabled";
 		};
 
+		gpio: gpio@60004000 {
+			compatible = "esp,esp32c3-gpio";
+			reg = <0x60004000 0x1000>;
+			interrupts = <16>;
+			esp,io-mux = <&io_mux>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <49>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			status = "disabled";
+		};
+
 		efuse: efuse@60007000 {
 			compatible = "esp,esp32c3-efuse";
 			reg = <0x60007000 0x200>;
@@ -56,6 +69,12 @@
 			compatible = "esp,esp32s3-rtc-cntl";
 			reg = <0x60008000 0x1000>;
 			interrupts = <39>;
+		};
+
+		io_mux: pinctrl@60009000 {
+			compatible = "esp,esp32c3-pinctrl";
+			reg = <0x60009000 0x1000>;
+			esp,gpio-matrix = <&gpio>;
 		};
 
 		uart1: serial@60010000 {
@@ -82,6 +101,16 @@
 			compatible = "esp,esp32c3-systimer";
 			reg = <0x60023000 0x1000>;
 			interrupts = <57>, <58>, <59>;
+		};
+
+		spi2: spi@60024000 {
+			compatible = "esp,esp32c3-spi";
+			reg = <0x60024000 0x1000>;
+			interrupts = <21>;
+			clocks = <&clk_apb>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
 		};
 
 		rng: rng@6003507c {

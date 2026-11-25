@@ -42,7 +42,7 @@ static int prv_configure_pin(const struct pbl_pinctrl_esp32c3 *ctrl, uint32_t pi
     iomux |= PBL_FIELD_PREP(IO_MUX_FUN_DRV_MASK, PBL_FIELD_GET(PBL_PINCTRL_ESP32C3_DRIVE_MSK, pin));
   }
   // A GPIO output reads back, as with the GPIO driver
-  if (in != ESP32C3_NOSIG || out == ESP32C3_SIG_GPIO) {
+  if (in != ESP32C3_NOSIG || out == GPIO_FUNC_OUT_GPIO) {
     iomux |= IO_MUX_FUN_IE;
   }
 
@@ -52,7 +52,7 @@ static int prv_configure_pin(const struct pbl_pinctrl_esp32c3 *ctrl, uint32_t pi
                 (pin & PBL_PINCTRL_ESP32C3_OPEN_DRAIN) != 0U ? GPIO_PIN_PAD_DRIVER : 0U,
                 ctrl->matrix + ESP32C3_GPIO_PIN_OFFSET(pad));
     // A GPIO keeps its enable in the matrix's own register, a peripheral gives its own
-    pbl_writel(out | (out == ESP32C3_SIG_GPIO ? GPIO_FUNC_OUT_OEN_SEL : 0U),
+    pbl_writel(out | (out == GPIO_FUNC_OUT_GPIO ? GPIO_FUNC_OUT_OEN_SEL : 0U),
                ctrl->matrix + ESP32C3_GPIO_FUNC_OUT_SEL_CFG_OFFSET(pad));
   }
   if (in != ESP32C3_NOSIG) {
