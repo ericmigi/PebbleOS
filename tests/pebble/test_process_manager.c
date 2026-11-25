@@ -187,6 +187,14 @@ bool process_metadata_has_required_features(const PebbleProcessMd *md, uint32_t 
   return true;
 }
 
+bool process_metadata_abi_supported(const PebbleProcessMd *md) {
+  return true;
+}
+
+PebblePlatformAbi process_metadata_get_abi(const PebbleProcessMd *md) {
+  return PLATFORM_ABI_ARMV7M;
+}
+
 static int s_process_metadata_get_res_bank_num__result;
 int process_metadata_get_res_bank_num(const PebbleProcessMd *md) {
   return s_process_metadata_get_res_bank_num__result;
