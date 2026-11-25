@@ -72,6 +72,15 @@ config FLASH_ESP32C3
       Support for the flash an ESP32-C3 runs from, written and erased
       through the ROM's SPI1 routines.
 
+config FLASH_ESP32S3
+    bool "ESP32-S3 flash"
+    default y
+    depends on DT_HAS_ESP_ESP32S3_FLASH_ENABLED
+    depends on RAMFUNC
+    help
+      Support for the flash an ESP32-S3 runs from, written and erased
+      through the ROM's SPI1 routines.
+
 config FLASH_POSIX
     bool "POSIX External Flash"
     default y if SOC_POSIX

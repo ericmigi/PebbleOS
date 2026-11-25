@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: esp,esp32s3-flash
+config: FLASH_ESP32S3
+class: flash
+define: PBL_FLASH_ESP32S3_DEFINE
+args:
+  - name: true
+  - size: 0
