@@ -4,6 +4,7 @@
 pbl_library()
 pbl_library_sources(
   esp32c3/bt.c
+  esp32c3/ctl.c
   esp32c3/phy.c
   esp32c3/phy_init_data.c
 )
