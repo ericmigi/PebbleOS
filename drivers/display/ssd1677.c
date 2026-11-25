@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include <pbl/crc/crc.h>
 #include <pbl/devicetree.h>
 #include <pbl/drivers/display/ssd1677.h>
 #include <pbl/kernel/assert.h>
@@ -230,6 +231,7 @@ static const uint8_t s_map_levels[4][4] = {
 struct plane_src {
   const uint8_t *frame;
   const uint8_t *xor;
+  const uint8_t *xor_rows;
   enum plane_map map;
   bool cells;
   uint16_t force_lo;
@@ -376,6 +378,9 @@ static void prv_map_row(const struct pbl_display_ssd1677 *epd, const struct plan
     if (src->xor != nullptr) {
       v ^= prv_bit(epd, src->xor, a, (uint32_t)across);
     }
+    if (src->xor_rows != nullptr) {
+      v ^= prv_row_bit(src->xor_rows, epd->quarter ? a : (uint32_t)across);
+    }
     line[a] = (uint8_t)v;
   }
 
@@ -459,7 +464,8 @@ static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint8_t ram,
 }
 
 static bool prv_has_idle_work(const struct pbl_display_ssd1677 *epd) {
-  return epd->touched != nullptr || epd->full_on_idle || epd->power_off_ms != 0U;
+  return epd->touched != nullptr || epd->touched_rows != nullptr || epd->full_on_idle ||
+         epd->power_off_ms != 0U;
 }
 
 // Ends the refresh in flight once, from the BUSY interrupt or the timeout
@@ -482,6 +488,12 @@ static void prv_end(const struct pbl_display *disp, int status) {
     state->need_half = true;
   }
   state->idle_since_ms = (uint32_t)pbl_uptime_ms();
+  // Without a frame copy the planes are re-synced first, from the framebuffer
+  if (prv_epd(disp)->shadow == nullptr) {
+    state->post_status = status;
+    (void)pbl_work_submit_boosted(&pbl_sys_workq, &state->post);
+    return;
+  }
   if (prv_has_idle_work(prv_epd(disp))) {
     (void)pbl_delayed_work_reschedule(&pbl_sys_workq, &state->idle,
                                       PBL_MSEC(prv_epd(disp)->idle_ms));
@@ -558,6 +570,7 @@ static int prv_controller_init(const struct pbl_display_ssd1677 *epd) {
 }
 
 static void prv_idle_work(struct pbl_work *work);
+static void prv_post(struct pbl_work *work);
 
 static int prv_init(const struct pbl_display *disp) {
   const struct pbl_display_ssd1677 *epd = prv_epd(disp);
@@ -601,6 +614,9 @@ static int prv_init(const struct pbl_display *disp) {
   state->dirty_valid = false;
   pbl_mutex_init(&state->lock);
   pbl_delayed_work_init(&state->idle, prv_idle_work);
+  pbl_work_init(&state->post, prv_post);
+  state->post_pending = false;
+  state->resync_valid = false;
   // The panel's own fast waveform, with its main phase cut, or that phase alone, on changes only
   if (epd->fast_differential) {
     memcpy(state->wave.vs, s_diff_vs, sizeof(state->wave.vs));
@@ -625,7 +641,9 @@ static int prv_init(const struct pbl_display *disp) {
   }
 
   // Unknown until the first update: the frame is white, as the RAM
-  memset(epd->shadow, 0xFF, (disp->props.width + 7U) / 8U * disp->props.height);
+  if (epd->shadow != nullptr) {
+    memset(epd->shadow, 0xFF, (disp->props.width + 7U) / 8U * disp->props.height);
+  }
 
   return prv_controller_init(epd);
 }
@@ -640,7 +658,7 @@ static int prv_disable(const struct pbl_display *disp) {
 
   (void)pbl_delayed_work_cancel(&epd->state->idle);
   (void)pbl_mutex_lock(&epd->state->lock, PBL_FOREVER);
-  if (epd->state->refreshing) {
+  if (epd->state->refreshing || epd->state->post_pending) {
     pbl_mutex_unlock(&epd->state->lock);
     return -EBUSY;
   }
@@ -857,6 +875,7 @@ static int prv_refresh(const struct pbl_display *disp, enum refresh_mode mode, b
 
   // The interrupt is armed before the refresh starts, so its end cannot be missed; the deadline
   // runs from the activation, however late that comes
+  state->post_pending = epd->shadow == nullptr;
   state->refreshing = true;
   ret = pbl_intc_enable(&state->busy_irq);
   if (ret == 0) {
@@ -876,6 +895,10 @@ static int prv_refresh(const struct pbl_display *disp, enum refresh_mode mode, b
   }
   refreshing = state->refreshing;
   state->refreshing = false;
+  // Not started: no re-sync follows
+  if (refreshing) {
+    state->post_pending = false;
+  }
   pbl_irq_unlock();
   (void)pbl_intc_disable(&state->busy_irq);
 
@@ -994,6 +1017,233 @@ static void prv_idle_power(const struct pbl_display_ssd1677 *epd) {
   }
 }
 
+/*
+ * Without a frame copy. The planes hold the frame shown everywhere between refreshes: after each,
+ * both are written again from the framebuffer over what it drove, before its completion, while
+ * the compositor leaves the framebuffer alone. A fast update then writes only the new plane over
+ * its rows; a CRC per row tells them. The top up drives every pixel of the rows fast refreshes
+ * changed, inverting them in the old plane. The driver's own refreshes read the framebuffer when
+ * nothing waits to be shown, so only where its rows' CRCs say it still holds the frame shown;
+ * rows it could not re-sync are driven whole by the next update.
+ */
+static uint32_t prv_row_crc(const struct pbl_display_ssd1677 *epd, const uint8_t *frame,
+                            uint32_t y) {
+  uint32_t pitch = (epd->disp.props.width + 7U) / 8U;
+
+  return pbl_crc32(0U, &frame[y * pitch], pitch);
+}
+
+static bool prv_frame_shown(const struct pbl_display_ssd1677 *epd, uint32_t lo, uint32_t hi) {
+  for (uint32_t y = lo; y <= hi; y++) {
+    if (prv_row_crc(epd, epd->state->frame, y) != epd->row_crc[y]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static void prv_rows_set(uint8_t *bits, uint32_t lo, uint32_t hi, bool set) {
+  for (uint32_t y = lo; y <= hi; y++) {
+    if (set) {
+      bits[y / 8U] |= (uint8_t)(1U << (y % 8U));
+    } else {
+      bits[y / 8U] &= (uint8_t)~(1U << (y % 8U));
+    }
+  }
+}
+
+// The first and last row set, false for none
+static bool prv_rows_range(const struct pbl_display_ssd1677 *epd, const uint8_t *bits, uint32_t *lo,
+                           uint32_t *hi) {
+  bool any = false;
+
+  for (uint32_t y = 0U; y < epd->disp.props.height; y++) {
+    if (prv_row_bit(bits, y)) {
+      *lo = any ? *lo : y;
+      *hi = y;
+      any = true;
+    }
+  }
+
+  return any;
+}
+
+// After a refresh: both planes back to the frame shown over what it drove, then its completion
+static void prv_post(struct pbl_work *work) {
+  struct pbl_display_ssd1677_state *state =
+      PBL_CONTAINER_OF(work, struct pbl_display_ssd1677_state, post);
+  const struct pbl_display *disp = state->disp;
+  const struct pbl_display_ssd1677 *epd = prv_epd(disp);
+  int status = state->post_status;
+
+  if (status == 0 && state->resync_valid) {
+    uint32_t lo = state->resync_lo;
+    uint32_t hi = state->resync_hi;
+    struct pbl_display_ssd1677_window w = prv_window(epd, (uint16_t)lo, (uint16_t)hi);
+    const struct plane_src src = {.frame = state->frame};
+
+    // The driver's own refresh: a new frame may be in the framebuffer already
+    if (state->own && !prv_frame_shown(epd, lo, hi)) {
+      prv_rows_set(epd->unsynced_rows, lo, hi, true);
+    } else if (prv_write_plane(epd, CMD_WRITE_RAM_RED, &w, &src) != 0 ||
+               prv_write_plane(epd, CMD_WRITE_RAM_BW, &w, &src) != 0) {
+      state->need_half = true;
+    } else if (state->own && !prv_frame_shown(epd, lo, hi)) {
+      prv_rows_set(epd->unsynced_rows, lo, hi, true);
+    }
+  }
+  state->resync_valid = false;
+  state->post_pending = false;
+
+  if (prv_has_idle_work(epd)) {
+    (void)pbl_delayed_work_reschedule(&pbl_sys_workq, &state->idle, PBL_MSEC(epd->idle_ms));
+  }
+  if (!state->own) {
+    pbl_display_complete(disp, status);
+  }
+}
+
+static int prv_topup_nocopy(const struct pbl_display_ssd1677 *epd) {
+  struct pbl_display_ssd1677_state *state = epd->state;
+  uint32_t lo;
+  uint32_t hi;
+  int ret;
+
+  // A new frame on its way comes first, and its update leaves these rows touched
+  if (!prv_rows_range(epd, epd->touched_rows, &lo, &hi) || !prv_frame_shown(epd, lo, hi)) {
+    return 0;
+  }
+
+  // The new plane holds the frame already
+  struct pbl_display_ssd1677_window w = prv_window(epd, (uint16_t)lo, (uint16_t)hi);
+
+  ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &w,
+                        &(struct plane_src){.frame = state->frame, .xor_rows = epd->touched_rows});
+  // ponytail: a frame drawn while the old plane went out leaves it unknown: a clean refresh
+  if (ret == 0 && !prv_frame_shown(epd, lo, hi)) {
+    ret = -EAGAIN;
+  }
+  if (ret == 0) {
+    memset(epd->touched_rows, 0, (epd->disp.props.height + 7U) / 8U);
+    state->resync_lo = (uint16_t)lo;
+    state->resync_hi = (uint16_t)hi;
+    state->resync_valid = true;
+    ret = prv_refresh(state->disp, REFRESH_TOPUP, true, 0U);
+  }
+  if (ret != 0) {
+    state->resync_valid = false;
+    state->need_half = true;
+  }
+
+  return ret;
+}
+
+// Both planes whole, from the framebuffer of the last update
+static int prv_write_half_nocopy(const struct pbl_display_ssd1677 *epd) {
+  uint32_t height = epd->disp.props.height;
+  struct pbl_display_ssd1677_window w = prv_window(epd, 0U, (uint16_t)(height - 1U));
+  const struct plane_src src = {.frame = epd->state->frame};
+  int ret;
+
+  ret = prv_write_plane(epd, CMD_WRITE_RAM_BW, &w, &src);
+  if (ret == 0) {
+    ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &w, &src);
+  }
+  memset(epd->unsynced_rows, 0, (height + 7U) / 8U);
+  if (epd->touched_rows != nullptr) {
+    memset(epd->touched_rows, 0, (height + 7U) / 8U);
+  }
+
+  return ret;
+}
+
+// Returns 1 for a frame unchanged
+static int prv_update_nocopy(const struct pbl_display_ssd1677 *epd,
+                             const struct pbl_display_buffer *buf, uint16_t y0, uint16_t y1) {
+  struct pbl_display_ssd1677_state *state = epd->state;
+  uint32_t height = epd->disp.props.height;
+  int32_t first = -1;
+  int32_t last = -1;
+  int ret = 0;
+
+  if (buf->pitch != (epd->disp.props.width + 7U) / 8U) {
+    return -EINVAL;
+  }
+  state->frame = buf->data;
+
+  // What the panel shows is not known: every row
+  if (state->need_half) {
+    y0 = 0U;
+    y1 = (uint16_t)(height - 1U);
+  }
+  for (uint32_t y = y0; y <= y1; y++) {
+    uint32_t crc = prv_row_crc(epd, buf->data, y);
+
+    if (crc != epd->row_crc[y] || state->need_half) {
+      epd->row_crc[y] = crc;
+      first = (first < 0) ? (int32_t)y : first;
+      last = (int32_t)y;
+    }
+  }
+  if (first < 0 && !state->need_half) {
+    return 1;
+  }
+
+  enum refresh_mode mode = prv_mode(epd);
+
+  if (mode == REFRESH_HALF) {
+    ret = prv_write_half_nocopy(epd);
+    if (ret == 0) {
+      ret = prv_refresh(state->disp, REFRESH_HALF, false, 0U);
+    }
+    if (ret != 0) {
+      state->need_half = true;
+    }
+    return ret;
+  }
+
+  bool large = epd->touched_rows != nullptr && (uint32_t)(last - first + 1) * 2U >= height;
+  struct pbl_display_ssd1677_window w = prv_window(epd, (uint16_t)first, (uint16_t)last);
+  uint32_t lo;
+  uint32_t hi;
+
+  // Rows whose old plane is not known are driven whole, with the changed rows among them
+  if (prv_rows_range(epd, epd->unsynced_rows, &lo, &hi)) {
+    struct pbl_display_ssd1677_window u = prv_window(epd, (uint16_t)lo, (uint16_t)hi);
+
+    for (uint32_t y = (uint32_t)first; y <= (uint32_t)last; y++) {
+      if (y >= lo && y <= hi) {
+        prv_rows_set(epd->unsynced_rows, y, y, true);
+      }
+    }
+    ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &u,
+                          &(struct plane_src){.frame = buf->data, .xor_rows = epd->unsynced_rows});
+    memset(epd->unsynced_rows, 0, (height + 7U) / 8U);
+    prv_union(&w, &u);
+    first = PBL_MIN(first, (int32_t)lo);
+    last = PBL_MAX(last, (int32_t)hi);
+  }
+  if (ret == 0) {
+    ret = prv_write_plane(epd, CMD_WRITE_RAM_BW, &w, &(struct plane_src){.frame = buf->data});
+  }
+  if (epd->touched_rows != nullptr) {
+    prv_rows_set(epd->touched_rows, (uint32_t)first, (uint32_t)last, !large);
+  }
+  state->resync_lo = (uint16_t)first;
+  state->resync_hi = (uint16_t)last;
+  state->resync_valid = true;
+  if (ret == 0) {
+    ret = prv_refresh(state->disp, REFRESH_FAST, false, large ? state->wave.topup_frames : 0U);
+  }
+  if (ret != 0) {
+    state->resync_valid = false;
+    state->need_half = true;
+  }
+
+  return ret;
+}
+
 // No update for a while: top up, run a deferred clean refresh, bring the planes back to the frame
 // shown, or turn the analog supplies off
 static void prv_idle_work(struct pbl_work *work) {
@@ -1008,7 +1258,30 @@ static void prv_idle_work(struct pbl_work *work) {
   }
 
   // A refresh in flight starts the wait over at its end
-  if (state->refreshing || pbl_display_update_in_progress(disp) || pbl_gpio_get(&epd->busy) != 0) {
+  if (state->refreshing || state->post_pending || pbl_display_update_in_progress(disp) ||
+      pbl_gpio_get(&epd->busy) != 0) {
+    pbl_mutex_unlock(&state->lock);
+    return;
+  }
+
+  if (epd->shadow == nullptr) {
+    uint32_t lo;
+    uint32_t hi;
+
+    if (state->need_half || state->frame == nullptr) {
+      prv_idle_power(epd);
+    } else if (epd->full_on_idle && epd->full_interval != 0U &&
+               state->updates >= epd->full_interval &&
+               prv_frame_shown(epd, 0U, disp->props.height - 1U)) {
+      state->updates = 0U;
+      if (prv_write_half_nocopy(epd) != 0 || prv_refresh(disp, REFRESH_HALF, true, 0U) != 0) {
+        state->need_half = true;
+      }
+    } else if (epd->touched_rows != nullptr && prv_rows_range(epd, epd->touched_rows, &lo, &hi)) {
+      (void)prv_topup_nocopy(epd);
+    } else {
+      prv_idle_power(epd);
+    }
     pbl_mutex_unlock(&state->lock);
     return;
   }
@@ -1250,8 +1523,8 @@ static int prv_update(const struct pbl_display *disp, const struct pbl_display_b
 
   (void)pbl_mutex_lock(&state->lock, PBL_FOREVER);
 
-  // The driver's own refresh, a top up or a clean one, ends first
-  (void)PBL_POLL_SLEEP_MS(!state->refreshing, 1U, REFRESH_TIMEOUT_MS);
+  // The driver's own refresh, a top up or a clean one, ends first, and its re-sync
+  (void)PBL_POLL_SLEEP_MS(!state->refreshing && !state->post_pending, 1U, REFRESH_TIMEOUT_MS);
 
   // Still busy with a refresh that timed out: start the controller over, and its planes with it
   if (pbl_gpio_get(&epd->busy) != 0) {
@@ -1263,6 +1536,16 @@ static int prv_update(const struct pbl_display *disp, const struct pbl_display_b
       pbl_mutex_unlock(&state->lock);
       return ret;
     }
+  }
+
+  if (epd->shadow == nullptr) {
+    ret = prv_update_nocopy(epd, buf, y0, y1);
+    pbl_mutex_unlock(&state->lock);
+    if (ret > 0) {
+      pbl_display_complete(disp, 0);
+      ret = 0;
+    }
+    return ret;
   }
 
   const struct pbl_display_detail *detail = (epd->cells != nullptr) ? buf->detail : nullptr;
