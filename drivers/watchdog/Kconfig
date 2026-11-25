@@ -48,6 +48,13 @@ config WATCHDOG_STM32_IWDG
     help
       Support for the ST STM32H7 independent watchdog.
 
+config WATCHDOG_ESP32C3
+    bool "Espressif ESP32-C3"
+    default y if SOC_ESP32C3
+    help
+      Support for the ESP32-C3's timer group 0 watchdog, which resets
+      the whole system.
+
 config WATCHDOG_QEMU
     bool "QEMU Watchdog"
     default y if SOC_QEMU_PEBBLE
