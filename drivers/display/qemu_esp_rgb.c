@@ -124,7 +124,13 @@ static void prv_draw_detail(const struct pbl_display_qemu_esp_rgb *rgb,
         uint32_t cy;
 
         display_geometry_scan_pos(g, flip, x, y, i % 2U, i / 2U, &cx, &cy);
-        vram[cy * win_width + cx] = s_levels[(cells[x] >> (2U * i)) & 3U];
+        uint32_t level = (cells[x] >> (2U * i)) & 3U;
+
+        // Black and white until the grey pass
+        if (!detail->grey) {
+          level = (level >= 2U) ? 3U : 0U;
+        }
+        vram[cy * win_width + cx] = s_levels[level];
       }
     }
   }
