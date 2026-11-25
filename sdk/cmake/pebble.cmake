@@ -75,9 +75,17 @@ function(_pebble_platform p)
   endif()
   set(build ${CMAKE_BINARY_DIR})
 
+  if(NOT PEBBLE_${p}_ABI STREQUAL "armv7m")
+    string(TOUPPER ${PEBBLE_${p}_ABI} abi)
+    if(NOT PEBBLE_${abi}_GCC)
+      message(FATAL_ERROR "${p} apps are ${PEBBLE_${p}_ABI} code: install its toolchain "
+                          "(${PEBBLE_${p}_TOOLCHAIN_PREFIX}gcc), or leave ${p} out")
+    endif()
+  endif()
+
   add_library(pebble_${p} INTERFACE)
   target_compile_options(pebble_${p} INTERFACE
-    -mcpu=cortex-m3 -mthumb -fPIE -g
+    ${PEBBLE_${p}_ABI_FLAGS} -g
     -ffunction-sections -fdata-sections -fcommon
     -Wall -Wextra -Wno-unused-parameter
     $<$<BOOL:${PEBBLE_WARNINGS_AS_ERRORS}>:-Werror>
@@ -99,7 +107,7 @@ function(_pebble_platform p)
     ${PEBBLE_${p}_PACKAGE_INCLUDES}
   )
   target_link_options(pebble_${p} INTERFACE
-    -mcpu=cortex-m3 -mthumb -fPIE
+    ${PEBBLE_${p}_ABI_FLAGS}
     -Wl,--gc-sections -Wl,--warn-common
     -Wl,--build-id=sha1 -Wl,--emit-relocs
     -T${build}/${p}/pebble_app.ld
@@ -130,6 +138,33 @@ function(_pebble_platform p)
   add_custom_target(pebble_resources_${p} DEPENDS ${outputs})
 endfunction()
 
+# A target of a platform of another ABI than the project's compiler builds
+# with that ABI's compiler, which takes the place of the project's.
+function(_pebble_abi_compiler target p)
+  if(PEBBLE_${p}_ABI STREQUAL "armv7m")
+    return()
+  endif()
+  string(TOUPPER ${PEBBLE_${p}_ABI} abi)
+  set(launcher ${PEBBLE_PYTHON} ${_PEBBLE_TOOL} cc ${PEBBLE_${abi}_GCC})
+  set_target_properties(${target} PROPERTIES
+    C_COMPILER_LAUNCHER "${launcher}"
+    C_LINKER_LAUNCHER "${launcher}"
+  )
+endfunction()
+
+# The objcopy and the directory of the binutils of a platform's ABI.
+function(_pebble_abi_binutils p objcopy_var bin_var)
+  if(PEBBLE_${p}_ABI STREQUAL "armv7m")
+    set(objcopy ${CMAKE_OBJCOPY})
+  else()
+    string(TOUPPER ${PEBBLE_${p}_ABI} abi)
+    set(objcopy ${PEBBLE_${abi}_OBJCOPY})
+  endif()
+  get_filename_component(bin ${objcopy} DIRECTORY)
+  set(${objcopy_var} ${objcopy} PARENT_SCOPE)
+  set(${bin_var} ${bin} PARENT_SCOPE)
+endfunction()
+
 # app_<platform> or worker_<platform>, out of the `app` or `worker`
 # interface.
 function(_pebble_binary kind)
@@ -145,6 +180,7 @@ function(_pebble_binary kind)
       $<$<BOOL:${PEBBLE_MESSAGE_KEYS}>:${build}/src/message_keys.auto.c>
     )
     add_executable(${kind}_${p})
+    _pebble_abi_compiler(${kind}_${p} ${p})
     target_link_libraries(${kind}_${p} PRIVATE ${kind} pebble_${kind}_${p}_generated pebble_${p})
     target_link_options(${kind}_${p} PRIVATE -Wl,-Map=${build}/${p}/pebble-${kind}.map)
     set_target_properties(${kind}_${p} PROPERTIES
@@ -203,6 +239,7 @@ function(pebble_package)
   foreach(p ${PEBBLE_PLATFORMS})
     _pebble_platform(${p})
     add_library(package_${p} STATIC ${build}/${p}/src/resource_ids.auto.h)
+    _pebble_abi_compiler(package_${p} ${p})
     target_link_libraries(package_${p} PRIVATE package pebble_${p})
     set_target_properties(package_${p} PROPERTIES
       OUTPUT_NAME ${name}
@@ -285,8 +322,6 @@ endfunction()
 function(_pebble_finalize)
   set(build ${CMAKE_BINARY_DIR})
   set(timestamp ${build}/pebble/timestamp)
-  # inject_metadata runs the binutils by name.
-  get_filename_component(toolchain_bin ${CMAKE_C_COMPILER} DIRECTORY)
 
   if(PEBBLE_PROJECT_TYPE STREQUAL "package")
     if(NOT TARGET package)
@@ -356,6 +391,7 @@ function(_pebble_finalize)
       else()
         string(APPEND entry ", \"worker\": \"${bin}\"")
       endif()
+      _pebble_abi_binutils(${p} objcopy toolchain_bin)
       add_custom_command(
         OUTPUT ${bin}
         BYPRODUCTS ${build}/${p}/pebble-${kind}.raw.bin
@@ -363,7 +399,7 @@ function(_pebble_finalize)
                 --project ${PEBBLE_PROJECT_JSON} --platform ${p} --kind ${kind}
                 --elf $<TARGET_FILE:${kind}_${p}> --output ${bin}
                 --timestamp ${timestamp} ${has_js} ${has_worker} ${extra}
-                --objcopy ${CMAKE_OBJCOPY}
+                --objcopy ${objcopy}
                 --toolchain-bin ${toolchain_bin}
         DEPENDS ${kind}_${p} ${resources} ${_PEBBLE_TOOL}
         COMMENT "Generating ${p} ${kind} binary"

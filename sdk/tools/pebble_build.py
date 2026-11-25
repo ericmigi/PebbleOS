@@ -32,6 +32,7 @@ if SDK_TOOLS not in sys.path:
 import pebble_project
 from pebble_project import ProjectError
 from pebble_sdk_platform import (
+    ABI_TOOLCHAINS,
     PlatformError,
     bezel_platforms,
     bundle_description,
@@ -520,6 +521,7 @@ def configure(args):
             "sdk_include": include_dir,
             "sdk_lib": sdk_component(sdk_root, p, "lib"),
             "sdk_version": [major, minor],
+            "abi": desc["ABI"],
             "frozen": "FROZEN_AT_REVISION" in desc,
             "defines": desc["DEFINES"],
             "bundle_dir": desc["BUNDLE_BIN_DIR"],
@@ -616,20 +618,30 @@ def configure(args):
 
     from generate_appinfo import generate_appinfo_c
 
-    template = os.path.join(SDK_COMMON, "pebble_app.ld.template")
-    with open(template) as f:
-        ldscript_template = f.read()
     with open(os.path.join(SDK_COMMON, "pebble_app_init_arrays.ld")) as f:
         init_arrays = f.read()
-    configure_depends.append(template)
 
     for p, pinfo in platform_info.items():
         platform_dir = os.path.join(build_dir, p)
+        # An ABI whose code is linked apart from its data has a script of its own.
+        abi = pinfo["abi"]
+        template = os.path.join(
+            SDK_COMMON,
+            "pebble_app.ld.template"
+            if abi == "armv7m"
+            else f"pebble_app_{abi}.ld.template",
+        )
+        with open(template) as f:
+            ldscript_template = f.read()
+        if template not in configure_depends:
+            configure_depends.append(template)
         _write_if_changed(
             os.path.join(platform_dir, "pebble_app.ld"),
             ldscript_template.replace(
                 "@MAX_APP_MEMORY_SIZE@", str(pinfo["max_app_memory_size"])
-            ).replace("@INIT_ARRAYS@", "" if pinfo["frozen"] else init_arrays),
+            )
+            .replace("@CODE_OFFSET@", hex(ABI_TOOLCHAINS[abi]["code_offset"]))
+            .replace("@INIT_ARRAYS@", "" if pinfo["frozen"] else init_arrays),
         )
         if project_type != "package":
             appinfo = dict(info)
@@ -675,6 +687,9 @@ def configure(args):
         sdk_version = tuple(pinfo["sdk_version"])
         emit(f"PEBBLE_{p}_SDK_INCLUDE", pinfo["sdk_include"])
         emit(f"PEBBLE_{p}_SDK_LIB", pinfo["sdk_lib"])
+        emit(f"PEBBLE_{p}_ABI", pinfo["abi"])
+        emit(f"PEBBLE_{p}_ABI_FLAGS", ABI_TOOLCHAINS[pinfo["abi"]]["flags"])
+        emit(f"PEBBLE_{p}_TOOLCHAIN_PREFIX", ABI_TOOLCHAINS[pinfo["abi"]]["prefix"])
         emit(f"PEBBLE_{p}_FROZEN", pinfo["frozen"])
         emit(
             f"PEBBLE_{p}_DEFINES",
@@ -1014,6 +1029,12 @@ def resources(args):
 # --- binaries -----------------------------------------------------------------
 
 
+def cc(args):
+    """Compile or link for a platform of another ABI than the project's
+    compiler: CMake runs this in front of its compiler, whose name is dropped."""
+    os.execv(args.compiler, [args.compiler, *args.command[1:]])
+
+
 def binary(args):
     """The image the watch loads, out of a linked app or worker."""
     import inject_metadata
@@ -1027,8 +1048,9 @@ def binary(args):
     os.environ["PATH"] = args.toolchain_bin + os.pathsep + os.environ["PATH"]
     project = _load_project(args.project)
     platform = project["platforms"][args.platform]
+    toolchain = ABI_TOOLCHAINS[platform.get("abi", "armv7m")]
     error = pebble_project.undeclared_health_error(
-        project["info"], inject_metadata.elf_symbol_names(args.elf)
+        project["info"], inject_metadata.elf_symbol_names(args.elf, toolchain["prefix"])
     )
     if error:
         raise ProjectError(error)
@@ -1073,9 +1095,11 @@ def binary(args):
         allow_js=args.has_js,
         has_worker=args.has_worker,
         max_binary_size=platform["max_app_binary_size"],
+        toolchain_prefix=toolchain["prefix"],
+        code_offset=toolchain["code_offset"],
     )
 
-    ram = sum(size(args.elf))
+    ram = sum(size(args.elf, toolchain["prefix"]))
     if args.kind == "worker":
         print(
             *app_memory_report(
@@ -1346,6 +1370,13 @@ def main():
     p.add_argument("--objcopy", required=True)
     p.add_argument("--toolchain-bin", required=True)
     p.set_defaults(func=binary)
+
+    p = sub.add_parser(
+        "cc", help="compiler launcher: run COMPILER in place of the one given"
+    )
+    p.add_argument("compiler")
+    p.add_argument("command", nargs=argparse.REMAINDER)
+    p.set_defaults(func=cc)
 
     p = sub.add_parser("js")
     p.add_argument("--project", required=True)
