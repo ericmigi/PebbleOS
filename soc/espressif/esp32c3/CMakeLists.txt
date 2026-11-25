@@ -8,3 +8,4 @@ pbl_library_sources(
   intmatrix.c
 )
 pbl_library_sources_ifdef(CONFIG_CRC retained.c)
+pbl_library_sources_ifdef(CONFIG_SOC_ESP32C3_POWER_OFF power_off.c)
