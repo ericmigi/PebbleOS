@@ -340,8 +340,8 @@ static PBL_NOINLINE void prv_record_edges(GContext *ctx, const GlyphData *glyph,
 #endif
 
 #ifdef CONFIG_FRAMEBUFFER_SCALE2
-// Mask words per row of a glyph drawn at twice its size: glyphs up to 128 pixels wide
-#define SCALED2_GLYPH_WORDS 8
+// Mask words per row of a glyph drawn at twice its size: any glyph width, up to 255 pixels
+#define SCALED2_GLYPH_WORDS 16
 
 // n (up to 8) bits of a glyph bitmap from bit p, LSB first
 static PBL_ALWAYS_INLINE unsigned prv_glyph_bits(const uint8_t *bits, uint32_t p, unsigned n) {
@@ -430,6 +430,10 @@ static PBL_NOINLINE void prv_render_glyph_scaled2(GContext *ctx, const GlyphData
     for (; e < count && edges[3 * e + 1] == gy; e++) {
       const int ex = edges[3 * e];
       const unsigned levels = edges[3 * e + 2];
+      if (ex >= w) {
+        // Not in the glyph: the font is malformed
+        continue;
+      }
       for (int i = 0; i < 4; i++) {
         const int c = 2 * ex + (i & 1);
         const uint32_t bit = 1U << (c % 32);

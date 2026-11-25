@@ -516,8 +516,8 @@ void graphics_draw_circle(GContext *ctx, GPoint p, uint16_t radius) {
   }
 #ifdef CONFIG_FRAMEBUFFER_SCALE2_SHAPES
   if (radius > 0 && gbitmap_is_scaled2(&ctx->dest_bitmap)) {
-    // The ring the stroke covers, in the stroke color
-    const int16_t r = (int16_t)(radius * 8 + 4);
+    // The ring the stroke covers, in the stroke color: centred on the radius, between pixels
+    const int16_t r = (int16_t)(radius * 8);
     // The stroke as the 1x circle draws it: odd, rounded up
     const int16_t half = (int16_t)(((ctx->draw_state.stroke_width / 2) * 2 + 1) * 4);
     const GColor fill = ctx->draw_state.fill_color;
