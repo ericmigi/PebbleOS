@@ -32,7 +32,35 @@ import re
 
 DESCRIPTOR_VERSION = 1
 
-ABIS = ("armv7m",)
+ABIS = ("armv7m", "riscv32")
+
+# What the binaries of an ABI are built with: the prefix of its toolchain's
+# tools, the flags apps compile and link with, and how far above its data a
+# binary's code is linked (riscv32: the ESP32-C3 fetches instructions from its
+# RAM 0x700000 above where it reads and writes it). Flexible binaries are
+# armv7m only.
+ABI_TOOLCHAINS = {
+    "armv7m": {
+        "prefix": "arm-none-eabi-",
+        "flags": ["-mcpu=cortex-m3", "-mthumb", "-fPIE"],
+        "code_offset": 0,
+    },
+    "riscv32": {
+        "prefix": "riscv32-esp-elf-",
+        # pc-relative addressing only (medany, no PIC, no GOT) and never gp,
+        # which is the firmware's; enums and alignment as the firmware's.
+        "flags": [
+            "-march=rv32imc_zicsr_zifencei",
+            "-mabi=ilp32",
+            "-mcmodel=medany",
+            "-fno-pic",
+            "-mno-relax",
+            "-fshort-enums",
+            "-mstrict-align",
+        ],
+        "code_offset": 0x700000,
+    },
+}
 
 # feature: (the define apps are given, the resource tag)
 FEATURES = {

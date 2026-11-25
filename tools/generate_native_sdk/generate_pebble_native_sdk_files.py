@@ -278,7 +278,7 @@ Hint: Add appropriate headers to the \"files\" array in exported_symbols.json"""
 
     # Build libpebble.a for our apps to compile against
     if build_shim_lib:
-        make_app_shim_lib(sorted_functions, sdk_lib_dir)
+        make_app_shim_lib(sorted_functions, sdk_lib_dir, platform_info["ABI"])
 
     # Build pebble.auto.c to build into our firmware
     make_fw_shims(sorted_functions, pbl_output_dir)
