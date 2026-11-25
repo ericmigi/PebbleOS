@@ -49,6 +49,15 @@ config SAMSA_MAX_OBJS
     int "Converted objects a process can have"
     default 1024
 
+config SAMSA_CACHE_ENTRIES
+    int "Decoded instructions a process keeps"
+    range 0 1024
+    default 0
+    help
+      Thumb instructions kept decoded per process, by address: a power of
+      two, or 0 to decode every instruction each time it runs. Each entry
+      takes about 12 bytes of each process's interpreter state.
+
 module = SAMSA
 module-str = Samsa
 source "subsys/logging/Kconfig.template.log_level"
