@@ -83,6 +83,9 @@ FEATURE_RLE4 = 0x02
 FEATURE_SCALE2 = 0x08
 # Glyph bitmaps hold 2 bits of coverage per pixel (0 none to 3 full), 16 pixels per 32-bit word
 FEATURE_AA2 = 0x10
+# Each glyph is a 1-bit bitmap at the font's resolution followed by its edges: a uint16 count,
+# then x, y and the coverage of the 2x2 panel pixels of each pixel not fully covered (3 bytes)
+FEATURE_EDGES = 0x20
 
 
 HASH_TABLE_SIZE = 255
@@ -152,6 +155,7 @@ class Font:
         self.autohint = False
         self.bits = 1
         self.fallback_face = None
+        self.edges = False
 
         self.glyph_header = "<BBbbb"
 
@@ -166,6 +170,54 @@ class Font:
             raise RuntimeError(
                 f"Unsupported compression engine: '{engine}'. Font {self.ttf_path}"
             )
+
+    def set_edges(self):
+        """Store a 1-bit glyph and its edges at panel resolution (needs scale 2 and 2 bits)."""
+        self.edges = True
+        self.features = (
+            self.features & ~(FEATURE_SCALE2 | FEATURE_AA2)
+        ) | FEATURE_EDGES
+
+    def _edge_glyph(self, bitmap, left2, top2, advance2):
+        """The glyph at the font's resolution, inked at half coverage, and its edge pixels."""
+        w2, h2 = bitmap.width, bitmap.rows
+        level = {}
+        for y in range(h2):
+            row = bitmap.buffer[y * bitmap.pitch : y * bitmap.pitch + w2]
+            for x, v in enumerate(row):
+                if v >> 6:
+                    level[(left2 + x, top2 + y)] = v >> 6
+        # Pixels of the font's resolution are 2x2 panel pixels on even panel coordinates
+        cx0, cy0 = left2 // 2, top2 // 2
+        cx1, cy1 = (left2 + w2 - 1) // 2, (top2 + h2 - 1) // 2
+        width, height = cx1 - cx0 + 1, cy1 - cy0 + 1
+        base, edges = [], []
+        for cy in range(cy0, cy1 + 1):
+            for cx in range(cx0, cx1 + 1):
+                cell = 0
+                for i in range(4):
+                    cell |= level.get((2 * cx + (i & 1), 2 * cy + (i >> 1)), 0) << (
+                        2 * i
+                    )
+                total = sum((cell >> (2 * i)) & 3 for i in range(4))
+                base.append(1 if total >= 6 else 0)
+                if cell not in (0, 0xFF):
+                    edges.append((cx - cx0, cy - cy0, cell))
+        packed = []
+        for word in grouper(32, base, 0):
+            w = 0
+            for index, bit in enumerate(word):
+                w |= bit << index
+            packed.append(struct.pack("<I", w))
+        packed.append(struct.pack("<H", len(edges)))
+        packed.extend(struct.pack("<BBB", *edge) for edge in edges)
+        data = b"".join(packed)
+        data += b"\0" * (-len(data) % 4)
+        if len(data) > self.max_glyph_size:
+            raise RuntimeError(
+                f"Glyph too large! {len(data)} > {self.max_glyph_size}. Font {self.ttf_path}"
+            )
+        return width, height, cx0, cy0, advance2 // 2, data
 
     def set_fallback(self, path):
         """Draw the codepoints the font lacks from another one, at the same capital height."""
@@ -385,7 +437,16 @@ class Font:
         pixel_mode = self.face.glyph.bitmap.pixel_mode
 
         glyph_packed = []
-        if height and width and self.bits == 2:
+        if self.edges:
+            if height and width:
+                width, height, left, bottom, advance, data = self._edge_glyph(
+                    bitmap, left, bottom, advance
+                )
+                glyph_packed = [data]
+            else:
+                width = height = 0
+                advance //= 2
+        elif height and width and self.bits == 2:
             levels = []
             for i in range(bitmap.rows):
                 row = bitmap.buffer[i * bitmap.pitch : i * bitmap.pitch + bitmap.width]

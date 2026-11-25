@@ -44,6 +44,7 @@ class FontResourceGenerator(ResourceGenerator):
         definition.autohint = bool(definition_dict.get("autohint"))
         definition.bits = definition_dict.get("bits", 1)
         definition.fallback = definition_dict.get("fallback")
+        definition.edges = bool(definition_dict.get("edges"))
         return definition
 
     @staticmethod
@@ -147,6 +148,12 @@ class FontResourceGenerator(ResourceGenerator):
                 font.set_bits2()
             if getattr(definition, "fallback", None):
                 font.set_fallback(definition.fallback)
+            if getattr(definition, "edges", False):
+                if scale != 2 or bits != 2:
+                    raise ValueError(
+                        f"Font {definition.name}: edges need scale 2 and bits 2"
+                    )
+                font.set_edges()
 
             if definition.character_regex is not None:
                 font.set_regex_filter(definition.character_regex)
