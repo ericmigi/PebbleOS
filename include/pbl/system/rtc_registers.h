@@ -28,6 +28,8 @@
 #define MAG_XY_CORRECTION_VALS           17
 #define MAG_Z_CORRECTION_VAL             18
 #define SLOT_OF_LAST_LAUNCHED_APP        19
+// The ESP32-C3 Bluetooth bring-up guard
+#define ESP32C3_BT_STATE_REGISTER        20
 
 // We want a checksum stored in the retained registers, to prove that they
 // are not *totally* full of noise from system-on reset -- otherwise, we

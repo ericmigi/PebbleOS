@@ -4,12 +4,17 @@
 menuconfig ESP32C3_BT
     bool "Espressif ESP32-C3 Bluetooth LE controller"
     depends on SOC_ESP32C3
+    select CRC
     select MCU
     select RNG
     help
       Link Espressif's Bluetooth LE controller and PHY libraries, from
       the esp32c3-bt-lib and esp-phy-lib submodules, with the glue that
-      runs them on PebbleOS.
+      runs them on PebbleOS. Nothing starts the controller unless asked
+      to: the btc shell command, or NimBLE's HCI transport once armed.
+      Each bring-up arms the RTC watchdog until btc confirm proves the
+      USB console alive, and a bring-up that never completed keeps the
+      controller off at the following boots.
 
 if ESP32C3_BT
 
@@ -34,6 +39,22 @@ config ESP32C3_BT_BLE_MAX_ACT
       Advertising, scanning, connection and initiating instances the
       controller allocates for: each costs heap. The watch advertises
       and keeps one connection.
+
+config ESP32C3_BT_CONFIRM_TIMEOUT_S
+    int "Seconds to confirm a bring-up"
+    range 5 3600
+    default 30
+    help
+      The RTC watchdog resets the chip this long after a bring-up starts
+      unless btc confirm stops it.
+
+config ESP32C3_BT_SHELL
+    bool "Shell commands"
+    default y
+    depends on SHELL
+    help
+      The btc command: start, confirm, arm and clear the controller,
+      send it raw HCI packets, dump clock and power registers.
 
 module = ESP32C3_BT
 module-str = ESP32-C3 Bluetooth controller
