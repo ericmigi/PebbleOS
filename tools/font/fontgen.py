@@ -81,6 +81,8 @@ FEATURE_OFFSET_16 = 0x01
 FEATURE_RLE4 = 0x02
 # Glyph bitmaps, offsets and advances are at twice the resolution of the font's height
 FEATURE_SCALE2 = 0x08
+# Glyph bitmaps hold 2 bits of coverage per pixel (0 none to 3 full), 16 pixels per 32-bit word
+FEATURE_AA2 = 0x10
 
 
 HASH_TABLE_SIZE = 255
@@ -148,6 +150,7 @@ class Font:
         self.features = 0
         self.scale = 1
         self.autohint = False
+        self.bits = 1
 
         self.glyph_header = "<BBbbb"
 
@@ -162,6 +165,11 @@ class Font:
             raise RuntimeError(
                 f"Unsupported compression engine: '{engine}'. Font {self.ttf_path}"
             )
+
+    def set_bits2(self):
+        """Store 2 bits of coverage per pixel, rasterised antialiased."""
+        self.bits = 2
+        self.features |= FEATURE_AA2
 
     def set_autohint(self):
         """Use FreeType's auto-hinter, for fonts whose own hinting gives uneven stems."""
@@ -323,6 +331,9 @@ class Font:
             | freetype.FT_LOAD_MONOCHROME
             | freetype.FT_LOAD_TARGET_MONO
         )
+        if self.bits == 2:
+            # Antialiased, with light hinting, quantised to four levels below
+            flags = freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_LIGHT
         if self.autohint:
             flags |= freetype.FT_LOAD_FORCE_AUTOHINT
         self.face.load_glyph(gindex, flags)
@@ -342,7 +353,23 @@ class Font:
         pixel_mode = self.face.glyph.bitmap.pixel_mode
 
         glyph_packed = []
-        if height and width:
+        if height and width and self.bits == 2:
+            levels = []
+            for i in range(bitmap.rows):
+                row = bitmap.buffer[i * bitmap.pitch : i * bitmap.pitch + bitmap.width]
+                levels.extend(v >> 6 for v in row)
+            for word in grouper(16, levels, 0):
+                w = 0
+                for index, level in enumerate(word):
+                    w |= level << (2 * index)
+                glyph_packed.append(struct.pack("<I", w))
+            size = ((width * height * 2) + (8 - 1)) // 8
+            if size > self.max_glyph_size:
+                raise RuntimeError(
+                    f"Glyph too large! codepoint {codepoint}: {size} > "
+                    f"{self.max_glyph_size}. Font {self.ttf_path}"
+                )
+        elif height and width:
             glyph_bitmap = []
             if pixel_mode == 1:  # monochrome font, 1 bit per pixel
                 for i in range(bitmap.rows):
