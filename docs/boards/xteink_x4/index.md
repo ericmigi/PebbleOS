@@ -14,8 +14,9 @@ e-paper display, the keys (two ADC ladders, polled, and the power button) and
 the battery voltage (ADC channel 0, half the cell voltage); the microSD card is
 not supported yet.
 
-The Pebble firmware (`pebble/`, the default application) runs as Flint: its
-144 × 168 screen three times as large in the middle of the panel, the system
+The Pebble firmware (`pebble/`, the default application) runs as folio: a
+240 × 400 screen twice as large, filling the panel, with watchfaces and
+third-party apps at their classic 144 × 168 centred on black; the system
 resources and the filesystem in the flash, the keys as Back, Up, Select and
 Down. Sensors, vibration, the microphone and the charger are simulated, and
 there is no Bluetooth.
