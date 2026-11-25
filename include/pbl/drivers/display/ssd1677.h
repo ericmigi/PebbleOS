@@ -57,6 +57,9 @@ struct pbl_display_ssd1677_wave {
   uint8_t frame_rate;
   uint8_t source[3];
   uint8_t topup_frames;
+  // Without a frame copy: frames more for a change of half the rows or more, which drives every
+  // pixel of its rows at once instead of leaving them to the top up
+  uint8_t large_frames;
 };
 
 // A framebuffer pixel drawn at panel resolution: its column and the levels of its panel pixels

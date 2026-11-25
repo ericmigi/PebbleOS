@@ -232,6 +232,7 @@ struct plane_src {
   const uint8_t *frame;
   const uint8_t *xor;
   const uint8_t *xor_rows;
+  bool invert;
   enum plane_map map;
   bool cells;
   uint16_t force_lo;
@@ -381,7 +382,7 @@ static void prv_map_row(const struct pbl_display_ssd1677 *epd, const struct plan
     if (src->xor_rows != nullptr) {
       v ^= prv_row_bit(src->xor_rows, epd->quarter ? a : (uint32_t)across);
     }
-    line[a] = (uint8_t)v;
+    line[a] = (uint8_t)(v ^ (src->invert ? 1U : 0U));
   }
 
   // RAM bytes are most significant bit first, the framebuffer's least; 1 is white. The border is
@@ -418,10 +419,12 @@ static void prv_map_row_quarter1(const struct pbl_display_ssd1677 *epd, const st
     }
     if (src->xor_rows != nullptr) {
       for (uint32_t b = 0U; b < 8U; b++) {
-        v ^= (uint32_t)prv_row_bit(src->xor_rows, (uint32_t)along[b]) << (7U - b);
+        uint32_t a = (uint32_t)along[b];
+
+        v ^= ((uint32_t)(src->xor_rows[a / 8U] >> (a % 8U)) & 1U) << (7U - b);
       }
     }
-    out[i] = (uint8_t)v;
+    out[i] = (uint8_t)(src->invert ? ~v : v);
   }
 }
 
@@ -663,6 +666,7 @@ static int prv_init(const struct pbl_display *disp) {
   state->wave.frame_rate = epd->fast_frame_rate;
   memcpy(state->wave.source, epd->source, sizeof(state->wave.source));
   state->wave.topup_frames = epd->topup_frames;
+  state->wave.large_frames = epd->topup_frames;
   state->need_half = true;
   state->powered = false;
   state->stale_valid = false;
@@ -1240,9 +1244,22 @@ static int prv_update_nocopy(const struct pbl_display_ssd1677 *epd,
   struct pbl_display_ssd1677_window w = prv_window(epd, (uint16_t)first, (uint16_t)last);
   uint32_t lo;
   uint32_t hi;
+  // A change of half the rows or more, as an app switch, drives every pixel of its rows in one
+  // longer refresh: unchanged ones too, so nothing of the frame before stays as a ghost, and no
+  // top up follows to draw the panel a second time
+  bool large = (uint32_t)(last - first + 1) * 2U >= height;
 
-  // Rows whose old plane is not known are driven whole, with the changed rows among them
-  if (prv_rows_range(epd, epd->unsynced_rows, &lo, &hi)) {
+  if (large) {
+    if (prv_rows_range(epd, epd->unsynced_rows, &lo, &hi)) {
+      first = PBL_MIN(first, (int32_t)lo);
+      last = PBL_MAX(last, (int32_t)hi);
+      w = prv_window(epd, (uint16_t)first, (uint16_t)last);
+      memset(epd->unsynced_rows, 0, (height + 7U) / 8U);
+    }
+    ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &w,
+                          &(struct plane_src){.frame = buf->data, .invert = true});
+  } else if (prv_rows_range(epd, epd->unsynced_rows, &lo, &hi)) {
+    // Rows whose old plane is not known are driven whole, with the changed rows among them
     struct pbl_display_ssd1677_window u = prv_window(epd, (uint16_t)lo, (uint16_t)hi);
 
     for (uint32_t y = (uint32_t)first; y <= (uint32_t)last; y++) {
@@ -1261,15 +1278,13 @@ static int prv_update_nocopy(const struct pbl_display_ssd1677 *epd,
     ret = prv_write_plane(epd, CMD_WRITE_RAM_BW, &w, &(struct plane_src){.frame = buf->data});
   }
   if (epd->touched_rows != nullptr) {
-    // Large changes too: the top up evens out the pixels they left undriven, ghosts of the frame
-    // before
-    prv_rows_set(epd->touched_rows, (uint32_t)first, (uint32_t)last, true);
+    prv_rows_set(epd->touched_rows, (uint32_t)first, (uint32_t)last, !large);
   }
   state->resync_lo = (uint16_t)first;
   state->resync_hi = (uint16_t)last;
   state->resync_valid = true;
   if (ret == 0) {
-    ret = prv_refresh(state->disp, REFRESH_FAST, false, 0U);
+    ret = prv_refresh(state->disp, REFRESH_FAST, false, large ? state->wave.large_frames : 0U);
   }
   if (ret != 0) {
     state->resync_valid = false;
