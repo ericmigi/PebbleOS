@@ -10,7 +10,8 @@
 //! This comes from the generated pebble.auto.c with all the exported functions in it.
 extern const void *const g_pbl_system_tbl[];
 
-#if !defined(CONFIG_CPU_CORTEX_M) && !defined(CONFIG_SAMSA) && !defined(CONFIG_SOC_POSIX)
+#if !defined(CONFIG_CPU_CORTEX_M) && !defined(CONFIG_SAMSA) && !defined(CONFIG_SOC_POSIX) && \
+    !defined(CONFIG_APP_NATIVE_RISCV32) && !defined(UNITTEST)
 // Without the SDK shims, which are only built for a CPU third-party apps run on
 const void *const g_pbl_system_tbl[] = {0};
 #endif

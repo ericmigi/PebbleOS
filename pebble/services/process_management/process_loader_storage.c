@@ -20,6 +20,14 @@
 
 PBL_LOG_MODULE_DECLARE(service_process_management, CONFIG_SERVICE_PROCESS_MANAGEMENT_LOG_LEVEL);
 
+#ifdef CONFIG_APP_NATIVE_RISCV32
+_Static_assert(CONFIG_RAMFUNC_ALIAS_OFFSET == PROCESS_RISCV32_CODE_OFFSET,
+               "riscv32 apps are linked for code fetched at this offset from their data");
+#endif
+
+//! This comes from the generated pebble.auto.c with all the exported functions in it.
+extern const void *const g_pbl_system_tbl[];
+
 // ----------------------------------------------------------------------------------------------
 static bool prv_verify_checksum(const PebbleProcessInfo *app_info, const uint8_t *data) {
   const uint8_t *crc_data = data + PROCESS_INFO_CRC_START_OFFSET;
@@ -124,6 +132,19 @@ static bool prv_load_sdk_process(const PebbleProcessInfo *info, const PebbleProc
   if (!prv_validate_process_info(info) || !prv_process_info_matches_md(info, app_md)) {
     return false;
   }
+  if (!process_metadata_abi_supported(app_md)) {
+    PBL_LOG_WRN("App code is of ABI %d, which this firmware does not run",
+                (int)process_metadata_get_abi(app_md));
+    return false;
+  }
+
+  // Code the CPU runs as it is goes without a runtime's translation
+  const bool native = process_metadata_runs_natively(app_md);
+#ifdef CONFIG_APP_NATIVE_RISCV32
+  const bool riscv32 = native;
+#else
+  const bool riscv32 = false;
+#endif
 
   // The relocation table follows the image, and is read over the start of .bss
   const struct pbl_loader_image img = {
@@ -132,6 +153,8 @@ static bool prv_load_sdk_process(const PebbleProcessInfo *info, const PebbleProc
     .header_size = prv_header_size(info),
     .reloc_offset = process_info_get_load_size(info),
     .reloc_count = info->num_reloc_entries,
+    .code_offset = riscv32 ? PROCESS_RISCV32_CODE_OFFSET : 0,
+    .riscv_hi20 = riscv32,
   };
   const size_t segment_size = memory_segment_get_size(destination);
 
@@ -148,15 +171,16 @@ static bool prv_load_sdk_process(const PebbleProcessInfo *info, const PebbleProc
     return false;
   }
 
-  const int ret =
-      pbl_loader_relocate(&img, src, destination->start, segment_size, prv_runtime_address, &task);
+  const int ret = pbl_loader_relocate(&img, src, destination->start, segment_size,
+                                      native ? nullptr : prv_runtime_address, &task);
   if (ret < 0) {
     return false;
   }
 
   // Write this after relocations so app relocations can't corrupt the pointer to the SDK table
   uint32_t *pbl_jump_table_addr = prv_offset_to_address(destination, info->sym_table_addr);
-  *pbl_jump_table_addr = process_runtime_sdk_table(task);
+  *pbl_jump_table_addr =
+      native ? (uint32_t)(uintptr_t)&g_pbl_system_tbl : process_runtime_sdk_table(task);
 
   return true;
 }
@@ -261,6 +285,12 @@ void *process_loader_load(const PebbleProcessMd *app_md, PebbleTask task,
     if (!memory_segment_split(destination, nullptr, loaded_size)) {
       return nullptr;
     }
+#ifdef CONFIG_APP_NATIVE_RISCV32
+    // Its code runs from where the CPU fetches the RAM it was loaded to
+    if (process_metadata_runs_natively(app_md)) {
+      return (char *)main_func + PROCESS_RISCV32_CODE_OFFSET;
+    }
+#endif
     // Set the THUMB bit on the function pointer.
     return (void *)((uintptr_t)main_func | 1);
   } else {
