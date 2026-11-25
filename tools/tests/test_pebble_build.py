@@ -53,6 +53,34 @@ class TestPackageBuild(unittest.TestCase):
                 pebble_build._package_build(lib, "rect-color+health"), "rect-color"
             )
 
+    def _archives(self, tmp, sizes):
+        for build, size in sizes.items():
+            os.makedirs(os.path.join(tmp, "binaries", build), exist_ok=True)
+            Path(tmp, "binaries", build, "liblib.a").write_bytes(
+                b"!<arch>\n".ljust(size, b"\0")
+            )
+
+    def test_a_package_without_code_goes_into_any_build(self):
+        # As @rebble/clay: JavaScript only, an empty archive for each platform
+        with tempfile.TemporaryDirectory() as tmp:
+            lib = self._lib(tmp, ["basalt", "flint"])
+            self._archives(tmp, {"basalt": 8, "flint": 8})
+            self.assertEqual(pebble_build._package_build(lib, "xteinkx4"), "basalt")
+            self.assertEqual(pebble_build._package_build(lib, "flint"), "flint")
+
+    def test_a_package_with_code_takes_no_other_build(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lib = self._lib(tmp, ["basalt", "flint"])
+            self._archives(tmp, {"basalt": 8, "flint": 600})
+            self.assertIsNone(pebble_build._package_build(lib, "xteinkx4"))
+
+    def test_a_package_with_resources_takes_no_other_build(self):
+        media = [{"name": "ICON", "file": "icon.png", "type": "png"}]
+        with tempfile.TemporaryDirectory() as tmp:
+            lib = self._lib(tmp, ["flint"], media)
+            self._archives(tmp, {"flint": 8})
+            self.assertIsNone(pebble_build._package_build(lib, "xteinkx4"))
+
     def test_resources_are_those_of_the_package_build(self):
         media = [
             {"name": "ICON", "file": "icon.png", "type": "png"},

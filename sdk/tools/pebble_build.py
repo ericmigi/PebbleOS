@@ -298,14 +298,35 @@ def _mod_path(project, platform):
     return os.path.join(project["build_dir"], "mods", platform, "mc.xsa")
 
 
+# An empty archive: its magic and no member.
+_EMPTY_ARCHIVE_SIZE = 8
+
+
+def _package_is_platform_free(lib, builds):
+    """Whether a Pebble package is the same on every platform: no C code (its
+    archives are empty, as those of a JavaScript-only package such as
+    @rebble/clay) and no resources."""
+    if lib.get("pebble", {}).get("resources", {}).get("media"):
+        return False
+    archives = [_package_archive(lib, build) for build in builds]
+    return all(
+        a is not None and os.path.getsize(a) <= _EMPTY_ARCHIVE_SIZE for a in archives
+    )
+
+
 def _package_build(lib, platform):
     """The build of a Pebble package that goes into a build of the project,
     or None. A flexible binary that requires features also takes what the
     package built for its class without them: that asks the watch for the
-    features, which only costs the check."""
+    features, which only costs the check. A package with neither code nor
+    resources goes into any build, as whichever build it has."""
     include_dir = os.path.join(lib["path"], "include", lib["name"])
     if os.path.isdir(os.path.join(include_dir, platform)):
         return platform
+    builds = sorted(os.listdir(include_dir)) if os.path.isdir(include_dir) else []
+    builds = [b for b in builds if os.path.isdir(os.path.join(include_dir, b))]
+    if builds and _package_is_platform_free(lib, builds):
+        return builds[0]
     parsed = parse_flexible_name(platform)
     if not parsed or not os.path.isdir(include_dir):
         return None
