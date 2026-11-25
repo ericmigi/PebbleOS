@@ -1529,6 +1529,10 @@ static void prv_apply_selection_change(MenuLayer *menu_layer, MenuRowAlign scrol
   // The selection (and its animations) own the highlight again.
   menu_layer->touch_center_pin = false;
 #endif
+#ifdef CONFIG_PLATFORM_ANIMATION_INSTANT
+  // An animation would end at once anyway, after a render of its first frame
+  animated = false;
+#endif
   if (menu_layer->center_focused && animated) {
     prv_schedule_center_focus_animation(menu_layer, up, prev_selection, was_animating);
   } else {
