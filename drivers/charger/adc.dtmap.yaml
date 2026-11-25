@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: coredevices,adc-charger
+config: CHARGER_ADC
+class: charger
+define: PBL_CHARGER_ADC_DEFINE
+args:
+  - name: true
+  - gpio: ""
+  - io-channel: 0
+  - prop: output-ohms
+  - prop: full-ohms

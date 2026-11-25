@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/power/supply/coredevices,adc-charger.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Charger seen through a presence pin and an ADC channel
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+description: |
+  A charger the firmware cannot talk to, such as a TP4056 with its status
+  pins not connected: a GPIO is high while external power is present, and an
+  ADC channel reads the battery through a resistor divider, given as with
+  voltage-divider.
+
+properties:
+  compatible:
+    const: coredevices,adc-charger
+
+  gpios:
+    maxItems: 1
+    description: High while external power is present.
+
+  io-channels:
+    maxItems: 1
+    description: ADC channel on the divider's output.
+
+  output-ohms:
+    description: Resistance across which the ADC reads.
+
+  full-ohms:
+    description: Resistance of the whole divider.
+
+required:
+  - compatible
+  - gpios
+  - io-channels
+  - output-ohms
+  - full-ohms
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/gpio/gpio.h>
+
+    charger {
+        compatible = "coredevices,adc-charger";
+        gpios = <&gpio 20 GPIO_ACTIVE_HIGH>;
+        io-channels = <&adc 0>;
+        output-ohms = <10000>;
+        full-ohms = <20000>;
+    };

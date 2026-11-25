@@ -32,6 +32,15 @@ config CHARGER_NPM1300
     help
       Support for the charger of the Nordic nPM1300 PMIC.
 
+config CHARGER_ADC
+    bool "Presence pin and ADC"
+    default y
+    depends on DT_HAS_COREDEVICES_ADC_CHARGER_ENABLED
+    depends on ADC
+    help
+      A charger seen only through a presence pin and the battery voltage
+      on an ADC channel (coredevices,adc-charger).
+
 config CHARGER_SIM
     bool "Simulator"
     default y if SOC_QEMU_PEBBLE || SOC_POSIX
