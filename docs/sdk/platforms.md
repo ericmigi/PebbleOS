@@ -7,7 +7,7 @@ A platform is what apps are built against. It is a name and a description:
 | Display | width and height; rectangular or round; colour (8-bit) or black and white (1-bit) |
 | Features | `microphone`, `smartstrap`, `smartstrap_power`, `health`, `compass`, `touch`, `rgb_backlight`, `speaker`, `barometer` |
 | Limits | what an app may take: code and memory, worker memory, resources, the largest font glyph |
-| ABI | what app binaries are compiled for; `armv7m` is Cortex-M3 Thumb code with soft float |
+| ABI | what app binaries are compiled for: `armv7m`, Cortex-M3 Thumb code with soft float, or `riscv32`, RV32IMC code with soft float (Folio) |
 
 The name labels the platform's directory in the SDK and in a `.pbw`.
 Everything the builds need to know of a platform follows from its
@@ -21,7 +21,7 @@ The firmware's platforms:
 | Flint | 144 × 168, black and white | Pebble 2 Duo |
 | Gabbro | 260 × 260 round, colour | Pebble Round 2 |
 | Cyberdeck | 400 × 240, black and white | Cyberdeck |
-| Folio | 240 × 400, black and white | Xteink X4, its 480 × 800 e-paper panel at two panel pixels per pixel |
+| Folio | 240 × 400, black and white, `riscv32` | Xteink X4, its 480 × 800 e-paper panel at two panel pixels per pixel |
 
 ## Where platforms are defined
 
@@ -183,7 +183,7 @@ header's flags says the record is there.
 | --- | --- | --- |
 | 0xA8 | 1 | version (1) |
 | 0xA9 | 1 | length of the record in bytes (16) |
-| 0xAA | 1 | ABI (1 is `armv7m`) |
+| 0xAA | 1 | ABI (1 is `armv7m`, 2 `riscv32`) |
 | 0xAB | 1 | display shape: 0 rectangular, 1 round |
 | 0xAC | 2 | display width |
 | 0xAE | 2 | display height |

@@ -32,6 +32,7 @@ functions only some platforms have.
 | Flint | 144 × 168, black and white | Pebble 2 Duo |
 | Emery | 200 × 228, color | Pebble Time 2 |
 | Gabbro | 260 × 260 round, color | Pebble Round 2 |
+| Folio | 240 × 400, black and white, RISC-V | Xteink X4 ({doc}`xteink_x4`) |
 
 {doc}`platforms` describes what a platform is made of and how one is added.
 
@@ -58,4 +59,5 @@ how_it_works.md
 exporting.md
 building.md
 recognizers.md
+xteink_x4.md
 ```

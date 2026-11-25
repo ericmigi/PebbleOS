@@ -74,11 +74,13 @@ pbl itest --connection serial:socket://127.0.0.1:12345
 ```
 
 The Pebble firmware's normal variant runs third-party apps from `.pbw`
-files, installed over that connection as a phone installs them: Samsa
-interprets their ARM code, with what it keeps per process sized for the
-chip in `pebble/boards/qemu_esp32c3_normal.conf`. The watch reports itself
-as the Flint emulator, so the host tools install a `.pbw`'s Flint binary,
-which runs in a 144 × 168 bezel. The integration harness's connection
+files, installed over that connection as a phone installs them. A Folio
+binary is RISC-V code and runs natively, as on the X4
+({doc}`../../sdk/xteink_x4`). Samsa interprets ARM binaries, with what it keeps per
+process sized for the chip in `pebble/boards/qemu_esp32c3_normal.conf`. The
+watch reports itself as the Flint emulator, so the host tools install a
+`.pbw`'s Flint binary, which runs in a 144 × 168 bezel, unless told to take
+`folio/`. The integration harness's connection
 (`tests/integration/harness/connections.py`, `start_protocol` over
 `pblconsole`'s frame transport) carries libpebble2's app installer.
 
