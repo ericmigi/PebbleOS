@@ -16,7 +16,8 @@ volatile const int FrameBuffer_BytesPerRow = FRAMEBUFFER_BYTES_PER_ROW;
 uint32_t *framebuffer_get_line(FrameBuffer *f, uint16_t y) {
   PBL_ASSERTN(y < f->size.h);
 
-  return f->buffer + (y * ((f->size.w / 32) + 1));
+  // The same row stride as the framebuffer's GBitmap (gbitmap_format_get_row_size_bytes)
+  return f->buffer + (y * ((f->size.w + 31) / 32));
 }
 
 inline size_t framebuffer_get_size_bytes(FrameBuffer *f) {
