@@ -234,6 +234,11 @@ struct plane_src {
   const uint8_t *xor;
   const uint8_t *xor_rows;
   bool invert;
+  // Without a frame copy, a grey update: the levels of rows levels_y0 on, 2 bits a pixel, for the
+  // old plane or the new one
+  const uint8_t *levels;
+  uint16_t levels_y0;
+  bool levels_new;
   enum plane_map map;
   bool cells;
   uint16_t force_lo;
@@ -424,6 +429,24 @@ static PBL_SECTION_RAM void prv_map_row_quarter1(const struct pbl_display_ssd167
         uint32_t a = (uint32_t)along[b];
 
         v ^= ((uint32_t)(src->xor_rows[a / 8U] >> (a % 8U)) & 1U) << (7U - b);
+      }
+    }
+    if (src->levels != nullptr) {
+      uint32_t lpitch = (epd->disp.props.width + 3U) / 4U;
+
+      for (uint32_t b = 0U; b < 8U; b++) {
+        uint32_t r = (uint32_t)along[b] - src->levels_y0;
+        uint32_t lvl = (r < SSD1677_GREY_BAND)
+                           ? (src->levels[r * lpitch + across / 4U] >> (2U * (across % 4U))) & 3U
+                           : 0U;
+        uint32_t bit = 1U << (7U - b);
+
+        // Light grey is class 1 (old 0, new 1), dark grey class 2 (old 1, new 0)
+        if (lvl == 1U) {
+          v = src->levels_new ? (v | bit) : (v & ~bit);
+        } else if (lvl == 2U) {
+          v = src->levels_new ? (v & ~bit) : (v | bit);
+        }
       }
     }
     out[i] = (uint8_t)(src->invert ? ~v : v);
@@ -1199,8 +1222,92 @@ static int prv_write_half_nocopy(const struct pbl_display_ssd1677 *epd) {
     ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &w, &src);
   }
   memset(epd->unsynced_rows, 0, (height + 7U) / 8U);
+  memset(epd->grey_shown_rows, 0, (height + 7U) / 8U);
   if (epd->touched_rows != nullptr) {
     memset(epd->touched_rows, 0, (height + 7U) / 8U);
+  }
+
+  return ret;
+}
+
+/*
+ * A grey update without a frame copy: the levels the detail gives for each row of the frame shown,
+ * read a band at a time while the update runs, lighten its grey pixels, which the frame has black,
+ * in one refresh; both planes then go back to the frame. Rows it drew are not drawn again until
+ * they change, and a change to one drives it whole, grey pixels with it. Returns 1 when there is
+ * nothing to do.
+ */
+static int prv_grey_nocopy(const struct pbl_display_ssd1677 *epd,
+                           const struct pbl_display_buffer *buf, uint16_t y0, uint16_t y1) {
+  struct pbl_display_ssd1677_state *state = epd->state;
+  const struct pbl_display_detail *detail = buf->detail;
+  uint32_t lpitch = (epd->disp.props.width + 3U) / 4U;
+  int32_t lo = -1;
+  int32_t hi = -1;
+  int ret = 0;
+
+  if (state->need_half || buf->data != state->frame || !prv_frame_shown(epd, y0, y1)) {
+    return 1;
+  }
+  // A top up still due would drive the grey back to black: it goes first
+  uint32_t tlo;
+  uint32_t thi;
+
+  if (epd->touched_rows != nullptr && prv_rows_range(epd, epd->touched_rows, &tlo, &thi)) {
+    ret = prv_topup_nocopy(epd);
+    (void)PBL_POLL_SLEEP_MS(!state->refreshing && !state->post_pending, 1U, REFRESH_TIMEOUT_MS);
+    if (ret != 0 || state->need_half) {
+      return (ret != 0) ? ret : 1;
+    }
+  }
+
+  for (uint32_t b0 = y0 - (y0 % SSD1677_GREY_BAND); b0 <= y1; b0 += SSD1677_GREY_BAND) {
+    uint32_t b1 = PBL_MIN(b0 + SSD1677_GREY_BAND - 1U, (uint32_t)epd->disp.props.height - 1U);
+    bool any = false;
+
+    memset(epd->grey_band, 0, SSD1677_GREY_BAND * lpitch);
+    for (uint32_t y = PBL_MAX(b0, (uint32_t)y0); y <= PBL_MIN(b1, (uint32_t)y1); y++) {
+      if (!prv_row_bit(epd->grey_shown_rows, y) &&
+          detail->row(detail, (uint16_t)y, &epd->grey_band[(y - b0) * lpitch])) {
+        prv_rows_set(epd->grey_shown_rows, y, y, true);
+        any = true;
+      }
+    }
+    if (!any) {
+      continue;
+    }
+
+    struct pbl_display_ssd1677_window w = prv_window(epd, (uint16_t)b0, (uint16_t)b1);
+    struct plane_src src = {
+      .frame = buf->data,
+      .levels = epd->grey_band,
+      .levels_y0 = (uint16_t)b0
+    };
+
+    ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &w, &src);
+    src.levels_new = true;
+    if (ret == 0) {
+      ret = prv_write_plane(epd, CMD_WRITE_RAM_BW, &w, &src);
+    }
+    if (ret != 0) {
+      break;
+    }
+    lo = (lo < 0) ? (int32_t)b0 : lo;
+    hi = (int32_t)b1;
+  }
+  if (ret == 0 && lo < 0) {
+    return 1;
+  }
+
+  state->resync_lo = (uint16_t)PBL_MAX(lo, 0);
+  state->resync_hi = (uint16_t)PBL_MAX(hi, 0);
+  state->resync_valid = ret == 0;
+  if (ret == 0) {
+    ret = prv_refresh(state->disp, REFRESH_GREY, false, 0U);
+  }
+  if (ret != 0) {
+    state->resync_valid = false;
+    state->need_half = true;
   }
 
   return ret;
@@ -1230,6 +1337,11 @@ static int prv_update_nocopy(const struct pbl_display_ssd1677 *epd,
 
     if (crc != epd->row_crc[y] || state->need_half) {
       epd->row_crc[y] = crc;
+      // Its grey pixels are not in the old plane: the row is driven whole
+      if (prv_row_bit(epd->grey_shown_rows, y)) {
+        prv_rows_set(epd->grey_shown_rows, y, y, false);
+        prv_rows_set(epd->unsynced_rows, y, y, true);
+      }
       first = (first < 0) ? (int32_t)y : first;
       last = (int32_t)y;
     }
@@ -1269,6 +1381,8 @@ static int prv_update_nocopy(const struct pbl_display_ssd1677 *epd,
     }
     ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &w,
                           &(struct plane_src){.frame = buf->data, .invert = true});
+    // Driven whole, grey included
+    prv_rows_set(epd->grey_shown_rows, (uint32_t)first, (uint32_t)last, false);
   } else if (prv_rows_range(epd, epd->unsynced_rows, &lo, &hi)) {
     // Rows whose old plane is not known are driven whole, with the changed rows among them
     struct pbl_display_ssd1677_window u = prv_window(epd, (uint16_t)lo, (uint16_t)hi);
@@ -1601,7 +1715,12 @@ static int prv_update(const struct pbl_display *disp, const struct pbl_display_b
   }
 
   if (epd->shadow == nullptr) {
-    ret = prv_update_nocopy(epd, buf, y0, y1);
+    // Grey is drawn by the mapper of a panel at the framebuffer's size, mounted a quarter turn
+    if (buf->detail != nullptr && buf->detail->grey) {
+      ret = (epd->quarter && epd->scale == 1U) ? prv_grey_nocopy(epd, buf, y0, y1) : 1;
+    } else {
+      ret = prv_update_nocopy(epd, buf, y0, y1);
+    }
     pbl_mutex_unlock(&state->lock);
     if (ret > 0) {
       pbl_display_complete(disp, 0);

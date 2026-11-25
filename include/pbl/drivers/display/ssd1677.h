@@ -131,6 +131,10 @@ struct pbl_display_ssd1677 {
   uint8_t *touched_rows;
   /** Without a frame copy: rows whose planes may not hold the frame shown, a bit each. */
   uint8_t *unsynced_rows;
+  /** Without a frame copy: rows the grey pass drew since they last changed, a bit each. */
+  uint8_t *grey_shown_rows;
+  /** Without a frame copy: grey levels of a band of rows, from a grey update. */
+  uint8_t *grey_band;
   /** Framebuffer coordinate along each controller row, by column, or -1. */
   int16_t *along;
   /** Controller rows, for a transfer. */
@@ -211,6 +215,9 @@ void pbl_display_ssd1677_grey_tune(uint8_t light, uint8_t dark, uint8_t frame_ra
 extern const struct pbl_display_ops pbl_display_ssd1677_ops;
 
 #define SSD1677_SCAN_WIDTH(_pw, _ph, _rot) (((_rot) % 180) ? (_ph) : (_pw))
+// Framebuffer rows of grey levels read per band by a grey update without a frame copy: a multiple
+// of the 8 rows of a RAM byte mounted a quarter turn
+#define SSD1677_GREY_BAND 16
 // Controller rows sent per SPI transfer
 #define SSD1677_ROWS_PER_WRITE 8
 /** @endcond */
@@ -285,6 +292,9 @@ extern const struct pbl_display_ops pbl_display_ssd1677_ops;
   static uint32_t sym##_row_crc[SSD1677_COPY ? 1 : PBL_SSD1677_FB(_height)];                       \
   static uint8_t sym##_touched_rows[SSD1677_COPY ? 1 : (PBL_SSD1677_FB(_height) + 7) / 8];         \
   static uint8_t sym##_unsynced_rows[SSD1677_COPY ? 1 : (PBL_SSD1677_FB(_height) + 7) / 8];        \
+  static uint8_t sym##_grey_shown_rows[SSD1677_COPY ? 1 : (PBL_SSD1677_FB(_height) + 7) / 8];      \
+  static uint8_t                                                                                   \
+      sym##_grey_band[SSD1677_COPY ? 1 : SSD1677_GREY_BAND * ((PBL_SSD1677_FB(_width) + 3) / 4)];  \
   static uint8_t sym##_line[PBL_SSD1677_FB(_width) > PBL_SSD1677_FB(_height)                       \
                                 ? PBL_SSD1677_FB(_width)                                           \
                                 : PBL_SSD1677_FB(_height)];                                        \
@@ -324,7 +334,9 @@ extern const struct pbl_display_ops pbl_display_ssd1677_ops;
     .touched = SSD1677_COPY && (_topup_frames) != 0 ? sym##_touched : nullptr,                     \
     .row_crc = SSD1677_COPY ? nullptr : sym##_row_crc,                                             \
     .touched_rows = SSD1677_COPY || (_topup_frames) == 0 ? nullptr : sym##_touched_rows,           \
-    .unsynced_rows = sym##_unsynced_rows, .panel_width = (_panel_width),                           \
+    .unsynced_rows = sym##_unsynced_rows,                                                          \
+    .grey_shown_rows = SSD1677_COPY ? nullptr : sym##_grey_shown_rows,                             \
+    .grey_band = SSD1677_COPY ? nullptr : sym##_grey_band, .panel_width = (_panel_width),          \
     .panel_height = (_panel_height), .scale = ((_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE),          \
     .quarter = ((_rotation) % 180) != 0, .full_interval = (_full_interval),                        \
     .fast_frames = (_fast_frames), .fast_differential = (_fast_differential) != 0,                 \
