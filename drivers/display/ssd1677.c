@@ -881,6 +881,83 @@ static int prv_update(const struct pbl_display *disp, const struct pbl_display_b
   return ret;
 }
 
+#ifdef CONFIG_DISPLAY_SSD1677_GREY
+/*
+ * The X4's own 4-level overlay, LUT and voltages as its stock firmware has them (via FreeInk,
+ * MIT): over a B/W refresh that drew every grey pixel black, class 2 (old 1, new 0) gets 9 frames
+ * towards white, light grey, class 3 (old 1, new 1) 6 frames, dark grey; class 0 is undriven.
+ * Three groups of four 1-frame phases, at frame rate codes 8 and F, about 60 ms.
+ */
+static const uint8_t s_grey_vs[4][3] = {
+  {0x00U, 0x00U, 0x00U},
+  {0x54U, 0x54U, 0x40U},
+  {0xAAU, 0xA0U, 0xA8U},
+  {0xA2U, 0x22U, 0x20U},
+};
+#define GREY_FRAME_RATE 0x8FU
+
+int pbl_display_ssd1677_grey(const struct pbl_display *disp, const uint8_t *old_frame,
+                             const uint8_t *new_frame, uint8_t vcom) {
+  const struct pbl_display_ssd1677 *epd = prv_epd(disp);
+  struct pbl_display_ssd1677_state *state = epd->state;
+  struct pbl_display_ssd1677_window w = prv_window(epd, 0U, disp->props.height - 1U);
+  uint8_t lut[LUT_LEN] = {0};
+  int ret;
+
+  (void)pbl_mutex_lock(&state->lock, PBL_FOREVER);
+  (void)PBL_POLL_SLEEP_MS(!state->refreshing && pbl_gpio_get(&epd->busy) == 0, 1U,
+                          REFRESH_TIMEOUT_MS);
+
+  for (uint32_t c = 0U; c < 4U; c++) {
+    for (uint32_t g = 0U; g < 3U; g++) {
+      lut[c * 10U + g] = s_grey_vs[c][g];
+    }
+  }
+  for (uint32_t g = 0U; g < 3U; g++) {
+    memset(&lut[50U + g * 5U], 1, 4U);
+  }
+  memset(&lut[100], GREY_FRAME_RATE, 5U);
+
+  ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &w, old_frame);
+  if (ret == 0) {
+    ret = prv_write_plane(epd, CMD_WRITE_RAM_BW, &w, new_frame);
+  }
+  if (ret == 0) {
+    ret = prv_cmd(epd, CMD_WRITE_LUT, lut, sizeof(lut));
+  }
+  if (ret == 0) {
+    ret = prv_cmd1(epd, CMD_GATE_VOLTAGE, GATE_VOLTAGE);
+  }
+  if (ret == 0) {
+    ret = prv_cmd(epd, CMD_SOURCE_VOLTAGE, state->wave.source, sizeof(state->wave.source));
+  }
+  if (ret == 0) {
+    ret = prv_cmd1(epd, CMD_VCOM, vcom);
+  }
+  if (ret == 0) {
+    ret = prv_cmd1(epd, CMD_UPDATE_CTRL1, CTRL1_NORMAL);
+  }
+  if (ret == 0) {
+    ret = prv_cmd1(epd, CMD_UPDATE_CTRL2, SEQ_CLOCK_ANALOG | SEQ_CUSTOM_LUT);
+  }
+  if (ret == 0) {
+    ret = prv_cmd(epd, CMD_ACTIVATE, nullptr, 0U);
+  }
+  if (ret == 0) {
+    pbl_sleep_ms(RESET_MS);
+    ret = PBL_POLL_SLEEP_MS(pbl_gpio_get(&epd->busy) == 0, 1U, REFRESH_TIMEOUT_MS);
+  }
+
+  // The planes hold grey classes, not the frame shown: the next update starts over clean
+  state->powered = true;
+  state->need_half = true;
+  state->stale_valid = false;
+  pbl_mutex_unlock(&state->lock);
+
+  return ret;
+}
+#endif
+
 const struct pbl_display_ops pbl_display_ssd1677_ops = {
   .init = prv_init,
   .enable = prv_enable,
