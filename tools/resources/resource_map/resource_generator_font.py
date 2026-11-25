@@ -40,6 +40,8 @@ class FontResourceGenerator(ResourceGenerator):
         definition.tracking_adjust = definition_dict.get("trackingAdjust")
         definition.pixel_height = definition_dict.get("pixelHeight")
         definition.render_height = definition_dict.get("renderHeight")
+        definition.scale = definition_dict.get("scale", 1)
+        definition.autohint = bool(definition_dict.get("autohint"))
         return definition
 
     @staticmethod
@@ -91,7 +93,9 @@ class FontResourceGenerator(ResourceGenerator):
             pixel_height = cls._get_pixel_height(definition)
             # Draws the glyphs at this size but keeps the name's height and baseline, so the
             # font can stand in for another of that name height
-            render_height = cls._get_pixel_height(definition, "render_height", "renderHeight")
+            render_height = cls._get_pixel_height(
+                definition, "render_height", "renderHeight"
+            )
 
             # Extended fonts take their baseline from the name even when pixelHeight is set
             name_height = None
@@ -114,15 +118,24 @@ class FontResourceGenerator(ResourceGenerator):
             # Extended fonts sit on the base font's baseline, not their render size.
             baseline = name_height if definition.extended or render_height else None
 
+            # A font for displays scaled by two keeps its glyphs at panel resolution
+            scale = getattr(definition, "scale", 1) or 1
+            if scale not in (1, 2) or (scale == 2 and render_height is None):
+                raise ValueError(f"Font {definition.name}: scale 2 needs renderHeight")
+
             font = Font(
                 ttf_path,
-                height,
+                height * scale,
                 max_glyphs,
                 definition.max_glyph_size,
                 is_legacy,
-                baseline=baseline,
+                baseline=baseline * scale if baseline else None,
                 line_height=name_height if render_height else None,
             )
+            if scale == 2:
+                font.set_scale2()
+            if getattr(definition, "autohint", False):
+                font.set_autohint()
 
             if definition.character_regex is not None:
                 font.set_regex_filter(definition.character_regex)
