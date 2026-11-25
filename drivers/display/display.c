@@ -6,6 +6,7 @@
 
 #include <pbl/drivers/display.h>
 #include <pbl/drivers/ram.h>
+#include <pbl/kernel/delay.h>
 #include <pbl/kernel/irq.h>
 #include <pbl/kernel/reboot.h>
 #include <pbl/kernel/sem.h>
@@ -16,6 +17,9 @@
 PBL_LOG_MODULE_DEFINE(driver_display, CONFIG_DRIVER_DISPLAY_LOG_LEVEL);
 
 PBL_DEVICE_CLASS_DEFINE(pbl_display_class, "display");
+
+// Longest a refresh may hold off the power-off
+#define POWER_OFF_BUSY_MS 3000U
 
 struct prv_sync {
   struct pbl_sem done;
@@ -238,7 +242,8 @@ static void prv_power_off_prepare(enum pbl_sys_off_mode mode, void *user_data) {
     const struct pbl_display *disp = PBL_CONTAINER_OF(dev, const struct pbl_display, dev);
 
     (void)pbl_display_clear(disp);
-    (void)pbl_display_disable(disp);
+    // A refresh still running, or its follow-up, would leave the panel powered
+    (void)PBL_POLL_SLEEP_MS(pbl_display_disable(disp) != -EBUSY, 10U, POWER_OFF_BUSY_MS);
   }
 }
 

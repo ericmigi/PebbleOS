@@ -6,6 +6,10 @@
 #include <pbl/services/boot_splash.h>
 
 #if defined(CONFIG_PBLBOOT) || defined(CONFIG_QEMU) || defined(CONFIG_SOC_POSIX)
+#define BOOT_SPLASH_ANIMATED
+#endif
+
+#if defined(BOOT_SPLASH_ANIMATED) || defined(CONFIG_SERVICE_BOOT_SPLASH_POWER_OFF)
 
 #include "splash.xbm"
 
@@ -27,20 +31,6 @@ static const uint8_t s_argb2222[] = {
   [SPLASH_COLOR_BLACK] = 0xC0,
   [SPLASH_COLOR_LGRAY] = 0xEA,
 };
-
-// Progress bar configuration
-#define PROGRESS_BAR_WIDTH       80
-#define PROGRESS_BAR_HEIGHT      4
-#define PROGRESS_INDICATOR_WIDTH 20
-#define PROGRESS_FRAME_DELAY_MS  100
-#define PROGRESS_TOTAL_FRAMES    20
-
-// Boot splash state
-static struct pbl_thread s_boot_splash_thread;
-PBL_THREAD_STACK_DEFINE(s_boot_splash_stack, CONFIG_SERVICE_BOOT_SPLASH_THREAD_STACK_SIZE);
-static struct pbl_thread *s_boot_splash_task;
-static volatile bool s_boot_splash_running;
-static struct pbl_display_buffer s_boot_splash_fb;
 
 static uint32_t prv_pitch(void) {
   const struct pbl_display_props *props = pbl_display_get_props(DISPLAY);
@@ -88,16 +78,6 @@ static void prv_clear(const struct pbl_display_buffer *fb) {
          prv_fb_bytes());
 }
 
-// Draw a filled rectangle
-static void prv_draw_filled_rect(const struct pbl_display_buffer *fb, int16_t x0, int16_t y0,
-                                 int16_t width, int16_t height, enum splash_color color) {
-  for (int16_t y = y0; y < y0 + height; y++) {
-    for (int16_t x = x0; x < x0 + width; x++) {
-      prv_set_pixel(fb, x, y, color);
-    }
-  }
-}
-
 // Draw the logo, centered
 static void prv_draw_logo(const struct pbl_display_buffer *fb) {
   const struct pbl_display_props *props = pbl_display_get_props(DISPLAY);
@@ -109,6 +89,40 @@ static void prv_draw_logo(const struct pbl_display_buffer *fb) {
       if (splash_bits[y * (splash_width / 8) + x / 8] & (0x1U << (x & 7))) {
         prv_set_pixel(fb, x + logo_x0, y + logo_y0, SPLASH_COLOR_BLACK);
       }
+    }
+  }
+}
+
+static void prv_show(const struct pbl_display_buffer *fb) {
+  const struct pbl_display_props *props = pbl_display_get_props(DISPLAY);
+
+  (void)pbl_display_update_sync(DISPLAY, fb, 0U, props->height - 1U);
+}
+
+#endif
+
+#ifdef BOOT_SPLASH_ANIMATED
+
+// Progress bar configuration
+#define PROGRESS_BAR_WIDTH       80
+#define PROGRESS_BAR_HEIGHT      4
+#define PROGRESS_INDICATOR_WIDTH 20
+#define PROGRESS_FRAME_DELAY_MS  100
+#define PROGRESS_TOTAL_FRAMES    20
+
+// Boot splash state
+static struct pbl_thread s_boot_splash_thread;
+PBL_THREAD_STACK_DEFINE(s_boot_splash_stack, CONFIG_SERVICE_BOOT_SPLASH_THREAD_STACK_SIZE);
+static struct pbl_thread *s_boot_splash_task;
+static volatile bool s_boot_splash_running;
+static struct pbl_display_buffer s_boot_splash_fb;
+
+// Draw a filled rectangle
+static void prv_draw_filled_rect(const struct pbl_display_buffer *fb, int16_t x0, int16_t y0,
+                                 int16_t width, int16_t height, enum splash_color color) {
+  for (int16_t y = y0; y < y0 + height; y++) {
+    for (int16_t x = x0; x < x0 + width; x++) {
+      prv_set_pixel(fb, x, y, color);
     }
   }
 }
@@ -140,12 +154,6 @@ static void prv_draw_progress_bar(const struct pbl_display_buffer *fb, int16_t c
   // Draw indicator
   prv_draw_filled_rect(fb, bar_x0 + indicator_offset, bar_y0, PROGRESS_INDICATOR_WIDTH,
                        PROGRESS_BAR_HEIGHT, SPLASH_COLOR_BLACK);
-}
-
-static void prv_show(const struct pbl_display_buffer *fb) {
-  const struct pbl_display_props *props = pbl_display_get_props(DISPLAY);
-
-  (void)pbl_display_update_sync(DISPLAY, fb, 0U, props->height - 1U);
 }
 
 // Boot splash task - runs until stopped
@@ -231,7 +239,7 @@ void boot_splash_stop(void) {
   }
 }
 
-#else // Everything else
+#else
 
 void boot_splash_start(void) {
   // No-op on platforms where the bootloader handles the splash
@@ -240,5 +248,42 @@ void boot_splash_start(void) {
 void boot_splash_stop(void) {
   // No-op on platforms where the bootloader handles the splash
 }
+
+#endif
+
+#ifdef CONFIG_SERVICE_BOOT_SPLASH_POWER_OFF
+
+#include <pbl/kernel/reboot.h>
+#include <pbl/kernel/work.h>
+
+// Longest a frame being sent may take to finish
+#define POWER_OFF_WAIT_MS 2000U
+
+// E-paper keeps its image once off: the logo rather than whatever the UI showed last
+static void prv_power_off_prepare(enum pbl_sys_off_mode mode, void *user_data) {
+  // A display may finish its updates on the system queue
+  if (pbl_workq_is_current(&pbl_sys_workq)) {
+    return;
+  }
+
+  struct pbl_display_buffer fb = {
+    .data = pbl_malloc(prv_fb_bytes()),
+    .pitch = prv_pitch(),
+  };
+
+  if (fb.data == nullptr) {
+    return;
+  }
+
+  prv_clear(&fb);
+  prv_draw_logo(&fb);
+  (void)PBL_POLL_SLEEP_MS(!pbl_display_update_in_progress(DISPLAY), 10U, POWER_OFF_WAIT_MS);
+  prv_show(&fb);
+  pbl_free(fb.data);
+}
+
+// After the services stopped, before the display is disabled
+PBL_SYS_OFF_HANDLER_DEFINE(boot_splash_power_off, PBL_SYS_OFF_POWER_OFF_PREPARE,
+                           PBL_SYS_OFF_PRIO_DEFAULT + 1, prv_power_off_prepare, nullptr);
 
 #endif
