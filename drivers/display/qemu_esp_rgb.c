@@ -136,6 +136,34 @@ static void prv_draw_detail(const struct pbl_display_qemu_esp_rgb *rgb,
   }
 }
 
+// Draws the grey of a grey pass at panel resolution: 2 bits a pixel, 1 light and 2 dark grey
+static void prv_draw_grey(const struct pbl_display_qemu_esp_rgb *rgb,
+                          const struct display_geometry *g, bool flip,
+                          const struct pbl_display_detail *detail, uint16_t y0, uint16_t y1) {
+  volatile uint16_t *vram = (volatile uint16_t *)rgb->vram;
+  const uint32_t win_width = display_geometry_scan_width(g);
+  static uint8_t levels[256];
+
+  if (g->width > 4U * sizeof(levels)) {
+    return;
+  }
+  for (uint16_t y = y0; y <= y1; y++) {
+    if (!detail->row(detail, y, levels)) {
+      continue;
+    }
+    for (uint16_t x = 0U; x < g->width; x++) {
+      const uint32_t level = (levels[x / 4U] >> (2U * (x % 4U))) & 3U;
+      if (level == 1U || level == 2U) {
+        uint32_t cx;
+        uint32_t cy;
+
+        display_geometry_scan_pos(g, flip, x, y, 0U, 0U, &cx, &cy);
+        vram[cy * win_width + cx] = s_levels[level];
+      }
+    }
+  }
+}
+
 static int prv_update(const struct pbl_display *disp, const struct pbl_display_buffer *buf,
                       uint16_t y0, uint16_t y1) {
   const struct pbl_display_qemu_esp_rgb *rgb = prv_rgb(disp);
@@ -172,6 +200,9 @@ static int prv_update(const struct pbl_display *disp, const struct pbl_display_b
 
   if (buf->detail != nullptr && g.scale == 2U && disp->props.format == PBL_DISPLAY_FORMAT_MONO) {
     prv_draw_detail(rgb, &g, flip, buf->detail, y0, y1);
+  } else if (buf->detail != nullptr && buf->detail->grey && g.scale == 1U &&
+             disp->props.format == PBL_DISPLAY_FORMAT_MONO) {
+    prv_draw_grey(rgb, &g, flip, buf->detail, y0, y1);
   }
 
   prv_refresh(rgb);
