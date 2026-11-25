@@ -30,9 +30,11 @@ config APP_RAM_4X_SEGMENT_SIZE
     default 67584
 
 # With FRAMEBUFFER_SCALE2 the app's framebuffer in its runtime is 4x larger (48,000 B, so
-# AppState is 53,620 B on RV32), and Samsa takes 8 KiB of the runtime for its host stack
+# AppState is 53,620 B on RV32), and Samsa takes 8 KiB of the runtime for its host stack.
+# Segment plus runtime stays a whole number of 4 KiB: native apps load at the start of app RAM,
+# which ends at a fixed address, and need a 4 KiB aligned load address.
 config APP_RAM_4X_RUNTIME_SIZE
-    default 66560 if FRAMEBUFFER_SCALE2 && SAMSA
+    default 63488 if FRAMEBUFFER_SCALE2 && SAMSA
     default 55296 if FRAMEBUFFER_SCALE2
     default 30720
 
