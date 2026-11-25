@@ -62,6 +62,18 @@ elseif(CONFIG_CPU_RISCV)
     -fdata-sections
     -fbuiltin
   )
+elseif(CONFIG_CPU_XTENSA)
+  set(pbl_arch_flags
+    -fvar-tracking-assignments
+    -mlongcalls
+    -mtext-section-literals
+    # Enums as small as the ARM EABI makes them, for the same struct layouts
+    -fshort-enums
+    -ffreestanding
+    -ffunction-sections
+    -fdata-sections
+    -fbuiltin
+  )
 else()
   set(pbl_arch_flags
     -fvar-tracking-assignments
@@ -89,7 +101,7 @@ if(CONFIG_COMPILER_SAVE_TEMPS)
   list(APPEND pbl_arch_flags -save-temps=obj)
 endif()
 
-if(CONFIG_ARCH_POSIX OR CONFIG_CPU_RISCV)
+if(CONFIG_ARCH_POSIX OR CONFIG_CPU_RISCV OR CONFIG_CPU_XTENSA)
 elseif(CONFIG_CPU_STAR_MC1)
   set(pbl_cpu star-mc1)
 elseif(CONFIG_CPU_CORTEX_M33)
