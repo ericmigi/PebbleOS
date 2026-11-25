@@ -142,7 +142,21 @@ static void prv_create_play_animation(KinoPlayer *player, uint32_t from_value, u
   player->animation = animation;
 }
 
+#ifdef CONFIG_PLATFORM_ANIMATION_INSTANT
+#define INFINITE_REEL_STILL_MS 1000U
+#endif
+
 void kino_player_play(KinoPlayer *player) {
+#ifdef CONFIG_PLATFORM_ANIMATION_INSTANT
+  // A reel that loops without end, such as a ringing alarm's, would redraw the display at its frame
+  // rate for as long as it shows: it shows one frame from a second in, past an unfold or a slide-in
+  if (player && player->reel && kino_reel_get_duration(player->reel) == PLAY_DURATION_INFINITE) {
+    kino_player_pause(player);
+    const uint32_t elapsed = kino_reel_get_elapsed(player->reel) + INFINITE_REEL_STILL_MS;
+    prv_announce_frame_did_change(player, kino_reel_set_elapsed(player->reel, elapsed));
+    return;
+  }
+#endif
   Animation *animation = (Animation *)kino_player_create_play_animation(player);
   if (animation) {
     animation_schedule(animation);
