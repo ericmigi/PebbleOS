@@ -54,6 +54,8 @@ def test_install_and_launch(dut, prompt, phone, pbw):
         while _active_app(prompt) != name:
             assert time.monotonic() < deadline, f"running {_active_app(prompt)!r}"
             time.sleep(0.5)
-        dut.screenshot().save(os.path.join(dut.config.results_dir, "app_install.png"))
+        shot = dut.screenshot()
+        if shot is not None:
+            shot.save(os.path.join(dut.config.results_dir, "app_install.png"))
     finally:
         assert BlobDB(phone).delete(Database.APPS, app_uuid) == Status.SUCCESS
