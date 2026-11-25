@@ -9,7 +9,7 @@ title: Espressif ESP32-C3 eFuse controller
 maintainers:
   - Eric Migicovsky <eric@repebble.com>
 
-description:
+description: |
   The eFuse controller of the ESP32-C3, whose read registers mirror the
   blocks programmed at the factory: the MAC address, chip revision and
   calibration.
