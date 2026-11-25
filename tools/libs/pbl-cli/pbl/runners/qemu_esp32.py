@@ -119,15 +119,29 @@ class QemuEsp32Runner(Runner):
         return self._command_line(self.cfg.build), {}
 
     @staticmethod
-    def _qemu():
-        qemu = os.getenv("PEBBLE_QEMU_ESP32_BIN")
-        if qemu and os.path.isfile(qemu) and os.access(qemu, os.X_OK):
+    def _qemu(machine):
+        binary = (
+            "qemu-system-xtensa"
+            if machine in ("esp32", "esp32s3")
+            else "qemu-system-riscv32"
+        )
+        env_var = (
+            "PEBBLE_QEMU_ESP32S3_BIN"
+            if machine == "esp32s3"
+            else "PEBBLE_QEMU_ESP32_BIN"
+        )
+        qemu = os.getenv(env_var) or os.getenv("PEBBLE_QEMU_ESP32_BIN")
+        if (
+            qemu
+            and os.path.isfile(qemu)
+            and os.access(qemu, os.X_OK)
+            and (env_var == "PEBBLE_QEMU_ESP32_BIN" or os.path.basename(qemu) == binary)
+        ):
             return qemu
-        qemu = shutil.which("qemu-system-riscv32")
+        qemu = shutil.which(binary)
         if not qemu:
             raise RunnerError(
-                "no Espressif QEMU: set PEBBLE_QEMU_ESP32_BIN to its "
-                "qemu-system-riscv32, or put it on PATH"
+                f"no Espressif QEMU: set {env_var} to its {binary}, or put it on PATH"
             )
         return qemu
 
@@ -176,16 +190,18 @@ class QemuEsp32Runner(Runner):
         else:
             # A plain stdio backend gets nothing through on this machine
             serial = "mon:stdio"
+        # Instruction counting keeps single-core RISC-V timers in step with code,
+        # but makes dual-core Xtensa (esp32s3) ~80x slower; esp32s3 runs natively.
+        icount = ["-icount", "3"] if machine == "esp32c3" else []
         return [
-            self._qemu(),
+            self._qemu(machine),
             "-machine", machine,
             *display,
             "-serial", serial,
             # UART1: the Bluetooth controller of CONFIG_NIMBLE_HCI_UART
             *(["-serial", self.bt_hci] if self.bt_hci else []),
             "-no-reboot",
-            # Instruction counting keeps the timers in step with the code
-            "-icount", "3",
+            *icount,
             "-drive", f"file={self._flash_image(build)},if=mtd,format=raw",
         ]  # fmt: skip
 

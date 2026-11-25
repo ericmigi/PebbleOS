@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+qemu:
+  machine: esp32s3
+
+runners:
+  - qemu-esp32

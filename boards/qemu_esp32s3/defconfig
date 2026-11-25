@@ -1,0 +1,5 @@
+# qemu_esp32s3 board configuration
+
+CONFIG_SOC_ESP32S3=y
+
+CONFIG_UART=y

@@ -5,6 +5,6 @@ expect:
   - 'display: checkerboard shown'
   - 'Sample done'
 roles: [display]
-integration: [qemu_emery, qemu_flint, asterix, obelix@pvt, qemu_esp32c3, xteink_x4]
+integration: [qemu_emery, qemu_flint, asterix, obelix@pvt, qemu_esp32c3, qemu_esp32s3, xteink_x4]
 # Flashing included: an e-paper panel takes seconds per update
 timeout: 30

@@ -18,4 +18,4 @@ expect:
   - 'error: not a number: soon'
   - "error: beep: command not found, try 'help'"
   - 'Sample done'
-integration: [qemu_emery, qemu_esp32c3]
+integration: [qemu_emery, qemu_esp32c3, qemu_esp32s3]

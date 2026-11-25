@@ -1,0 +1,59 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+
+/dts-v1/;
+
+// Espressif's QEMU esp32s3 machine, booting the flash image through the ESP32-S3 ROM, with
+// UART0 for the console and the virtual RGB framebuffer for display output.
+
+#include "espressif/esp32s3.dtsi"
+
+/ {
+	model = "QEMU ESP32-S3";
+	compatible = "qemu,esp32s3", "esp,esp32s3";
+
+	chosen {
+		stdout-path = &uart0;
+	};
+
+	flash0: flash@0 {
+		compatible = "esp,esp32s3-flash";
+		reg = <0x0 0x400000>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "code";
+				reg = <0x0 0x400000>;
+			};
+		};
+	};
+};
+
+&uart0 {
+	current-speed = <115200>;
+	status = "okay";
+};
+
+&uart1 {
+	current-speed = <1000000>;
+	status = "okay";
+};
+
+/ {
+	// Virtual RGB framebuffer, emulating an 800x480 e-paper panel mounted in portrait.
+	display: display@21000000 {
+		compatible = "qemu,esp-rgb";
+		reg = <0x21000000 0x1c>, <0x20000000 0x1d4c00>;
+		reg-names = "regs", "vram";
+		width = <480>;
+		height = <800>;
+		panel-width = <480>;
+		panel-height = <800>;
+		bits-per-pixel = <1>;
+		rotation = <90>;
+	};
+};
