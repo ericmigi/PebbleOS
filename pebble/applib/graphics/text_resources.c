@@ -345,7 +345,8 @@ static bool prv_load_glyph_bitmap(Codepoint codepoint, const FontResource *font_
     size_t num_bytes_loaded = sys_resource_load_range(font_res->app_num, font_res->resource_id,
                                                       bitmap_addr, target, glyph_size_bytes);
     PBL_PROFILER_NODE_STOP(text_render_flash);
-    if (glyph_size_bytes && !num_bytes_loaded) {
+    // Older fonts keep their lenient check; an edge list must be read whole to be trusted
+    if (!num_bytes_loaded || (edges && num_bytes_loaded != glyph_size_bytes)) {
       PBL_LOG_WRN("Failed to load glyph bitmap from resources; cp: %" PRIx32 ", addr: %" PRIx32,
                   codepoint, bitmap_addr);
       return false;
@@ -357,9 +358,10 @@ static bool prv_load_glyph_bitmap(Codepoint codepoint, const FontResource *font_
       memcpy(&count, target + bitmap_words_bytes, sizeof(count));
       const size_t edge_bytes = 3U * count;
       if (glyph_size_bytes + edge_bytes > CACHE_GLYPH_SIZE ||
-          (edge_bytes && !sys_resource_load_range(font_res->app_num, font_res->resource_id,
-                                                  bitmap_addr + glyph_size_bytes,
-                                                  target + glyph_size_bytes, edge_bytes))) {
+          (edge_bytes &&
+           sys_resource_load_range(font_res->app_num, font_res->resource_id,
+                                   bitmap_addr + glyph_size_bytes, target + glyph_size_bytes,
+                                   edge_bytes) != edge_bytes)) {
         PBL_LOG_WRN("Failed to load glyph edges; cp: %" PRIx32, codepoint);
         return false;
       }
