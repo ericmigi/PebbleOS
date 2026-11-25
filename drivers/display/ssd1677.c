@@ -895,6 +895,26 @@ static const uint8_t s_grey_vs[4][3] = {
   {0xA2U, 0x22U, 0x20U},
 };
 #define GREY_FRAME_RATE 0x8FU
+#define VS_VSL          0x2U
+
+/*
+ * 0 light frames: the stock table; else that many phases of 1 frame towards white for light grey,
+ * dark ones for dark grey, from the first on, four per group, then tail undriven ones. Each
+ * undriven phase after a drive darkens it again much more than its length suggests, so the
+ * drives start together. Measured on the X4 (camera luminance white/light/dark/black, -1.2 V):
+ * stock 151/70/27/4; 12, 8 and a tail of 1: 152/81/35/4; 12, 9, tail 2: 152/72/41/4.
+ */
+static uint8_t s_grey_light = 12U;
+static uint8_t s_grey_dark = 8U;
+static uint8_t s_grey_frame_rate = GREY_FRAME_RATE;
+static uint8_t s_grey_tail = 1U;
+
+void pbl_display_ssd1677_grey_tune(uint8_t light, uint8_t dark, uint8_t frame_rate, uint8_t tail) {
+  s_grey_tail = tail;
+  s_grey_light = (uint8_t)PBL_MIN(light, 40U);
+  s_grey_dark = (uint8_t)PBL_MIN(dark, 40U);
+  s_grey_frame_rate = frame_rate;
+}
 
 int pbl_display_ssd1677_grey(const struct pbl_display *disp, const uint8_t *old_frame,
                              const uint8_t *new_frame, uint8_t vcom) {
@@ -908,15 +928,32 @@ int pbl_display_ssd1677_grey(const struct pbl_display *disp, const uint8_t *old_
   (void)PBL_POLL_SLEEP_MS(!state->refreshing && pbl_gpio_get(&epd->busy) == 0, 1U,
                           REFRESH_TIMEOUT_MS);
 
-  for (uint32_t c = 0U; c < 4U; c++) {
+  if (s_grey_light == 0U) {
+    for (uint32_t c = 0U; c < 4U; c++) {
+      for (uint32_t g = 0U; g < 3U; g++) {
+        lut[c * 10U + g] = s_grey_vs[c][g];
+      }
+    }
     for (uint32_t g = 0U; g < 3U; g++) {
-      lut[c * 10U + g] = s_grey_vs[c][g];
+      memset(&lut[50U + g * 5U], 1, 4U);
+    }
+  } else {
+    uint32_t total = PBL_MIN(PBL_MAX(s_grey_light, s_grey_dark) + s_grey_tail, 40U);
+
+    for (uint32_t ph = 0U; ph < total; ph++) {
+      uint32_t g = ph / 4U;
+      uint32_t shift = (3U - ph % 4U) * 2U;
+
+      lut[50U + g * 5U + ph % 4U] = 1U;
+      if (ph < s_grey_light) {
+        lut[2U * 10U + g] |= (uint8_t)(VS_VSL << shift);
+      }
+      if (ph < s_grey_dark) {
+        lut[3U * 10U + g] |= (uint8_t)(VS_VSL << shift);
+      }
     }
   }
-  for (uint32_t g = 0U; g < 3U; g++) {
-    memset(&lut[50U + g * 5U], 1, 4U);
-  }
-  memset(&lut[100], GREY_FRAME_RATE, 5U);
+  memset(&lut[100], s_grey_frame_rate, 5U);
 
   ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &w, old_frame);
   if (ret == 0) {
