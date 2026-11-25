@@ -183,7 +183,7 @@ config WATCHFACE_BEZEL
 
 choice SYSTEM_UI_FONT_CHOICE
     prompt "Typeface of the system UI"
-    default SYSTEM_UI_FONT_NOTO_SANS_CONDENSED if PLATFORM_FOLIO
+    default SYSTEM_UI_FONT_ATKINSON_NEXT if PLATFORM_FOLIO
     default SYSTEM_UI_FONT_GOTHIC
     help
       The system's own windows and the built-in apps that fill the display
@@ -193,6 +193,38 @@ choice SYSTEM_UI_FONT_CHOICE
 
 config SYSTEM_UI_FONT_GOTHIC
     bool "Gothic"
+
+config SYSTEM_UI_FONT_ATKINSON_NEXT
+    bool "Atkinson Hyperlegible Next, at panel resolution"
+    select SYSTEM_UI_FONT
+    select SYSTEM_UI_FONT_SCALE2
+
+config SYSTEM_UI_FONT_LITERATA_ATKINSON
+    bool "Literata text with Atkinson Hyperlegible Next titles, at panel resolution"
+    select SYSTEM_UI_FONT
+    select SYSTEM_UI_FONT_SCALE2
+    help
+      Regular text (bodies, subtitles) in Literata, bold text (titles,
+      menus) in Atkinson Hyperlegible Next.
+
+config SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON
+    bool "Local: Bookerly text, Atkinson Hyperlegible Next titles (development only)"
+    select SYSTEM_UI_FONT
+    select SYSTEM_UI_FONT_SCALE2
+    select SYSTEM_UI_FONT_LOCAL
+    help
+      Bookerly is proprietary (Amazon / Dalton Maag): its files come
+      from SYSTEM_UI_FONT_LOCAL_DIR on this machine, are never in the
+      tree, and a build with them must not leave the machine.
+
+config SYSTEM_UI_FONT_LOCAL_BOOKERLY
+    bool "Local: Bookerly for all text (development only)"
+    select SYSTEM_UI_FONT
+    select SYSTEM_UI_FONT_SCALE2
+    select SYSTEM_UI_FONT_LOCAL
+    help
+      As SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON, with Bookerly Bold for
+      titles too.
 
 config SYSTEM_UI_FONT_NOTO_SANS_CONDENSED
     bool "Noto Sans Condensed"
@@ -208,6 +240,17 @@ config SYSTEM_UI_FONT
     bool
     help
       The system UI has a typeface of its own, the UI_SANS_* fonts.
+
+config SYSTEM_UI_FONT_LOCAL
+    bool
+
+config SYSTEM_UI_FONT_LOCAL_DIR
+    string "Directory of the local, non-redistributable UI fonts"
+    depends on SYSTEM_UI_FONT_LOCAL
+    default "~/dev/pebbleos-local-fonts/bookerly"
+    help
+      Holds Bookerly-Regular.ttf and Bookerly-Bold.ttf. Development only:
+      do not commit these fonts or anything built from them.
 
 config SYSTEM_UI_FONT_SCALE2
     bool

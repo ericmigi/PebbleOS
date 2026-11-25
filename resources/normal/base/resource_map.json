@@ -2841,6 +2841,421 @@
       "extended": true,
       "renderHeight": 32,
       "config": "CONFIG_SYSTEM_UI_FONT_PLEX_SANS_CONDENSED"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_14",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 14,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_14_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-Bold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 14,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_18",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 16,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_18_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-Bold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 16,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_24",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 20,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_24_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-SemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 20,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_28",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 26,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_28_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-SemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 28,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_36",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 32,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_36_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-SemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 34,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_14",
+      "file": "normal/base/ttf/Literata-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 13,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_14_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-Bold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 14,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_18",
+      "file": "normal/base/ttf/Literata-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 16,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_18_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-Bold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 16,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_24",
+      "file": "normal/base/ttf/Literata-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 19,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_24_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-SemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 20,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_28",
+      "file": "normal/base/ttf/Literata-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 25,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_28_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-SemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 28,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_36",
+      "file": "normal/base/ttf/Literata-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 31,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_36_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-SemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 34,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_14",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 13,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_14_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-Bold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 14,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_18",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 16,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_18_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-Bold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 16,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_24",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 20,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_24_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-SemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 20,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_28",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 25,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_28_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-SemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 28,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_36",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 31,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_36_BOLD",
+      "file": "normal/base/ttf/AtkinsonHyperlegibleNext-SemiBold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 34,
+      "scale": 2,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_14",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 13,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_14_BOLD",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Bold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 13,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_18",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 16,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_18_BOLD",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Bold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 16,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_24",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 20,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_24_BOLD",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Bold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 19,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_28",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 25,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_28_BOLD",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Bold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 25,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_36",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Regular.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 31,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
+    },
+    {
+      "type": "font",
+      "name": "UI_SANS_36_BOLD",
+      "file": "${CONFIG_SYSTEM_UI_FONT_LOCAL_DIR}/Bookerly-Bold.ttf",
+      "characterList": "normal/base/ttf/gothic_codepoints.json",
+      "extended": true,
+      "renderHeight": 32,
+      "scale": 2,
+      "autohint": true,
+      "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
     }
   ],
   "timeline": [
