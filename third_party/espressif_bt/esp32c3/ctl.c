@@ -18,7 +18,9 @@
 #include <string.h>
 
 #include <pbl/drivers/mcu.h>
+#include <pbl/kernel/heap.h>
 #include <pbl/kernel/irq.h>
+#include <pbl/kernel/malloc.h>
 #include <pbl/kernel/mmio.h>
 #include <pbl/kernel/sem.h>
 #include <pbl/kernel/time.h>
@@ -122,6 +124,7 @@ int esp32c3_bt_start(void) {
   PBL_LOG_INFO("Bluetooth bring-up: confirm within %u s or the chip resets",
                (unsigned int)CONFIG_ESP32C3_BT_CONFIRM_TIMEOUT_S);
 
+  const size_t heap_before = pbl_heap_used(pbl_malloc_heap());
   ret = esp32c3_bt_controller_init();
   if (ret == 0) {
     ret = esp32c3_bt_controller_enable();
@@ -133,7 +136,8 @@ int esp32c3_bt_start(void) {
     return ret;
   }
 
-  PBL_LOG_INFO("Bluetooth controller enabled");
+  PBL_LOG_INFO("Bluetooth controller enabled, %u bytes of kernel heap",
+               (unsigned int)(pbl_heap_used(pbl_malloc_heap()) - heap_before));
 
   return 0;
 }
@@ -230,6 +234,10 @@ static int prv_cmd_status(const struct pbl_shell *sh, size_t argc, char **argv) 
   if (esp32c3_bt_controller_enabled()) {
     pbl_shell_print(sh, "version: %s", esp32c3_bt_controller_version());
   }
+  pbl_shell_print(sh, "kernel heap: %u used of %u, %u headroom at worst",
+                  (unsigned int)pbl_heap_used(pbl_malloc_heap()),
+                  (unsigned int)pbl_heap_size(pbl_malloc_heap()),
+                  (unsigned int)pbl_heap_min_headroom(pbl_malloc_heap()));
   return 0;
 }
 

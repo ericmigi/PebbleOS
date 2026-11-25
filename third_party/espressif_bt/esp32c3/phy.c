@@ -24,6 +24,7 @@
 #include <pbl/kernel/irq.h>
 #include <pbl/kernel/malloc.h>
 #include <pbl/kernel/mmio.h>
+#include <pbl/kernel/work.h>
 #include <pbl/logging/logging.h>
 
 PBL_LOG_MODULE_DECLARE(espressif_bt, CONFIG_ESP32C3_BT_LOG_LEVEL);
@@ -185,6 +186,26 @@ void esp_wifi_bt_power_domain_on(void) {
 /* Enable (phy_init.c, phy_common.c) */
 
 static esp_phy_modem_t s_phy_modem_flag;
+
+/* PLL tracking (phy_common.c): every second once the PHY is on. ESP-IDF serialises it with
+ * enabling the PHY, which here happens once, before it starts. */
+
+#define PHY_TRACK_PLL_PERIOD_MS 1000U
+
+extern void phy_param_track_tot(bool en_wifi, bool en_ble_154);
+
+static struct pbl_delayed_work s_track_pll_work;
+
+static void phy_track_pll_timer_callback(struct pbl_work *work) {
+  phy_param_track_tot(false, true);
+  pbl_delayed_work_schedule_next(&s_track_pll_work, pbl_ms_to_ticks(PHY_TRACK_PLL_PERIOD_MS));
+}
+
+static void phy_track_pll_init(void) {
+  pbl_delayed_work_init(&s_track_pll_work, phy_track_pll_timer_callback);
+  (void)pbl_delayed_work_schedule(&pbl_sys_workq, &s_track_pll_work,
+                                  PBL_MSEC(PHY_TRACK_PLL_PERIOD_MS));
+}
 static bool s_is_phy_calibrated;
 
 static void esp_phy_load_cal_and_init(void) {
@@ -202,7 +223,9 @@ static void esp_phy_load_cal_and_init(void) {
   phy_bbpll_en_usb(true);
 #endif
 
-  register_chipv7_phy(init_data, cal_data, PHY_RF_CAL_FULL);
+  int ret = register_chipv7_phy(init_data, cal_data, PHY_RF_CAL_FULL);
+  PBL_LOG_INFO("RF calibration: %d, data version %02x%02x%02x%02x", ret, cal_data->version[0],
+               cal_data->version[1], cal_data->version[2], cal_data->version[3]);
 
   pbl_free(cal_data); // PHY maintains a copy of calibration data, so we can free this
 }
@@ -218,6 +241,7 @@ void esp_phy_enable(esp_phy_modem_t modem) {
       extern void phy_wakeup_init(void);
       phy_wakeup_init();
     }
+    phy_track_pll_init();
     phy_module_disable();
   }
   s_phy_modem_flag |= modem;
