@@ -211,8 +211,9 @@ static PBL_NOINLINE void prv_render_color_glyph(GContext *ctx, const GlyphData *
 
 #if CONFIG_SCREEN_COLOR_DEPTH_BITS == 1
 // A glyph stored at twice its font's resolution: each framebuffer pixel covers 2x2 glyph pixels,
-// inked when at least two are. The pixels at the glyph's edges are recorded with their pattern,
-// for displays that can show them at panel resolution.
+// with 1 or 2 bits of coverage each, and is inked when at least half covered. The pixels at the
+// glyph's edges are recorded with the coverage of their four, for displays that can show them at
+// panel resolution and in grey.
 static PBL_NOINLINE void prv_render_scale2_glyph(GContext *ctx, const GlyphData *glyph,
                                                  const GlyphLocation *location,
                                                  const GRect cursor) {
@@ -236,38 +237,40 @@ static PBL_NOINLINE void prv_render_scale2_glyph(GContext *ctx, const GlyphData 
   GBitmap *dest = graphics_context_get_bitmap(ctx);
   const bool white = !gcolor_equal(ctx->draw_state.text_color, GColorBlack);
   const GlyphBlock *bits = (const GlyphBlock *)glyph->data;
+  const bool aa2 = text_resources_glyph_is_aa2(location);
 #ifdef CONFIG_TEXT_DETAIL
   const int owner = text_detail_glyph_begin(dest);
 #endif
   for (int cy = cells.origin.y; cy < cells.origin.y + cells.size.h; cy++) {
     const GBitmapDataRowInfo row = gbitmap_get_data_row_info(dest, cy);
-    // Bit offsets of the cell row's two glyph rows, or -1 outside the glyph
+    // Pixel offsets of the cell row's two glyph rows, or -1 outside the glyph
     const int sy = 2 * cy - y2;
-    const int base0 = (sy >= 0 && sy < h2) ? sy * w2 : -1;
-    const int base1 = (sy + 1 >= 0 && sy + 1 < h2) ? (sy + 1) * w2 : -1;
+    const int base[2] = {
+      (sy >= 0 && sy < h2) ? sy * w2 : -1, (sy + 1 >= 0 && sy + 1 < h2) ? (sy + 1) * w2 : -1
+    };
     const int x_min = PBL_MAX(cells.origin.x, row.min_x);
     const int x_max = PBL_MIN(cells.origin.x + cells.size.w - 1, row.max_x);
     for (int cx = x_min; cx <= x_max; cx++) {
       const int sx = 2 * cx - x2;
-      uint8_t pattern = 0;
-      for (int i = 0; i < 2; i++) {
-        if (sx + i < 0 || sx + i >= w2) {
+      // Coverage, 0 to 3, of the four glyph pixels, two bits each: top left first
+      uint8_t levels = 0;
+      unsigned sum = 0;
+      for (int i = 0; i < 4; i++) {
+        const int x = sx + (i & 1);
+        if (x < 0 || x >= w2 || base[i >> 1] < 0) {
           continue;
         }
-        if (base0 >= 0) {
-          const uint32_t bit = (uint32_t)(base0 + sx + i);
-          pattern |= ((bits[bit / 32] >> (bit % 32)) & 1U) << i;
-        }
-        if (base1 >= 0) {
-          const uint32_t bit = (uint32_t)(base1 + sx + i);
-          pattern |= ((bits[bit / 32] >> (bit % 32)) & 1U) << (i + 2);
-        }
+        const uint32_t pixel = (uint32_t)(base[i >> 1] + x);
+        const unsigned level = aa2 ? (bits[pixel / 16] >> (2 * (pixel % 16))) & 3U
+                                   : ((bits[pixel / 32] >> (pixel % 32)) & 1U) * 3U;
+        levels |= (uint8_t)(level << (2 * i));
+        sum += level;
       }
-      if (pattern == 0) {
+      if (levels == 0) {
         continue;
       }
-      // At least two of the four glyph pixels ink the framebuffer pixel
-      if ((0xFEE8U >> pattern) & 1U) {
+      // Inked when at least half covered
+      if (sum >= 6) {
         if (white) {
           row.data[cx / 8] |= (uint8_t)(1U << (cx % 8));
         } else {
@@ -275,8 +278,8 @@ static PBL_NOINLINE void prv_render_scale2_glyph(GContext *ctx, const GlyphData 
         }
       }
 #ifdef CONFIG_TEXT_DETAIL
-      if (pattern != 0x0F && owner >= 0) {
-        text_detail_add(owner, cx, cy, pattern, white);
+      if (levels != 0xFF && owner >= 0) {
+        text_detail_add(owner, cx, cy, levels, white);
       }
 #endif
     }
