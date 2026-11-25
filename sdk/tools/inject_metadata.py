@@ -259,8 +259,13 @@ def inject_metadata(
                 continue
             offset = image_offset(int(columns[0], 16))
             if columns[2] == RISCV_SLOT_RELOC:
-                if offset % 4:
-                    raise InvalidBinaryError(f"unaligned R_RISCV_32 at 0x{offset:x}")
+                # Bit 0 of an entry marks a lui: a pointer in a packed struct
+                # may be halfword aligned, not at an odd offset.
+                if offset % 2:
+                    raise RuntimeError(
+                        f"pointer at the odd offset 0x{offset:x} cannot be relocated: "
+                        "align it to 2 bytes at least"
+                    )
                 entries.append(offset)
             elif columns[2] == RISCV_HI20_RELOC:
                 if offset % 2:
