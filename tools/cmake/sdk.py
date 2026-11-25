@@ -185,7 +185,8 @@ def main():
                 TINTIN_ROOT=REPO_ROOT, PLATFORM_PATH=abi_dir)
 
     _copy_tree(os.path.join(SDK_ROOT, "include"), os.path.join(common, "include"))
-    for name in ("pebble_app.ld.template", "pebble_app_init_arrays.ld"):
+    for name in ("pebble_app.ld.template", "pebble_app_riscv32.ld.template",
+                 "pebble_app_init_arrays.ld"):
         _copy(os.path.join(SDK_ROOT, name), os.path.join(common, name))
 
     # The CMake package apps find the SDK with.

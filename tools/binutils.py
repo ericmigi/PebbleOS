@@ -283,9 +283,9 @@ def _nm_generator_fast(f):
         yield (addr, section, symbol_name, rel_file_path, line, size)
 
 
-def size(elf_path):
+def size(elf_path, prefix="arm-none-eabi-"):
     """Returns size (text, data, bss)"""
-    output = subprocess.check_output(["arm-none-eabi-size", elf_path])
+    output = subprocess.check_output([prefix + "size", elf_path])
 
     lines = output.decode("utf8").splitlines()
     if len(lines) < 2:

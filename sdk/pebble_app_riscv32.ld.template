@@ -1,0 +1,79 @@
+/* riscv32 apps: the image is laid out as pebble_app.ld.template lays it out,
+ * but its code is linked @CODE_OFFSET@ above where it sits in the image,
+ * which is where the CPU fetches the RAM the app is loaded to. Everything
+ * else is linked where it sits, and code reaches it there: pc-relative. */
+
+ENTRY(main)
+EXTERN(pbl_process_entry)
+
+CODE_OFFSET = @CODE_OFFSET@;
+
+MEMORY
+{
+  APP (rwx) : ORIGIN = 0, LENGTH = @MAX_APP_MEMORY_SIZE@
+}
+
+SECTIONS
+{
+    .header :
+    {
+        KEEP(*(.pbl_header))
+
+    } > APP
+
+    /* -- DO NOT ADD ANY NEW SECTIONS HERE AND DO NOT CHANGE THE ALIGNMENT -- */
+    /* The GNU build ID is tacked to the end of the PebbleProcessInfo struct: */
+    .note.gnu.build-id ALIGN(1) : {
+        PROVIDE(BUILD_ID = .);
+        KEEP(*(.note.gnu.build-id))
+    } > APP
+
+    /* The PebblePlatformInfo, when there is one, follows the build ID. */
+    .platform ALIGN(1) :
+    {
+        KEEP(*(.pbl_platform))
+    } > APP
+
+    /* Where it sits in the image is the next place in APP, as for the sections
+     * before it; its code is aligned to no more than 16 bytes. */
+    .text CODE_OFFSET + ALIGN(16) : ALIGN(16)
+    {
+        *(.text)
+        *(.text.*)
+    } AT> APP
+    ASSERT(ADDR(.text) == CODE_OFFSET + LOADADDR(.text), "The code is not linked at CODE_OFFSET")
+
+    .rodata :
+    {
+        *(.rodata)
+        *(.rodata*)
+        *(.srodata)
+        *(.srodata*)
+    } > APP
+
+    .data :
+    {
+        KEEP(*(.data))
+        *(.data.*)
+        *(.sdata)
+        *(.sdata.*)
+@INIT_ARRAYS@
+    } > APP
+
+    .bss :
+    {
+        *(.bss)
+        *(.bss.*)
+        *(.sbss)
+        *(.sbss.*)
+        *(.scommon)
+        *(COMMON)
+    } > APP
+
+    DISCARD :
+    {
+        *(.eh_frame)
+    }
+}
+
+/* vim:filetype=ld */
