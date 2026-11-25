@@ -18,8 +18,8 @@ The Pebble firmware (`pebble/`, the default application) runs as folio: a
 240 × 400 screen twice as large, filling the panel, with watchfaces and
 third-party apps at their classic 144 × 168 centred on black; the system
 resources and the filesystem in the flash, the keys as Back, Up, Select and
-Down. Sensors, vibration, the microphone and the charger are simulated, and
-there is no Bluetooth.
+Down. Sensors, vibration, the microphone and the charger are simulated.
+Bluetooth LE runs on the chip's own radio, see [Bluetooth](#bluetooth).
 
 The firmware is the image the ROM boots straight from the flash, as on
 [](../qemu_esp32c3/index.md): no second-stage bootloader, the code running in
@@ -86,3 +86,38 @@ ESPTOOL_PORT=/dev/cu.usbmodem1101 pbl samples --board xteink_x4 samples/kernel
 Flashing replaces the reader's own bootloader and firmware. Back the flash up
 first, with `esptool read-flash 0 0x1000000 backup.bin`, to write it back
 with `esptool write-flash 0 backup.bin`.
+
+## Bluetooth
+
+The Pebble firmware pairs with the phone app and keeps its connection over
+the ESP32-C3's radio: the NimBLE host on Espressif's Bluetooth LE controller,
+reached through its virtual HCI (`third_party/nimble/transport/hci_esp32c3.c`).
+The controller and its PHY are **closed libraries** from Espressif,
+`libbtdm_app.a`, `libphy.a` and `libbtbb.a`, in the `esp32c3-bt-lib` and
+`esp-phy-lib` submodules at the versions ESP-IDF 5.5.5 pins, with the glue
+that runs them on PebbleOS in `third_party/espressif_bt`. Fetch them before
+building:
+
+```shell
+git submodule update --init --depth 1 -- third_party/espressif_bt/esp32c3-bt-lib third_party/espressif_bt/esp-phy-lib
+```
+
+The controller comes up at every boot (`CONFIG_ESP32C3_BT_ARMED_BY_DEFAULT`).
+Each bring-up runs under the RTC watchdog: one that hangs resets the chip,
+and a bring-up that failed or hung keeps the radio off at the following
+boots, the firmware then running on a fake controller and logging so. `btc
+status` shows the state, `btc clear` and a restart retry. Airplane mode
+stops the host, so nothing is on air, and starts it again.
+
+Its interrupt handler runs from the flash, which is why the board runs the
+flash at 80 MHz: at the boot's 20 MHz the controller misses its timing and
+stops within seconds. The controller takes about 23 KiB of heap and as much
+RAM code; firmware updates from the phone are refused, as nothing could
+install them (`CONFIG_FIRMWARE_UPDATE`), and the serial number is the chip's
+MAC address.
+
+To build without Bluetooth, leaving the radio off and the libraries out:
+
+```shell
+pbl configure --board xteink_x4 -DCONFIG_ESP32C3_BT=n
+```

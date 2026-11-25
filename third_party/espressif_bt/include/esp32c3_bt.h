@@ -39,6 +39,9 @@ void esp32c3_bt_arm(void);
 /** @brief Whether the controller was asked for at boot, and the last attempt did not fail. */
 bool esp32c3_bt_armed(void);
 
+/** @brief Whether a bring-up failed or hung, which keeps the controller off until cleared. */
+bool esp32c3_bt_failed(void);
+
 // The unguarded steps of esp32c3_bt_start(), derived from ESP-IDF's
 int esp32c3_bt_controller_init(void);
 int esp32c3_bt_controller_enable(void);

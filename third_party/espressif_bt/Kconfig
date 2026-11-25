@@ -11,7 +11,8 @@ menuconfig ESP32C3_BT
       Link Espressif's Bluetooth LE controller and PHY libraries, from
       the esp32c3-bt-lib and esp-phy-lib submodules, with the glue that
       runs them on PebbleOS. Nothing starts the controller unless asked
-      to: the btc shell command, or NimBLE's HCI transport once armed.
+      to: the btc shell command, or NimBLE's HCI transport once armed
+      (or at every boot, with ESP32C3_BT_ARMED_BY_DEFAULT).
       Each bring-up arms the RTC watchdog until btc confirm proves the
       USB console alive, and a bring-up that never completed keeps the
       controller off at the following boots.
@@ -58,8 +59,17 @@ config ESP32C3_BT_CONFIRM_TIMEOUT_S
       The RTC watchdog resets the chip this long after a bring-up starts
       unless btc confirm stops it.
 
+config ESP32C3_BT_ARMED_BY_DEFAULT
+    bool "Use the controller without btc arm"
+    help
+      NimBLE's HCI transport brings the controller up at every boot, not
+      only once btc arm asked for it. A bring-up that failed or hung
+      still keeps the controller off at the following boots, on the fake
+      HCI, until btc clear.
+
 config ESP32C3_BT_REQUIRE_CONFIRM
     bool "Require a confirmation of every bring-up"
+    default n if ESP32C3_BT_ARMED_BY_DEFAULT
     default y
     help
       Keep the RTC watchdog armed after a bring-up until btc confirm,

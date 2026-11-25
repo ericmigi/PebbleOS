@@ -168,7 +168,16 @@ void esp32c3_bt_arm(void) {
 
 bool esp32c3_bt_armed(void) {
   prv_state_load();
+#ifdef CONFIG_ESP32C3_BT_ARMED_BY_DEFAULT
+  return (s_state & STATE_FAILED) == 0U;
+#else
   return (s_state & (STATE_ARMED | STATE_FAILED)) == STATE_ARMED;
+#endif
+}
+
+bool esp32c3_bt_failed(void) {
+  prv_state_load();
+  return (s_state & STATE_FAILED) != 0U;
 }
 
 #ifdef CONFIG_ESP32C3_BT_SHELL

@@ -4,9 +4,9 @@
 // NimBLE to the ESP32-C3's own controller, over its virtual HCI: whole H4 packets both ways,
 // modeled on ESP-IDF's esp_nimble_hci.c. The controller calls back in its own thread.
 //
-// The controller is used only once armed (btc arm, then a reset) and if its last bring-up did not
-// fail; the transport answers like the fake one otherwise, so the host still synchronises. That is
-// decided once per boot.
+// The controller is used once armed (btc arm, then a reset, or at every boot with
+// ESP32C3_BT_ARMED_BY_DEFAULT) and if its last bring-up did not fail; the transport answers like
+// the fake one otherwise, so the host still synchronises. That is decided once per boot.
 
 #include <stdint.h>
 #include <string.h>
@@ -96,6 +96,12 @@ static const struct esp32c3_bt_vhci_callbacks s_vhci_cb = {
 void ble_transport_ll_init(void) {
   int ret;
 
+  if (esp32c3_bt_failed()) {
+    PBL_LOG_ERR(
+        "ESP32-C3 controller off after a failed bring-up, fake HCI: btc clear, then "
+        "restart to retry");
+    return;
+  }
   if (!esp32c3_bt_armed()) {
     PBL_LOG_INFO("ESP32-C3 controller not armed: fake HCI");
     return;
