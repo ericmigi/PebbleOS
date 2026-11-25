@@ -259,3 +259,22 @@ void test_pebble_process_md__framebuffer_of_app_without_platform_info(void) {
   md = prv_md_for_platform(PROCESS_INFO_PLATFORM_OTHER);
   prv_assert_framebuffer_size(&md, s_display_size);
 }
+
+void test_pebble_process_md__abi(void) {
+  // A binary without a record predates riscv32: it is ARM code
+  PebbleProcessMdFlash md = prv_md_for_platform(PROCESS_INFO_PLATFORM_FLINT);
+  cl_assert_equal_i(process_metadata_get_abi(&md.common), PLATFORM_ABI_ARMV7M);
+  cl_assert(process_metadata_runs_natively(&md.common));
+  cl_assert(process_metadata_abi_supported(&md.common));
+
+  md = prv_md_for_display(PBL_DISPLAY_WIDTH, PBL_DISPLAY_HEIGHT, OUR_SHAPE);
+  md.platform_info.abi = PLATFORM_ABI_RISCV32;
+  cl_assert_equal_i(process_metadata_get_abi(&md.common), PLATFORM_ABI_RISCV32);
+  // The unit tests are of an ARM watch, which runs no RISC-V code
+  cl_assert(!process_metadata_runs_natively(&md.common));
+  cl_assert(!process_metadata_abi_supported(&md.common));
+
+  // The firmware's own processes are of its CPU
+  const PebbleProcessMdFlash system = {};
+  cl_assert(process_metadata_runs_natively(&system.common));
+}

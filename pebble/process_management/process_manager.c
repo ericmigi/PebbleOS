@@ -320,9 +320,18 @@ void process_manager_launch_process(const ProcessLaunchConfig *config) {
   }
 
 #if !defined(CONFIG_RECOVERY_FW)
-  // What installed it should not have offered a binary that requires a feature this watch lacks
-  if (!process_metadata_has_required_features(md, platform_get_features())) {
-    PBL_LOG_WRN("Tried to launch an app that requires features this watch does not have.");
+  // What installed it should not have offered a binary of code this watch cannot run, or that
+  // requires a feature it lacks
+  const bool abi_supported = process_metadata_abi_supported(md);
+  if (!abi_supported || !process_metadata_has_required_features(md, platform_get_features())) {
+    if (!abi_supported) {
+      PBL_LOG_WRN(
+          "Tried to launch an app built for another CPU (ABI %d); its pbw has no binary "
+          "for this watch",
+          (int)process_metadata_get_abi(md));
+    } else {
+      PBL_LOG_WRN("Tried to launch an app that requires features this watch does not have.");
+    }
     if (!is_worker) {
       AppInstallEntry entry;
       if (app_install_get_entry_for_install_id(id, &entry) &&
@@ -333,7 +342,9 @@ void process_manager_launch_process(const ProcessLaunchConfig *config) {
 
       ExpandableDialog *expandable_dialog = expandable_dialog_create("Unsupported App");
       Dialog *dialog = expandable_dialog_get_dialog(expandable_dialog);
-      const char *error_text = pbl_i18n_noop("This app needs hardware this watch does not have.");
+      const char *error_text =
+          abi_supported ? pbl_i18n_noop("This app needs hardware this watch does not have.")
+                        : pbl_i18n_noop("This app was not built for this watch.");
       dialog_set_text(dialog, pbl_i18n_get(error_text, expandable_dialog));
       dialog_set_icon(dialog, RESOURCE_ID_GENERIC_WARNING_SMALL);
       pbl_i18n_free(error_text, expandable_dialog);
