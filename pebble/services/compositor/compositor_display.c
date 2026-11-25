@@ -198,7 +198,8 @@ void compositor_display_init(void) {
 #endif
   const struct pbl_display_props *props = pbl_display_get_props(DISPLAY);
 
-  PBL_ASSERTN((props->width == PBL_DISPLAY_WIDTH) && (props->height == PBL_DISPLAY_HEIGHT) &&
+  PBL_ASSERTN((props->width == PBL_DISPLAY_WIDTH * FRAMEBUFFER_SCALE) &&
+              (props->height == PBL_DISPLAY_HEIGHT * FRAMEBUFFER_SCALE) &&
               (props->format == format));
 #if PBL_ROUND
   PBL_ASSERTN(props->round_mask != nullptr);
@@ -225,8 +226,9 @@ void compositor_display_update(void (*handle_update_complete_cb)(bool success)) 
   // Every flush drops the mirror; the compositor restores it after an app frame's flush
   compositor_app_framebuffer_mirror_invalidate();
 
-  s_flush_y0 = fb->dirty_rect.origin.y;
-  s_flush_y1 = fb->dirty_rect.origin.y + fb->dirty_rect.size.h - 1;
+  // The display's rows, FRAMEBUFFER_SCALE per row of the dirty rectangle
+  s_flush_y0 = fb->dirty_rect.origin.y * FRAMEBUFFER_SCALE;
+  s_flush_y1 = (fb->dirty_rect.origin.y + fb->dirty_rect.size.h) * FRAMEBUFFER_SCALE - 1;
   s_update_complete_handler = handle_update_complete_cb;
   s_flush_start_ticks = pbl_uptime_ticks();
   s_flush_pending = true;

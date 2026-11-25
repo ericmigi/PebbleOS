@@ -87,8 +87,9 @@ static void prv_request_fast_connection(struct pbl_pp_session *session) {
 
 static uint32_t prv_framebuffer_next_chunk(FrameBufferState *restrict state,
                                            uint32_t max_chunk_bytes, uint8_t *output_buffer) {
-  const uint32_t bytes_per_row = CONFIG_SCREEN_COLOR_DEPTH_BITS * PBL_DISPLAY_WIDTH / 8;
-  const uint32_t cols_per_byte = PBL_DISPLAY_WIDTH / bytes_per_row;
+  // The framebuffer as stored, at FRAMEBUFFER_SCALE
+  const uint32_t bytes_per_row = CONFIG_SCREEN_COLOR_DEPTH_BITS * state->width / 8;
+  const uint32_t cols_per_byte = state->width / bytes_per_row;
 
   uint32_t remaining_chunk_bytes = max_chunk_bytes;
   uint8_t *output_buffer_with_offset = output_buffer;
@@ -231,8 +232,8 @@ void screenshot_protocol_msg_callback(struct pbl_pp_session *session, const uint
           .fb = compositor_get_framebuffer(),
           .row = 0,
           .col = 0,
-          .width = PBL_DISPLAY_WIDTH,
-          .height = PBL_DISPLAY_HEIGHT,
+          .width = PBL_DISPLAY_WIDTH * FRAMEBUFFER_SCALE,
+          .height = PBL_DISPLAY_HEIGHT * FRAMEBUFFER_SCALE,
         },
     .sent_header = false,
   };

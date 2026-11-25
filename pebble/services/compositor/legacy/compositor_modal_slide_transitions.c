@@ -65,9 +65,13 @@ static void prv_modal_transition_pop_update(GContext *ctx, uint32_t distance_nor
     }
 
     // copy a row from above and paste it into the destination.
-    uint32_t *src_line = framebuffer_get_line(sys_frame_buffer, fetch_row);
-    uint32_t *dest_line = framebuffer_get_line(sys_frame_buffer, dest_row);
-    memcpy(dest_line, src_line, FRAMEBUFFER_BYTES_PER_ROW);
+    for (unsigned int r = 0; r < FRAMEBUFFER_SCALE; r++) {
+      uint32_t *src_line =
+          framebuffer_get_line(sys_frame_buffer, fetch_row * FRAMEBUFFER_SCALE + r);
+      uint32_t *dest_line =
+          framebuffer_get_line(sys_frame_buffer, dest_row * FRAMEBUFFER_SCALE + r);
+      memcpy(dest_line, src_line, FRAMEBUFFER_BYTES_PER_ROW);
+    }
   }
 
   // update the current offset of the modal after all lines have been copied.
@@ -77,7 +81,8 @@ static void prv_modal_transition_pop_update(GContext *ctx, uint32_t distance_nor
   // We do this by copying the rows from the app's framebuffer into the system's.
   uint32_t *app_buffer = compositor_get_app_framebuffer_as_bitmap().addr;
   uint32_t *sys_buffer = sys_frame_buffer->buffer;
-  memcpy(sys_buffer, app_buffer, FRAMEBUFFER_BYTES_PER_ROW * s_data.cur_modal_offset_y);
+  memcpy(sys_buffer, app_buffer,
+         FRAMEBUFFER_BYTES_PER_ROW * FRAMEBUFFER_SCALE * s_data.cur_modal_offset_y);
 
   // Render transparent modals over only the revealed app portion
   ctx->draw_state.clip_box.size.h = s_data.cur_modal_offset_y;

@@ -231,26 +231,37 @@ static bool prv_rows_differ(const uint8_t *a, const uint8_t *b, size_t byte0, si
 //! from the system framebuffer, which still holds the previous frame copied to origin. False when
 //! no row differs.
 static bool prv_narrow_to_changed_rows(GRect *rect, GPoint origin) {
-  const GBitmap app_bitmap = compositor_get_app_framebuffer_as_bitmap();
-  const GBitmap sys_bitmap = compositor_get_framebuffer_as_bitmap();
-  const int16_t x_max = grect_get_max_x(rect) - 1;
+  // Compared as stored: FRAMEBUFFER_SCALE rows and columns per pixel
+  const int s = FRAMEBUFFER_SCALE;
+  GBitmap app_bitmap = compositor_get_app_framebuffer_as_bitmap();
+  GBitmap sys_bitmap = compositor_get_framebuffer_as_bitmap();
+  if (gbitmap_is_scaled2(&app_bitmap)) {
+    app_bitmap = gbitmap_scaled2_get_stored(&app_bitmap);
+    sys_bitmap = gbitmap_scaled2_get_stored(&sys_bitmap);
+  }
+  const int16_t x_max = (grect_get_max_x(rect) * s) - 1;
   // The origin's column is byte aligned
-  const size_t sys_byte_offset = ((size_t)origin.x * CONFIG_SCREEN_COLOR_DEPTH_BITS) / 8;
+  const size_t sys_byte_offset = ((size_t)origin.x * s * CONFIG_SCREEN_COLOR_DEPTH_BITS) / 8;
   int16_t first = -1;
   int16_t last = -1;
   for (int16_t y = rect->origin.y; y < grect_get_max_y(rect); y++) {
-    const GBitmapDataRowInfo app_row = gbitmap_get_data_row_info(&app_bitmap, y);
-    const GBitmapDataRowInfo sys_row = gbitmap_get_data_row_info(&sys_bitmap, y + origin.y);
-    const int16_t x0 = PBL_MAX(rect->origin.x, app_row.min_x);
-    const int16_t x1 = PBL_MIN(x_max, app_row.max_x);
-    if (x0 > x1) {
-      continue;
+    bool differ = false;
+    for (int r = 0; r < s && !differ; r++) {
+      const GBitmapDataRowInfo app_row = gbitmap_get_data_row_info(&app_bitmap, y * s + r);
+      const GBitmapDataRowInfo sys_row =
+          gbitmap_get_data_row_info(&sys_bitmap, (y + origin.y) * s + r);
+      const int16_t x0 = PBL_MAX(rect->origin.x * s, app_row.min_x);
+      const int16_t x1 = PBL_MIN(x_max, app_row.max_x);
+      if (x0 > x1) {
+        continue;
+      }
+      // Only the bytes holding those columns are read; round displays pack each row to its extent
+      const size_t byte0 = ((size_t)x0 * CONFIG_SCREEN_COLOR_DEPTH_BITS) / 8;
+      const size_t byte1 =
+          ((size_t)x1 * CONFIG_SCREEN_COLOR_DEPTH_BITS + CONFIG_SCREEN_COLOR_DEPTH_BITS - 1) / 8;
+      differ = prv_rows_differ(app_row.data, sys_row.data + sys_byte_offset, byte0, byte1);
     }
-    // Only the bytes holding those columns are read; round displays pack each row to its extent
-    const size_t byte0 = ((size_t)x0 * CONFIG_SCREEN_COLOR_DEPTH_BITS) / 8;
-    const size_t byte1 =
-        ((size_t)x1 * CONFIG_SCREEN_COLOR_DEPTH_BITS + CONFIG_SCREEN_COLOR_DEPTH_BITS - 1) / 8;
-    if (prv_rows_differ(app_row.data, sys_row.data + sys_byte_offset, byte0, byte1)) {
+    if (differ) {
       if (first < 0) {
         first = y;
       }
@@ -860,6 +871,12 @@ void compositor_scaled_app_fb_copy_offset(const GRect update_rect, bool copy_rel
 
 //! Set the pixels [start_x, end_x) of a row of the system framebuffer to black.
 static void prv_fill_row_black(GBitmap *bitmap, int16_t y, int16_t start_x, int16_t end_x) {
+  if (gbitmap_is_scaled2(bitmap)) {
+    GBitmap stored = gbitmap_scaled2_get_stored(bitmap);
+    prv_fill_row_black(&stored, 2 * y, 2 * start_x, 2 * end_x);
+    prv_fill_row_black(&stored, 2 * y + 1, 2 * start_x, 2 * end_x);
+    return;
+  }
   const GBitmapDataRowInfo row_info = gbitmap_get_data_row_info(bitmap, y);
   start_x = PBL_MAX(start_x, row_info.min_x);
   end_x = PBL_MIN(end_x, row_info.max_x + 1);
