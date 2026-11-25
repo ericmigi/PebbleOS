@@ -64,6 +64,9 @@ struct pbl_loader_source {
   void *ctx;
 };
 
+/** @brief Marks a relocation table entry that names a RISC-V @c lui, not a slot. */
+#define PBL_LOADER_RISCV_HI20_ENTRY (1U << 31)
+
 /** @brief Image layout. */
 struct pbl_loader_image {
   /** Size of the file part, stored at source offset 0. */
@@ -84,9 +87,9 @@ struct pbl_loader_image {
    */
   uint32_t code_offset;
   /**
-   * Entries with bit 0 set name a RISC-V @c lui of an absolute address rather than a slot. The
-   * loader adds the load address, which must be 4 KiB aligned, to its upper immediate; the
-   * lower 12 bits of the address are then those the code was linked with.
+   * Entries with PBL_LOADER_RISCV_HI20_ENTRY set name a RISC-V @c lui of an absolute address rather
+   * than a slot. The loader adds the load address, which must be 4 KiB aligned, to its upper
+   * immediate; the lower 12 bits of the address are then those the code was linked with.
    */
   bool riscv_hi20;
 };

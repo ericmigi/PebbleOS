@@ -94,8 +94,8 @@ static int prv_apply(const struct pbl_loader_image *img, uint8_t *dst, const uin
   for (size_t i = 0; i < img->reloc_count; ++i) {
     uint32_t target;
     memcpy(&target, &table[i * RELOC_ENTRY_SIZE], sizeof(target));
-    if (img->riscv_hi20 && (target & 1U)) {
-      const int ret = prv_apply_hi20(img, dst, i, target & ~1U, base);
+    if (img->riscv_hi20 && (target & PBL_LOADER_RISCV_HI20_ENTRY)) {
+      const int ret = prv_apply_hi20(img, dst, i, target & ~PBL_LOADER_RISCV_HI20_ENTRY, base);
       if (ret < 0) {
         return ret;
       }

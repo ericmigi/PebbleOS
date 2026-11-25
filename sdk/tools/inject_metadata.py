@@ -75,9 +75,10 @@ MAIN_SYMBOL = "main"
 JUMP_TABLE_ADDR_SYMBOL = "pbl_table_addr"
 ABS_RELOC_TYPES = ("R_ARM_ABS32", "R_ARM_TARGET1")
 # riscv32: R_RISCV_32 is a slot to relocate and R_RISCV_HI20 the lui of an absolute address,
-# whose table entry has bit 0 set. The others below need nothing once linked: pc-relative, or
+# whose table entry has bit 31 set (RISCV_HI20_ENTRY). The others below need nothing once linked: pc-relative, or
 # the low 12 bits of an address, which a load address aligned to 4 KiB leaves as they are.
 RISCV_SLOT_RELOC = "R_RISCV_32"
+RISCV_HI20_ENTRY = 1 << 31
 RISCV_HI20_RELOC = "R_RISCV_HI20"
 RISCV_LINKED_RELOCS = (
     "R_RISCV_LO12_I",
@@ -231,7 +232,7 @@ def inject_metadata(
         return addr - code_offset if code_offset and addr >= code_offset else addr
 
     def get_riscv_relocate_entries(elf_file):
-        """The slots and lui instructions to relocate, as image offsets; a lui has bit 0 set."""
+        """The slots and lui instructions to relocate, as image offsets; a lui has bit 31 set."""
         output = (
             Popen([toolchain_prefix + "readelf", "-rW", elf_file], stdout=PIPE)
             .communicate()[0]
@@ -259,18 +260,12 @@ def inject_metadata(
                 continue
             offset = image_offset(int(columns[0], 16))
             if columns[2] == RISCV_SLOT_RELOC:
-                # Bit 0 of an entry marks a lui: a pointer in a packed struct
-                # may be halfword aligned, not at an odd offset.
-                if offset % 2:
-                    raise RuntimeError(
-                        f"pointer at the odd offset 0x{offset:x} cannot be relocated: "
-                        "align it to 2 bytes at least"
-                    )
+                # At any offset: a pointer in a packed struct need not be aligned
                 entries.append(offset)
             elif columns[2] == RISCV_HI20_RELOC:
                 if offset % 2:
                     raise InvalidBinaryError(f"misaligned lui at 0x{offset:x}")
-                entries.append(offset | 1)
+                entries.append(offset | RISCV_HI20_ENTRY)
             elif columns[2] not in RISCV_LINKED_RELOCS:
                 raise RuntimeError(
                     f"{columns[2]} at 0x{offset:x} cannot be relocated when the app is loaded: "

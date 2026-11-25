@@ -241,7 +241,8 @@ void test_loader__forwards_read_errors(void) {
 
 static void prv_add_lui(uint32_t target, uint32_t insn) {
   prv_put32(&s_src[target], insn);
-  prv_put32(&s_src[s_img.reloc_offset + s_img.reloc_count * 4], target | 1U);
+  prv_put32(&s_src[s_img.reloc_offset + s_img.reloc_count * 4],
+            target | PBL_LOADER_RISCV_HI20_ENTRY);
   s_img.reloc_count++;
   s_src_len = s_img.reloc_offset + s_img.reloc_count * 4;
 }
@@ -306,6 +307,18 @@ void test_loader__refuses_a_lui_outside_the_image(void) {
   prv_add_lui(0x20, LUI_A5(0x10000));
 
   cl_assert_equal_i(prv_load(prv_offset_address, &base), -EINVAL);
+}
+
+void test_loader__relocates_odd_slots_with_lui_relocations(void) {
+  uint32_t base = 0x3fcc5000;
+  s_img.riscv_hi20 = true;
+  prv_add_reloc(0x21, 0x30);
+  prv_add_lui(0x28, LUI_A5(0));
+
+  cl_assert_equal_i(prv_load(prv_offset_address, &base), 0);
+
+  cl_assert_equal_i(prv_get32(&s_dst[0x21]), base + 0x30);
+  cl_assert_equal_i(prv_get32(&s_dst[0x28]), LUI_A5(base));
 }
 
 void test_loader__takes_odd_entries_as_slots_without_lui_relocations(void) {
