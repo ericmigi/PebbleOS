@@ -212,8 +212,13 @@ PlatformType process_metadata_get_app_sdk_platform(const PebbleProcessMd *md);
 //! The values of PebblePlatformInfo. They are here rather than beside the struct because that
 //! header is also the SDK's, which has no PBL_BIT().
 typedef enum {
-  PLATFORM_ABI_ARMV7M = 1, //!< Cortex-M3 Thumb, soft float
+  PLATFORM_ABI_ARMV7M = 1,  //!< Cortex-M3 Thumb, soft float
+  PLATFORM_ABI_RISCV32 = 2, //!< RV32IMC, soft float, code PROCESS_RISCV32_CODE_OFFSET above data
 } PebblePlatformAbi;
+
+//! How far above its data a riscv32 binary's code is linked: the ESP32-C3 fetches instructions
+//! from its RAM at this offset from the addresses it reads and writes it at.
+#define PROCESS_RISCV32_CODE_OFFSET 0x700000
 
 //! A reader takes a shape it does not know as one it cannot show.
 typedef enum {
@@ -250,6 +255,16 @@ const PebblePlatformInfo *process_metadata_get_platform_info(const PebbleProcess
 //! Whether resources of this version are ones the process was built with. They are the one pack
 //! it was built with, or any pack of its set if it has one.
 bool process_metadata_resources_match(const PebbleProcessMd *md, const ResourceVersion *version);
+
+//! The ABI of a process's code. A binary without a PebblePlatformInfo is armv7m; the firmware's
+//! own processes are of the CPU it runs on.
+PebblePlatformAbi process_metadata_get_abi(const PebbleProcessMd *md);
+
+//! Whether the CPU runs the process's code as it is, rather than a runtime interpreting it.
+bool process_metadata_runs_natively(const PebbleProcessMd *md);
+
+//! Whether this firmware can run the process's code at all: natively, or interpreted.
+bool process_metadata_abi_supported(const PebbleProcessMd *md);
 
 //! Whether a watch with these features, a bitwise OR of PebblePlatformFeature, has all a process
 //! cannot run without. Only a flexible binary says what it requires.

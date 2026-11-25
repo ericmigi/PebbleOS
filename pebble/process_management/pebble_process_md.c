@@ -311,6 +311,37 @@ bool process_metadata_resources_match(const PebbleProcessMd *md, const ResourceV
   return version->crc == built_with.crc;
 }
 
+PebblePlatformAbi process_metadata_get_abi(const PebbleProcessMd *md) {
+  if (md->process_storage != ProcessStorageFlash) {
+    return (PebblePlatformAbi)CONFIG_PLATFORM_ABI_ID;
+  }
+  const PebblePlatformInfo *platform_info = process_metadata_get_platform_info(md);
+  return platform_info ? (PebblePlatformAbi)platform_info->abi : PLATFORM_ABI_ARMV7M;
+}
+
+bool process_metadata_runs_natively(const PebbleProcessMd *md) {
+  if (md->process_storage != ProcessStorageFlash) {
+    return true;
+  }
+#if defined(CONFIG_CPU_CORTEX_M) || defined(UNITTEST)
+  // The unit tests are of a watch
+  return process_metadata_get_abi(md) == PLATFORM_ABI_ARMV7M;
+#elif defined(CONFIG_APP_NATIVE_RISCV32)
+  return process_metadata_get_abi(md) == PLATFORM_ABI_RISCV32;
+#else
+  return false;
+#endif
+}
+
+bool process_metadata_abi_supported(const PebbleProcessMd *md) {
+#ifdef CONFIG_SAMSA
+  if (process_metadata_get_abi(md) == PLATFORM_ABI_ARMV7M) {
+    return true;
+  }
+#endif
+  return process_metadata_runs_natively(md);
+}
+
 bool process_metadata_has_required_features(const PebbleProcessMd *md, uint32_t features) {
   const PebblePlatformInfo *platform_info = process_metadata_get_platform_info(md);
   // One built for a platform says what that platform has, which is not what it needs

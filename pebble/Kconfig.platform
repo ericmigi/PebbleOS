@@ -38,7 +38,17 @@ config PLATFORM_ABI
     default "armv7m"
     help
       What app binaries are compiled for. armv7m is Cortex-M3 Thumb code
-      with soft float.
+      with soft float. riscv32 is RV32IMC code with soft float, its code
+      linked 0x700000 above its data: the ESP32-C3's instruction-bus window
+      of its RAM.
+
+config PLATFORM_ABI_ID
+    int
+    default 2 if PLATFORM_ABI = "riscv32"
+    default 1
+    help
+      PLATFORM_ABI as PebblePlatformAbi numbers it in binaries and in the
+      version reply.
 
 # Display properties apps are built against. The display hardware may differ;
 # its own properties belong to its driver.
