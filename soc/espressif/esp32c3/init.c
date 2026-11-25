@@ -26,6 +26,9 @@
 // ROM entry points (esp32c3.rom.ld)
 #define ROM_ETS_INSTALL_PUTC1        ((void (*)(void (*)(char)))0x40000044U)
 #define ROM_ETS_UPDATE_CPU_FREQUENCY ((void (*)(uint32_t ticks_per_us))0x40000588U)
+#define ROM_SPIFLASH_CONFIG_CLK      ((int (*)(uint8_t freqdiv, uint8_t spi))0x40000150U)
+#define ROM_CACHE_SUSPEND_ICACHE     ((uint32_t (*)(void))0x40000524U)
+#define ROM_CACHE_RESUME_ICACHE      ((void (*)(uint32_t autoload))0x40000528U)
 
 // Where ESP-IDF's clock init leaves the crystal and APB frequencies for the ROM and the PHY, as
 // a value repeated in both halves
@@ -69,7 +72,7 @@ static void prv_power_latch_hold(void) {
  * The CPU clock the devicetree gives cpu0. The ROM leaves the CPU on the crystal halved, and the
  * PLL running at 480 MHz for the USB PHY, which stays as it is: 80 and 160 MHz only switch the CPU
  * over to it, 40 MHz takes the crystal undivided. The APB clock follows the CPU's up to 80 MHz,
- * and the flash's, from the same, to 20 MHz on the PLL.
+ * and the flash's, from the same, to 20 MHz on the PLL until prv_flash_clock_set().
  */
 static void prv_cpu_clock_set(void) {
 #if CPU_HZ == 80000000U || CPU_HZ == 160000000U
@@ -109,6 +112,20 @@ static void prv_rom_putc(char c) {
 #endif
 }
 
+#if (CPU_HZ == 80000000U || CPU_HZ == 160000000U) && CONFIG_SOC_ESP32C3_FLASH_CLOCK_DIV != 4
+// The clock of the flash the cache fetches through (SPI0), set from RAM with the cache idle, as
+// ESP-IDF's bootloader does
+PBL_SECTION_RAM static void prv_flash_clock_set(void) {
+  uint32_t autoload = ROM_CACHE_SUSPEND_ICACHE();
+
+  ROM_SPIFLASH_CONFIG_CLK(CONFIG_SOC_ESP32C3_FLASH_CLOCK_DIV, 0U);
+  ROM_CACHE_RESUME_ICACHE(autoload);
+}
+#else
+static void prv_flash_clock_set(void) {
+}
+#endif
+
 void pbl_soc_early_init(void) {
 #ifdef CONFIG_SOC_ESP32C3_POWER_LATCH
   prv_power_latch_hold();
@@ -127,6 +144,7 @@ void pbl_soc_early_init(void) {
   pbl_writel(0U, RTC_CNTL(SWD_WPROTECT));
 
   prv_cpu_clock_set();
+  prv_flash_clock_set();
   // Busy waits count CPU cycles
   pbl_cycles_per_sec_set(CPU_HZ);
   // So do the ROM's, ets_delay_us() included, at the rate given here

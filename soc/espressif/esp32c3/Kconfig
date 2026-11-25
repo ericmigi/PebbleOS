@@ -10,3 +10,14 @@ config SOC_ESP32C3_POWER_LATCH
       thing the early init does, before there are devices: a board that
       powers itself from the battery through it stays on once the power
       button is released. The device that owns the pin keeps it high.
+
+config SOC_ESP32C3_FLASH_CLOCK_DIV
+    int "Flash clock divider"
+    range 1 4
+    default 4
+    depends on SOC_ESP32C3
+    help
+      The flash's clock, and so the speed of code and data run in place,
+      is the 80 MHz of the PLL divided by this: 4 is the 20 MHz the boot
+      leaves, 2 is 40 MHz and 1 is 80 MHz. Applies with the CPU on the
+      PLL only.
