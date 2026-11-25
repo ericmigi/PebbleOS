@@ -46,8 +46,8 @@ def enabled(config, key):
 
 
 def max_resources_size(config):
-    if enabled(config, "CONFIG_SOC_ESP32C3"):
-        # The banks of esp32c3-flash-16m.dtsi
+    if enabled(config, "CONFIG_SOC_ESP32C3") or enabled(config, "CONFIG_SOC_ESP32S3"):
+        # The banks of esp32c3-flash-16m.dtsi / esp32s3-flash-16m.dtsi
         return 1536 * BYTES_PER_K
     if enabled(config, "CONFIG_SOC_NRF52"):
         return 1024 * BYTES_PER_K

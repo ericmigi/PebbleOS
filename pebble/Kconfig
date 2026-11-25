@@ -122,7 +122,7 @@ config SCREEN_COLOR_DEPTH_BITS
 
 config FIRMWARE_UPDATE
     bool "Firmware updates from the phone"
-    default n if SOC_ESP32C3
+    default n if SOC_ESP32C3 || SOC_ESP32S3
     default y
     help
       Take a new firmware, recovery firmware or system resources from the

@@ -1,0 +1,66 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: Apache-2.0
+
+// Firmware partitions for a 16 MiB ESP32-S3 flash: code stays inside the
+// first 4 MiB mapped by the boot stub, with 1.5 MiB resource banks for
+// panel-resolution fonts and an 8 MiB filesystem.
+
+partition@0 {
+	label = "code";
+	reg = <0x0 0x280000>;
+};
+
+partition@280000 {
+	label = "safe-firmware";
+	reg = <0x280000 0x80000>;
+};
+
+partition@300000 {
+	label = "system-resources-bank-0";
+	reg = <0x300000 0x180000>;
+};
+
+partition@480000 {
+	label = "system-resources-bank-1";
+	reg = <0x480000 0x180000>;
+};
+
+partition@600000 {
+	label = "scratch";
+	reg = <0x600000 0x180000>;
+};
+
+partition@780000 {
+	label = "filesystem";
+	reg = <0x780000 0x800000>;
+};
+
+partition@f80000 {
+	label = "debug-db";
+	reg = <0xf80000 0x20000>;
+};
+
+partition@fa0000 {
+	label = "mfg-info";
+	reg = <0xfa0000 0x1000>;
+};
+
+partition@fa1000 {
+	label = "mfg-results";
+	reg = <0xfa1000 0x1000>;
+};
+
+partition@fa2000 {
+	label = "mfg-battery-state";
+	reg = <0xfa2000 0x1000>;
+};
+
+partition@fa3000 {
+	label = "tzinfo";
+	reg = <0xfa3000 0x1000>;
+};
+
+partition@fa4000 {
+	label = "shared-prf-storage";
+	reg = <0xfa4000 0x1000>;
+};

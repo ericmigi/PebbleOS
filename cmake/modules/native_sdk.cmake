@@ -39,10 +39,10 @@ for f in files:
     ${sdk_dir}/include/pebble_worker.h
     ${sdk_dir}/include/pebble_worker_sdk_version.h
   )
-  # A host build runs apps with Samsa, as ARM code: it has no toolchain for
-  # the library of another ABI, and no use for it.
+  # A build that runs apps only via Samsa (host or another CPU arch) has no
+  # toolchain for a different platform ABI's shim library, and no use for it.
   set(lib_args "")
-  if(CONFIG_SOC_POSIX AND NOT CONFIG_PLATFORM_ABI STREQUAL "armv7m")
+  if((CONFIG_SOC_POSIX OR CONFIG_CPU_XTENSA) AND NOT CONFIG_PLATFORM_ABI STREQUAL "armv7m")
     set(lib_args --no-shim-lib)
   else()
     list(APPEND outputs ${sdk_dir}/lib/libpebble.a)

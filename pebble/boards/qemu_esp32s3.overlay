@@ -1,0 +1,19 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: Apache-2.0
+
+// xteinkx4's 240x400, twice as large: the whole 480x800 panel.
+&display {
+	width = <240>;
+	height = <400>;
+	scale = <2>;
+};
+
+&flash0 {
+	reg = <0x0 0x1000000>;
+
+	partitions {
+		/delete-node/ partition@0;
+
+#include "esp32s3-flash-16m.dtsi"
+	};
+};
