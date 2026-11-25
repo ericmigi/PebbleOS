@@ -28,6 +28,11 @@
 #define SYSTEM_WIFI_CLK_EN_REG (DR_REG_SYSCON_BASE + 0x014U)
 // Clock bits used by both Wi-Fi and Bluetooth: 0-3, 7-10, 19-23
 #define SYSTEM_WIFI_CLK_WIFI_BT_COMMON_M 0x78078FU
+// Bluetooth baseband (11) and link controller (16, 17) clocks
+#define SYSTEM_BT_BASEBAND_EN PBL_BIT(11)
+#define SYSTEM_BT_LC_EN       (PBL_BIT(16) | PBL_BIT(17))
+// Every radio clock bit, which esp-hal turns on for Bluetooth on the C3 (SYSTEM_WIFI_CLK_EN)
+#define SYSTEM_WIFI_CLK_EN_ALL 0x00FB9FCFU
 // Clock bit of the PHY calibration, 22
 #define SYSTEM_WIFI_CLK_PHY_EN_M 0x400000U
 

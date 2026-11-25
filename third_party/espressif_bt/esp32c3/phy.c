@@ -122,6 +122,10 @@ static void wifi_bt_common_module_disable(void) {
 void periph_bt_module_enable(void) {
   pbl_irq_lock();
   if (s_bt_ref++ == 0) {
+    // ESP-IDF's mask for the BT module is empty on the C3 and leaves these to the boot: a direct
+    // boot leaves them off, and the controller then reads its exchange memory base as 0
+    pbl_modifyl(0, SYSTEM_BT_BASEBAND_EN | SYSTEM_BT_LC_EN | SYSTEM_WIFI_CLK_EN_ALL,
+                SYSTEM_WIFI_CLK_EN_REG);
     pbl_modifyl(BT_MODULE_RST_MASK, 0, SYSTEM_WIFI_RST_EN_REG);
   }
   pbl_irq_unlock();
