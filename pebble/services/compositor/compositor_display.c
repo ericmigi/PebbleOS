@@ -20,6 +20,7 @@
 #include <applib/graphics/gcolor_definitions.h>
 #include <applib/graphics/gtypes.h>
 #include <kernel/events.h>
+#include <kernel/pebble_tasks.h>
 
 #ifdef CONFIG_TEXT_DETAIL
 #include <pbl/services/evented_timer.h>
@@ -170,11 +171,13 @@ static void prv_flush_finish(void *data) {
   }
 }
 
-// The display reports from its interrupt, or synchronously from compositor_display_update()
+// The display reports synchronously from compositor_display_update(), or from its interrupt or
+// a thread of its own, which hand the end to KernelMain
 static void prv_flush_done(int status, void *arg) {
   void *data = (status == 0) ? nullptr : (void *)1;
+  const bool isr = pbl_in_isr();
 
-  if (!pbl_in_isr()) {
+  if (!isr && pebble_task_get_current() == PebbleTask_KernelMain) {
     prv_flush_finish(data);
     return;
   }
@@ -187,7 +190,11 @@ static void prv_flush_done(int status, void *arg) {
     },
   };
 
-  event_put_isr(&e);
+  if (isr) {
+    event_put_isr(&e);
+  } else {
+    event_put(&e);
+  }
 }
 
 void compositor_display_init(void) {
