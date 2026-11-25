@@ -1,0 +1,133 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+
+/dts-v1/;
+
+// Xteink X4 Pro e-reader: ESP32-S3 (16 MiB flash, 8 MiB octal PSRAM), 800x480 SSD1677 e-paper,
+// digital buttons, GT911 touch, dual PWM frontlight, CW2017 fuel gauge, BM8563 RTC.
+// Hardware pinout confirmed by CrossPoint / FreeInk (MIT).
+//
+// Peripherals wired on the board awaiting drivers:
+//   - I2C0 (SDA=GPIO39, SCL=GPIO38, 400 kHz): GT911 touch @0x5D (INT=GPIO10, RST=GPIO4,
+//     power=GPIO2 active-LOW), CW2017 fuel gauge @0x63, BM8563 RTC @0x51
+//   - Dual PWM frontlight (LEDC 25 kHz / 10-bit, active-HIGH): Cool=GPIO8, Warm=GPIO9
+//   - Charger STAT: GPIO21 (active-HIGH)
+//   - SDMMC 1-bit: CLK=GPIO41, CMD=GPIO42, D0=GPIO40, power=GPIO5 (active-LOW)
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/pinctrl/esp32s3-pinctrl.h>
+
+#include "espressif/esp32s3.dtsi"
+
+/ {
+	model = "Xteink X4 Pro";
+	compatible = "xteink,x4-pro", "esp,esp32s3";
+
+	chosen {
+		stdout-path = &usb_serial_jtag;
+	};
+
+	// Master peripheral rail / power latch: driven HIGH from reset
+	power_latch: regulator-latch {
+		compatible = "regulator-fixed";
+		regulator-name = "latch";
+		gpios = <&gpio 1 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-always-on;
+	};
+
+	// GT911 touch controller power rail: active-LOW enable on GPIO2
+	touch_power: regulator-touch {
+		compatible = "regulator-fixed";
+		regulator-name = "touch-power";
+		gpios = <&gpio 2 GPIO_ACTIVE_LOW>;
+		regulator-always-on;
+	};
+
+	// Hardware-confirmed active-low digital keys (Left=GPIO0, Right=GPIO7, Power=GPIO3)
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		button-up {
+			label = "Up";
+			gpios = <&gpio 0 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			linux,code = <KEY_UP>;
+			debounce-interval = <20>;
+		};
+
+		button-down {
+			label = "Down";
+			gpios = <&gpio 7 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			linux,code = <KEY_DOWN>;
+			debounce-interval = <20>;
+		};
+
+		button-power {
+			label = "Power";
+			gpios = <&gpio 3 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			linux,code = <KEY_POWER>;
+			debounce-interval = <20>;
+		};
+	};
+
+	flash0: flash@0 {
+		compatible = "esp,esp32s3-flash";
+		reg = <0x0 0x1000000>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "code";
+				reg = <0x0 0x400000>;
+			};
+		};
+	};
+};
+
+&gpio {
+	status = "okay";
+};
+
+&usb_serial_jtag {
+	status = "okay";
+};
+
+&io_mux {
+	spi2_default: spi2-default-state {
+		// Write-only SSD1677 bus: SCLK=GPIO12, MOSI=GPIO11
+		out-pins {
+			pinmux = <ESP32S3_PINMUX(12, ESP32S3_NOSIG, ESP32S3_SIG_FSPICLK)>,
+				 <ESP32S3_PINMUX(11, ESP32S3_NOSIG, ESP32S3_SIG_FSPID)>;
+		};
+	};
+};
+
+&spi2 {
+	pinctrl-0 = <&spi2_default>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpio 13 GPIO_ACTIVE_LOW>;
+	status = "okay";
+
+	display: display@0 {
+		compatible = "solomon,ssd1677";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+		dc-gpios = <&gpio 18 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio 14 GPIO_ACTIVE_LOW>;
+		busy-gpios = <&gpio 6 GPIO_ACTIVE_HIGH>;
+		width = <480>;
+		height = <800>;
+		panel-width = <480>;
+		panel-height = <800>;
+		rotation = <270>;
+		fast-frames = <3>;
+		fast-differential;
+		topup-frames = <10>;
+		full-refresh-on-idle;
+		power-off-idle-ms = <15000>;
+	};
+};

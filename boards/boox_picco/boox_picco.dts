@@ -1,0 +1,141 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+
+/dts-v1/;
+
+// Boox Picco e-reader: ESP32-S3 (16 MiB flash, 8 MiB octal PSRAM), 800x480 SSD1677 e-paper,
+// digital buttons, TMA525C touch, I2C dual frontlight, SGM41562 charger, PCF8563 RTC, QMI8658 IMU.
+// Hardware pinout confirmed by CrossPoint / FreeInk (MIT).
+//
+// Peripherals wired on the board awaiting drivers:
+//   - I2C0 (SDA=GPIO7, SCL=GPIO8, 400 kHz): TMA525C touch @0x24 (INT=GPIO11, RST=GPIO10),
+//     PiccoDualLed frontlight @0x38, SGM41562 charger @0x03, PCF8563 RTC @0x51,
+//     QMI8658 6-axis IMU @0x6A
+//   - Battery ADC: GPIO1 (ADC1, x2 resistor divider)
+//   - Slide switch: GPIO6
+//   - SDMMC 4-bit: CLK=GPIO41, CMD=GPIO42, D0=GPIO40, D1=GPIO39, D2=GPIO44, D3=GPIO43, CD=GPIO38
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/pinctrl/esp32s3-pinctrl.h>
+
+#include "espressif/esp32s3.dtsi"
+
+/ {
+	model = "Boox Picco";
+	compatible = "onyx,boox-picco", "esp,esp32s3";
+
+	chosen {
+		stdout-path = &usb_serial_jtag;
+	};
+
+	// Master power latch: driven HIGH from reset
+	power_latch: regulator-latch {
+		compatible = "regulator-fixed";
+		regulator-name = "latch";
+		gpios = <&gpio 4 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-always-on;
+	};
+
+	// Peripheral power rail: active-LOW enable on GPIO0
+	periph_rail: regulator-periph {
+		compatible = "regulator-fixed";
+		regulator-name = "periph-rail";
+		gpios = <&gpio 0 GPIO_ACTIVE_LOW>;
+		regulator-always-on;
+	};
+
+	// Active-low digital keys (Up=GPIO21, Down=GPIO9, Confirm=GPIO5, Power=GPIO2)
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		button-up {
+			label = "Up";
+			gpios = <&gpio 21 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			linux,code = <KEY_UP>;
+			debounce-interval = <20>;
+		};
+
+		button-down {
+			label = "Down";
+			gpios = <&gpio 9 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			linux,code = <KEY_DOWN>;
+			debounce-interval = <20>;
+		};
+
+		button-confirm {
+			label = "Confirm";
+			gpios = <&gpio 5 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			linux,code = <KEY_SELECT>;
+			debounce-interval = <20>;
+		};
+
+		button-power {
+			label = "Power";
+			gpios = <&gpio 2 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			linux,code = <KEY_POWER>;
+			debounce-interval = <20>;
+		};
+	};
+
+	flash0: flash@0 {
+		compatible = "esp,esp32s3-flash";
+		reg = <0x0 0x1000000>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "code";
+				reg = <0x0 0x400000>;
+			};
+		};
+	};
+};
+
+&gpio {
+	status = "okay";
+};
+
+&usb_serial_jtag {
+	status = "okay";
+};
+
+&io_mux {
+	spi2_default: spi2-default-state {
+		// Write-only SSD1677 bus: SCLK=GPIO48, MOSI=GPIO47
+		out-pins {
+			pinmux = <ESP32S3_PINMUX(48, ESP32S3_NOSIG, ESP32S3_SIG_FSPICLK)>,
+				 <ESP32S3_PINMUX(47, ESP32S3_NOSIG, ESP32S3_SIG_FSPID)>;
+		};
+	};
+};
+
+&spi2 {
+	pinctrl-0 = <&spi2_default>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpio 18 GPIO_ACTIVE_LOW>;
+	status = "okay";
+
+	display: display@0 {
+		compatible = "solomon,ssd1677";
+		reg = <0>;
+		spi-max-frequency = <20000000>;
+		dc-gpios = <&gpio 17 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio 16 GPIO_ACTIVE_LOW>;
+		busy-gpios = <&gpio 15 GPIO_ACTIVE_HIGH>;
+		width = <480>;
+		height = <800>;
+		panel-width = <480>;
+		panel-height = <800>;
+		rotation = <270>;
+		fast-frames = <3>;
+		fast-differential;
+		topup-frames = <10>;
+		full-refresh-on-idle;
+		power-off-idle-ms = <15000>;
+	};
+};
