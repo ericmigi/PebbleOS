@@ -3,6 +3,10 @@
 
 #include "app.h"
 
+#ifdef CONFIG_TEXT_DETAIL
+#include <applib/graphics/text_detail.h>
+#endif
+
 #include <pbl/logging/logging.h>
 #include <pbl/mcu/fpu.h>
 #include <pbl/profiler/profiler.h>
@@ -21,6 +25,10 @@ PBL_PROFILER_NODE_DEFINE(render_app);
 static void prv_render_app(void) {
   WindowStack *stack = app_state_get_window_stack();
   GContext *ctx = app_state_get_graphics_context();
+#ifdef CONFIG_TEXT_DETAIL
+  // The frame is drawn whole, its text edges with it
+  sys_text_detail_app_frame_begin();
+#endif
   if (!window_stack_is_animating(stack)) {
     PBL_PROFILER_NODE_START(render_app);
     window_render(app_window_stack_get_top_window(), ctx);
@@ -97,6 +105,9 @@ static void prv_app_will_focus_handler(PebbleEvent *e, void *context) {
       window_became_input_focus(window);
       // Do not call 'appear' handler on window displacing modal window
       window_set_on_screen(window, true, false);
+#ifdef CONFIG_TEXT_DETAIL
+      sys_text_detail_app_frame_begin();
+#endif
       window_render(window, app_state_get_graphics_context());
     }
   } else if (window) {

@@ -41,4 +41,18 @@ void compositor_app_framebuffer_fill_callback(GContext *ctx, int16_t y, Fixed_S1
                                               Fixed_S16_3 x_range_end, Fixed_S16_3 delta_begin,
                                               Fixed_S16_3 delta_end, void *user_data);
 
+#ifdef CONFIG_TEXT_DETAIL
+#include <applib/graphics/text_detail.h>
+
+/**
+ * @brief Which text detail records the frame on the display shows.
+ *
+ * @param frame Filled in.
+ */
+void compositor_get_text_detail_frame(TextDetailFrame *frame);
+
+/** @brief Send the whole frame to the display again, e.g. after a change of text mode. */
+void compositor_redraw(void);
+#endif
+
 /** @} */
