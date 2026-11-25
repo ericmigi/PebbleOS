@@ -107,6 +107,14 @@ pbl_clar_test(test_battery_monitor
   OVERRIDES dummy_board
 )
 
+pbl_clar_test(test_battery_curve_xteinkx4
+  SOURCES
+    pebble/services/battery/voltage/battery_curve.c
+  DEFINES CONFIG_PLATFORM_XTEINKX4=1 CONFIG_SERVICE_BATTERY_LOW_POWER_PERCENT=2
+    CONFIG_SERVICE_BATTERY_CAPACITY_HOURS=144
+  OVERRIDES dummy_board
+)
+
 pbl_clar_test(test_alerts
   MODULES settings
   SOURCES
