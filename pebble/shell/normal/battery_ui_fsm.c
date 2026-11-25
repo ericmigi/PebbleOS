@@ -56,10 +56,9 @@ static void prv_display_fully_charged(void *data);
 static void prv_dismiss_fully_charged(void);
 
 static const BatteryUIState ui_states[] = {
+  // Fully charged only after charging: plugged in and full at boot shows nothing
   [BatteryGood] =
-      {.next_state =
-           {BatteryWarning, BatteryLowPower, BatteryCritical, BatteryCharging,
-            BatteryFullyCharged}},
+      {.next_state = {BatteryWarning, BatteryLowPower, BatteryCritical, BatteryCharging}},
   [BatteryWarning] =
       {.enter = prv_display_warning,
        .exit = prv_dismiss_warning,

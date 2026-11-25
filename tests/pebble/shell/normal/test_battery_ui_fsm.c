@@ -312,6 +312,17 @@ void test_battery_ui_fsm__honor_dnd(void) {
   cl_assert_equal_i(vibes_short_pulse_fake.call_count, 2);
 }
 
+void test_battery_ui_fsm__no_fully_charged_at_boot(void) {
+  // Plugged in and full, not charging, as the first state: no modal
+  prv_change_state(prv_make_state(100, false, true));
+  cl_assert(!s_modal_onscreen);
+
+  // Charging, then full: the modal comes
+  prv_change_state(prv_make_state(99, true, true));
+  prv_change_state(prv_make_state(100, false, true));
+  cl_assert(s_modal_onscreen && !s_modal_charging);
+}
+
 void test_battery_ui_fsm__no_vibe_complete(void) {
   PreciseBatteryChargeState charging = prv_make_state(50, true, true),
                             fully_charged = prv_make_state(100, false, true);
