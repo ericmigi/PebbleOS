@@ -235,3 +235,83 @@ void test_loader__forwards_read_errors(void) {
   cl_assert_equal_i(pbl_loader_relocate(&s_img, &s_source, s_dst, sizeof(s_dst), nullptr, nullptr),
                     -EIO);
 }
+
+#define CODE_OFFSET 0x700000U
+#define LUI_A5(hi)  (((uint32_t)(hi) & 0xFFFFF000U) | (15U << 7) | 0x37U)
+
+static void prv_add_lui(uint32_t target, uint32_t insn) {
+  prv_put32(&s_src[target], insn);
+  prv_put32(&s_src[s_img.reloc_offset + s_img.reloc_count * 4], target | 1U);
+  s_img.reloc_count++;
+  s_src_len = s_img.reloc_offset + s_img.reloc_count * 4;
+}
+
+void test_loader__relocates_code_values_by_the_same_load_address(void) {
+  uint32_t base = 0x3fcc5000;
+  s_img.code_offset = CODE_OFFSET;
+  prv_add_reloc(0x20, 0x30);
+  prv_add_reloc(0x24, CODE_OFFSET + 0x18);
+
+  cl_assert_equal_i(prv_load(prv_offset_address, &base), 0);
+
+  cl_assert_equal_i(prv_get32(&s_dst[0x20]), base + 0x30);
+  cl_assert_equal_i(prv_get32(&s_dst[0x24]), base + CODE_OFFSET + 0x18);
+}
+
+void test_loader__refuses_code_values_without_a_code_offset(void) {
+  prv_add_reloc(0x20, CODE_OFFSET + 0x18);
+
+  cl_assert_equal_i(prv_load(nullptr, nullptr), -EINVAL);
+}
+
+void test_loader__refuses_a_code_value_past_mem_size(void) {
+  s_img.code_offset = CODE_OFFSET;
+  prv_add_reloc(0x20, CODE_OFFSET + MEM_SIZE + 1);
+
+  cl_assert_equal_i(prv_load(nullptr, nullptr), -EINVAL);
+}
+
+void test_loader__adds_the_load_address_to_a_lui(void) {
+  uint32_t base = 0x3fcc5000;
+  s_img.code_offset = CODE_OFFSET;
+  s_img.riscv_hi20 = true;
+  prv_add_lui(0x22, LUI_A5(0));
+  prv_add_lui(0x28, LUI_A5(CODE_OFFSET));
+
+  cl_assert_equal_i(prv_load(prv_offset_address, &base), 0);
+
+  cl_assert_equal_i(prv_get32(&s_dst[0x22]), LUI_A5(base));
+  cl_assert_equal_i(prv_get32(&s_dst[0x28]), LUI_A5(base + CODE_OFFSET));
+}
+
+void test_loader__refuses_a_lui_at_an_unaligned_load_address(void) {
+  uint32_t base = 0x3fcc4800;
+  s_img.riscv_hi20 = true;
+  prv_add_lui(0x20, LUI_A5(0));
+
+  cl_assert_equal_i(prv_load(prv_offset_address, &base), -EINVAL);
+}
+
+void test_loader__refuses_a_lui_entry_that_is_no_lui(void) {
+  uint32_t base = 0x3fcc5000;
+  s_img.riscv_hi20 = true;
+  prv_add_lui(0x20, 0x00000013); // nop
+
+  cl_assert_equal_i(prv_load(prv_offset_address, &base), -EINVAL);
+}
+
+void test_loader__refuses_a_lui_outside_the_image(void) {
+  uint32_t base = 0x3fcc5000;
+  s_img.riscv_hi20 = true;
+  prv_add_lui(0x20, LUI_A5(0x10000));
+
+  cl_assert_equal_i(prv_load(prv_offset_address, &base), -EINVAL);
+}
+
+void test_loader__takes_odd_entries_as_slots_without_lui_relocations(void) {
+  prv_add_reloc(0x21, 0x30);
+
+  cl_assert_equal_i(prv_load(nullptr, nullptr), 0);
+
+  cl_assert_equal_i(prv_get32(&s_dst[0x21]), (uint32_t)(uintptr_t)&s_dst[0x30]);
+}

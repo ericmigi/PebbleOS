@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -75,6 +76,19 @@ struct pbl_loader_image {
   size_t reloc_offset;
   /** Number of relocation table entries. */
   size_t reloc_count;
+  /**
+   * How far above the image its code is linked, or 0 if code and data are linked together. A
+   * slot value from it to it plus the memory size is the address of code, which the loader
+   * relocates by the same load address, so the code is reached at that offset from where it was
+   * loaded.
+   */
+  uint32_t code_offset;
+  /**
+   * Entries with bit 0 set name a RISC-V @c lui of an absolute address rather than a slot. The
+   * loader adds the load address, which must be 4 KiB aligned, to its upper immediate; the
+   * lower 12 bits of the address are then those the code was linked with.
+   */
+  bool riscv_hi20;
 };
 
 /**
@@ -105,7 +119,8 @@ int pbl_loader_copy(const struct pbl_loader_image *img, const struct pbl_loader_
  * @param address Address translation, or @c nullptr to relocate to @p dst itself.
  * @param ctx Context passed to @p address.
  * @retval 0 Success.
- * @retval -EINVAL The layout is inconsistent, or an entry or slot points outside the image.
+ * @retval -EINVAL The layout is inconsistent, an entry or slot points outside the image, or a
+ *         @c lui entry is not one or the load address is not 4 KiB aligned.
  * @retval -ENOMEM The relocation table does not fit in @p dst.
  * @return Other negative errno values from the source.
  */

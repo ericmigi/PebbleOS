@@ -51,11 +51,56 @@ int pbl_loader_copy(const struct pbl_loader_image *img, const struct pbl_loader_
   return 0;
 }
 
+//! Whether a value linked into the image is an address in it: of data, or of its code at
+//! code_offset. One past the end is a valid pointer, it is just never dereferenced.
+static bool prv_value_in_image(const struct pbl_loader_image *img, uint32_t value) {
+  return (value <= img->mem_size) || ((img->code_offset != 0) && (value >= img->code_offset) &&
+                                      (value - img->code_offset <= img->mem_size));
+}
+
+#define RISCV_OPCODE_MASK 0x7FU
+#define RISCV_OPCODE_LUI  0x37U
+#define RISCV_HI20_MASK   0xFFFFF000U
+//! How far the upper part of an address is from it at most, for its signed lower 12 bits
+#define RISCV_HI20_ROUND 0x800U
+
+static int prv_apply_hi20(const struct pbl_loader_image *img, uint8_t *dst, size_t i,
+                          uint32_t target, uint32_t base) {
+  uint32_t insn;
+  if (!prv_range_fits(target, sizeof(insn), img->file_size) || (target < img->header_size)) {
+    PBL_LOG_WRN("Invalid relocation target[%zu]: 0x%" PRIx32, i, target);
+    return -EINVAL;
+  }
+  memcpy(&insn, &dst[target], sizeof(insn));
+  const uint32_t hi = insn & RISCV_HI20_MASK;
+  if (((insn & RISCV_OPCODE_MASK) != RISCV_OPCODE_LUI) ||
+      !(prv_value_in_image(img, hi) || prv_value_in_image(img, hi - RISCV_HI20_ROUND) ||
+        prv_value_in_image(img, hi + RISCV_HI20_ROUND))) {
+    PBL_LOG_WRN("Invalid lui relocation[%zu]: 0x%" PRIx32, i, insn);
+    return -EINVAL;
+  }
+  if (base & ~RISCV_HI20_MASK) {
+    PBL_LOG_WRN("lui relocations need a 4 KiB aligned load address, not 0x%" PRIx32, base);
+    return -EINVAL;
+  }
+  insn += base;
+  memcpy(&dst[target], &insn, sizeof(insn));
+  return 0;
+}
+
 static int prv_apply(const struct pbl_loader_image *img, uint8_t *dst, const uint8_t *table,
                      pbl_loader_address_t address, void *ctx) {
+  const uint32_t base = address ? address(ctx, dst) : (uint32_t)(uintptr_t)dst;
   for (size_t i = 0; i < img->reloc_count; ++i) {
     uint32_t target;
     memcpy(&target, &table[i * RELOC_ENTRY_SIZE], sizeof(target));
+    if (img->riscv_hi20 && (target & 1U)) {
+      const int ret = prv_apply_hi20(img, dst, i, target & ~1U, base);
+      if (ret < 0) {
+        return ret;
+      }
+      continue;
+    }
     if (!prv_range_fits(target, sizeof(uint32_t), img->file_size) || (target < img->header_size)) {
       PBL_LOG_WRN("Invalid relocation target[%zu]: 0x%" PRIx32, i, target);
       return -EINVAL;
@@ -63,14 +108,15 @@ static int prv_apply(const struct pbl_loader_image *img, uint8_t *dst, const uin
 
     uint32_t value;
     memcpy(&value, &dst[target], sizeof(value));
-    // One past the end of the image is a valid pointer, it is just never dereferenced
-    if (value > img->mem_size) {
+    if (!prv_value_in_image(img, value)) {
       PBL_LOG_WRN("Invalid relocation value[%zu]: 0x%" PRIx32, i, value);
       return -EINVAL;
     }
 
     const uint32_t relocated =
-        address ? address(ctx, &dst[value]) : (uint32_t)(uintptr_t)&dst[value];
+        (value <= img->mem_size)
+            ? (address ? address(ctx, &dst[value]) : (uint32_t)(uintptr_t)&dst[value])
+            : base + value;
     memcpy(&dst[target], &relocated, sizeof(relocated));
   }
 
