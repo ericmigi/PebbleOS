@@ -8,6 +8,12 @@ config SERVICE_BOOT_SPLASH
 
 if SERVICE_BOOT_SPLASH
 
+config SERVICE_BOOT_SPLASH_POWER_OFF
+    bool "Logo on power-off"
+    help
+      Draw the logo before the display is disabled at power-off, for a
+      panel that keeps its image unpowered, e.g. e-paper.
+
 config SERVICE_BOOT_SPLASH_THREAD_STACK_SIZE
     int "Boot splash thread stack size in bytes"
     default 2048
