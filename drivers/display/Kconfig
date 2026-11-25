@@ -135,6 +135,15 @@ config DISPLAY_SDL_MONO
     help
       The SDL display takes a 1-bit framebuffer, 8-bit color otherwise.
 
+config DISPLAY_SDL_PANEL_SCALE
+    int "SDL panel pixels per display pixel"
+    range 1 2
+    default 1
+    help
+      Show each display pixel as this many panel pixels in each
+      direction, as a panel driven at twice the display's resolution
+      does; at 2 the window also shows text detail at panel resolution.
+
 config DISPLAY_SDL_ROUND
     bool "SDL display is round"
     help
