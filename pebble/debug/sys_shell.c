@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include <pbl/kernel/compiler.h>
+#include <pbl/kernel/debug.h>
 #include <pbl/kernel/delay.h>
 #include <pbl/kernel/fatal.h>
 #include <pbl/kernel/irq.h>
@@ -238,6 +239,23 @@ static int prv_cmd_mpu(const struct pbl_shell *sh, size_t argc, char **argv) {
 }
 
 PBL_SHELL_SUBCMD_ADD(sub_sys, mpu, nullptr, "Dump the MPU regions", prv_cmd_mpu, 0, 0);
+
+static int prv_cmd_stacks(const struct pbl_shell *sh, size_t argc, char **argv) {
+  static struct pbl_thread_stats s_stats[CONFIG_KERNEL_MAX_THREADS];
+  size_t count = pbl_thread_stats_snapshot(s_stats, PBL_ARRAY_SIZE(s_stats), nullptr);
+
+  for (size_t i = 0; i < count; i++) {
+    size_t size = s_stats[i].thread->stack_size;
+
+    pbl_shell_print(sh, "%-12s %5u of %5u bytes never used (%u %%)", s_stats[i].name,
+                    (unsigned int)s_stats[i].stack_high_water, (unsigned int)size,
+                    (unsigned int)(s_stats[i].stack_high_water * 100U / size));
+  }
+  return 0;
+}
+
+PBL_SHELL_SUBCMD_ADD(sub_sys, stacks, nullptr,
+                     "Show how much of each thread's stack was never used", prv_cmd_stacks, 0, 0);
 PBL_SHELL_SUBCMD_ADD(sub_sys, reset, nullptr, "Reset the system", prv_cmd_reset, 0, 0);
 PBL_SHELL_SUBCMD_ADD(sub_sys, poweroff, nullptr, "Power the system off", prv_cmd_poweroff, 0, 0);
 PBL_SHELL_SUBCMD_ADD(sub_sys, powercut, nullptr, "Cut the power of the system", prv_cmd_powercut, 0,
