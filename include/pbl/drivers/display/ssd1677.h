@@ -248,54 +248,79 @@ extern const struct pbl_display_ops pbl_display_ssd1677_ops;
 #endif
 #define SSD1677_DETAIL(_scale) (SSD1677_COPY && (_scale) == 2 && SSD1677_DETAIL_CELLS > 0)
 
-#define PBL_DISPLAY_SSD1677_DEFINE(                                                               \
-    sym, _name, _bus, _cs, _max_hz, _mode, _dc, _reset, _busy, _width, _height, _panel_width,     \
-    _panel_height, _scale, _rotation, _full_interval, _fast_frames, _fast_differential,           \
-    _fast_frame_rate, _vsh1, _vsh2, _vsl, _topup_frames, _full_on_idle, _idle_ms, _power_off_ms)  \
-  static_assert((_rotation) % 90 == 0 && (_rotation) < 360, "rotation of 0, 90, 180 or 270");     \
-  static_assert((_scale) >= 1 && (_width) * (_scale) <= (_panel_width) &&                         \
-                    (_height) * (_scale) <= (_panel_height),                                      \
-                "scaled framebuffer larger than the panel");                                      \
-  static_assert(SSD1677_SCAN_WIDTH(_panel_width, _panel_height, _rotation) % 8 == 0,              \
-                "controller rows of whole bytes");                                                \
-  static_assert((_fast_frames) <= 255 && (_topup_frames) <= 255, "phases of up to 255 frames");   \
-  static struct pbl_display_ssd1677_state sym##_state;                                            \
-  static uint8_t sym##_shadow[SSD1677_COPY ? ((_width) + 7) / 8 * (_height) : 1];                 \
-  static int16_t sym##_along[SSD1677_SCAN_WIDTH(_panel_width, _panel_height, _rotation)];         \
-  static uint8_t                                                                                  \
-      sym##_touched[SSD1677_COPY && (_topup_frames) != 0 ? ((_width) + 7) / 8 * (_height) : 1];   \
-  static uint32_t sym##_row_crc[SSD1677_COPY ? 1 : (_height)];                                    \
-  static uint8_t sym##_touched_rows[SSD1677_COPY ? 1 : ((_height) + 7) / 8];                      \
-  static uint8_t sym##_unsynced_rows[SSD1677_COPY ? 1 : ((_height) + 7) / 8];                     \
-  static uint8_t sym##_line[(_width) > (_height) ? (_width) : (_height)];                         \
-  static uint8_t sym##_row[SSD1677_SCAN_WIDTH(_panel_width, _panel_height, _rotation) / 8 *       \
-                           SSD1677_ROWS_PER_WRITE];                                               \
-  static_assert(!SSD1677_DETAIL(_scale) || (_width) <= 256, "cell columns of a byte");            \
-  static struct pbl_display_ssd1677_cell                                                          \
-      sym##_cells[SSD1677_DETAIL(_scale) ? SSD1677_DETAIL_CELLS : 1];                             \
-  static uint16_t sym##_cell_start[SSD1677_DETAIL(_scale) ? (_height) + 1 : 1];                   \
-  static uint16_t sym##_cursor[SSD1677_DETAIL(_scale) ? (_height) : 1];                           \
-  static uint8_t sym##_cellbuf[SSD1677_DETAIL(_scale) ? (_width) : 1];                            \
-  static uint8_t sym##_grey_rows[SSD1677_DETAIL(_scale) ? ((_height) + 7) / 8 : 1];               \
-  PBL_DISPLAY_STATE_DEFINE(sym);                                                                  \
-  PBL_DEVICE_INSTANCE(sym, struct pbl_display_ssd1677, struct pbl_display, disp) {                \
-    .disp = PBL_DISPLAY_INIT(sym, _name, nullptr, &pbl_display_ssd1677_ops, _width, _height,      \
-                             PBL_DISPLAY_FORMAT_MONO, (_rotation) >= 180),                        \
-    .state = &sym##_state, .spi = PBL_SPI_DEV(_bus, _cs, _max_hz, _mode), .dc = _dc,              \
-    .reset = _reset, .busy = _busy, .shadow = SSD1677_COPY ? sym##_shadow : nullptr,              \
-    .along = sym##_along, .row = sym##_row, .line = sym##_line,                                   \
-    .cells = SSD1677_DETAIL(_scale) ? sym##_cells : nullptr, .cell_start = sym##_cell_start,      \
-    .cursor = sym##_cursor, .cellbuf = sym##_cellbuf, .grey_rows = sym##_grey_rows,               \
-    .cell_cap = SSD1677_DETAIL(_scale) ? SSD1677_DETAIL_CELLS : 0,                                \
-    .touched = SSD1677_COPY && (_topup_frames) != 0 ? sym##_touched : nullptr,                    \
-    .row_crc = SSD1677_COPY ? nullptr : sym##_row_crc,                                            \
-    .touched_rows = SSD1677_COPY || (_topup_frames) == 0 ? nullptr : sym##_touched_rows,          \
-    .unsynced_rows = sym##_unsynced_rows, .panel_width = (_panel_width),                          \
-    .panel_height = (_panel_height), .scale = (_scale), .quarter = ((_rotation) % 180) != 0,      \
-    .full_interval = (_full_interval), .fast_frames = (_fast_frames),                             \
-    .fast_differential = (_fast_differential) != 0, .fast_frame_rate = (_fast_frame_rate),        \
-    .source = {(_vsh1), (_vsh2), (_vsl)}, .topup_frames = (_topup_frames),                        \
-    .full_on_idle = (_full_on_idle) != 0, .idle_ms = (_idle_ms), .power_off_ms = (_power_off_ms), \
+// Width, height and scale as the devicetree describes them, before PBL_DISPLAY_FRAMEBUFFER_SCALE
+#define PBL_SSD1677_FB(_n) ((_n) * PBL_DISPLAY_FRAMEBUFFER_SCALE)
+#define PBL_DISPLAY_SSD1677_DEFINE(                                                                \
+    sym, _name, _bus, _cs, _max_hz, _mode, _dc, _reset, _busy, _width, _height, _panel_width,      \
+    _panel_height, _scale, _rotation, _full_interval, _fast_frames, _fast_differential,            \
+    _fast_frame_rate, _vsh1, _vsh2, _vsl, _topup_frames, _full_on_idle, _idle_ms, _power_off_ms)   \
+  static_assert((_scale) % PBL_DISPLAY_FRAMEBUFFER_SCALE == 0,                                     \
+                "scale not a multiple of the framebuffer's");                                      \
+  static_assert((_rotation) % 90 == 0 && (_rotation) < 360, "rotation of 0, 90, 180 or 270");      \
+  static_assert(                                                                                   \
+      ((_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE) >= 1 &&                                           \
+          PBL_SSD1677_FB(_width) * ((_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE) <= (_panel_width) && \
+          PBL_SSD1677_FB(_height) * ((_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE) <= (_panel_height), \
+      "scaled framebuffer larger than the panel");                                                 \
+  static_assert(SSD1677_SCAN_WIDTH(_panel_width, _panel_height, _rotation) % 8 == 0,               \
+                "controller rows of whole bytes");                                                 \
+  static_assert((_fast_frames) <= 255 && (_topup_frames) <= 255, "phases of up to 255 frames");    \
+  static struct pbl_display_ssd1677_state sym##_state;                                             \
+  static uint8_t                                                                                   \
+      sym##_shadow[SSD1677_COPY ? (PBL_SSD1677_FB(_width) + 7) / 8 * PBL_SSD1677_FB(_height) : 1]; \
+  static int16_t sym##_along[SSD1677_SCAN_WIDTH(_panel_width, _panel_height, _rotation)];          \
+  static uint8_t sym##_touched[SSD1677_COPY && (_topup_frames) != 0                                \
+                                   ? (PBL_SSD1677_FB(_width) + 7) / 8 * PBL_SSD1677_FB(_height)    \
+                                   : 1];                                                           \
+  static uint32_t sym##_row_crc[SSD1677_COPY ? 1 : PBL_SSD1677_FB(_height)];                       \
+  static uint8_t sym##_touched_rows[SSD1677_COPY ? 1 : (PBL_SSD1677_FB(_height) + 7) / 8];         \
+  static uint8_t sym##_unsynced_rows[SSD1677_COPY ? 1 : (PBL_SSD1677_FB(_height) + 7) / 8];        \
+  static uint8_t sym##_line[PBL_SSD1677_FB(_width) > PBL_SSD1677_FB(_height)                       \
+                                ? PBL_SSD1677_FB(_width)                                           \
+                                : PBL_SSD1677_FB(_height)];                                        \
+  static uint8_t sym##_row[SSD1677_SCAN_WIDTH(_panel_width, _panel_height, _rotation) / 8 *        \
+                           SSD1677_ROWS_PER_WRITE];                                                \
+  static_assert(                                                                                   \
+      !SSD1677_DETAIL((_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE) || PBL_SSD1677_FB(_width) <= 256,  \
+      "cell columns of a byte");                                                                   \
+  static struct pbl_display_ssd1677_cell                                                           \
+      sym##_cells[SSD1677_DETAIL((_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE) ? SSD1677_DETAIL_CELLS  \
+                                                                           : 1];                   \
+  static uint16_t sym##_cell_start[SSD1677_DETAIL((_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE)        \
+                                       ? PBL_SSD1677_FB(_height) + 1                               \
+                                       : 1];                                                       \
+  static uint16_t sym##_cursor[SSD1677_DETAIL((_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE)            \
+                                   ? PBL_SSD1677_FB(_height)                                       \
+                                   : 1];                                                           \
+  static uint8_t sym##_cellbuf[SSD1677_DETAIL((_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE)            \
+                                   ? PBL_SSD1677_FB(_width)                                        \
+                                   : 1];                                                           \
+  static uint8_t sym##_grey_rows[SSD1677_DETAIL((_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE)          \
+                                     ? (PBL_SSD1677_FB(_height) + 7) / 8                           \
+                                     : 1];                                                         \
+  PBL_DISPLAY_STATE_DEFINE(sym);                                                                   \
+  PBL_DEVICE_INSTANCE(sym, struct pbl_display_ssd1677, struct pbl_display, disp) {                 \
+    .disp =                                                                                        \
+        PBL_DISPLAY_INIT(sym, _name, nullptr, &pbl_display_ssd1677_ops, PBL_SSD1677_FB(_width),    \
+                         PBL_SSD1677_FB(_height), PBL_DISPLAY_FORMAT_MONO, (_rotation) >= 180),    \
+    .state = &sym##_state, .spi = PBL_SPI_DEV(_bus, _cs, _max_hz, _mode), .dc = _dc,               \
+    .reset = _reset, .busy = _busy, .shadow = SSD1677_COPY ? sym##_shadow : nullptr,               \
+    .along = sym##_along, .row = sym##_row, .line = sym##_line,                                    \
+    .cells = SSD1677_DETAIL((_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE) ? sym##_cells : nullptr,     \
+    .cell_start = sym##_cell_start, .cursor = sym##_cursor, .cellbuf = sym##_cellbuf,              \
+    .grey_rows = sym##_grey_rows,                                                                  \
+    .cell_cap =                                                                                    \
+        SSD1677_DETAIL((_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE) ? SSD1677_DETAIL_CELLS : 0,       \
+    .touched = SSD1677_COPY && (_topup_frames) != 0 ? sym##_touched : nullptr,                     \
+    .row_crc = SSD1677_COPY ? nullptr : sym##_row_crc,                                             \
+    .touched_rows = SSD1677_COPY || (_topup_frames) == 0 ? nullptr : sym##_touched_rows,           \
+    .unsynced_rows = sym##_unsynced_rows, .panel_width = (_panel_width),                           \
+    .panel_height = (_panel_height), .scale = ((_scale) / PBL_DISPLAY_FRAMEBUFFER_SCALE),          \
+    .quarter = ((_rotation) % 180) != 0, .full_interval = (_full_interval),                        \
+    .fast_frames = (_fast_frames), .fast_differential = (_fast_differential) != 0,                 \
+    .fast_frame_rate = (_fast_frame_rate), .source = {(_vsh1), (_vsh2), (_vsl)},                   \
+    .topup_frames = (_topup_frames), .full_on_idle = (_full_on_idle) != 0, .idle_ms = (_idle_ms),  \
+    .power_off_ms = (_power_off_ms),                                                               \
   }
 
 /** @} */
