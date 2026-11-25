@@ -186,10 +186,11 @@ config WATCHFACE_BEZEL
     bool "Watchfaces at 144x168 in a black bezel"
     depends on !PLATFORM_ROUND
     help
-      Give every watchface a 144x168 framebuffer, which the compositor
+      Give watchfaces a 144x168 framebuffer, which the compositor
       centres on the display in a black bezel, for displays whose pixels
       are small enough that a watchface drawn to the whole display would
-      be too large.
+      be too large. A watchface built for this display, or for every
+      display, keeps the whole of it.
 
 choice SYSTEM_UI_FONT_CHOICE
     prompt "Typeface of the system UI"
