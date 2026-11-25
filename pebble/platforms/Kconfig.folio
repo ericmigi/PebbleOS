@@ -16,6 +16,14 @@ config PLATFORM_DISPLAY_WIDTH
 config PLATFORM_DISPLAY_HEIGHT
     default 400
 
+# What an app and a worker may take: their segments less the 4 KiB stack a
+# native process has, on which its calls into the firmware run.
+config PLATFORM_MAX_APP_MEMORY_SIZE
+    default 63488
+
+config PLATFORM_MAX_WORKER_MEMORY_SIZE
+    default 7552
+
 # RAM of an app and of its runtime.
 
 config APP_RAM_4X_SEGMENT_SIZE
