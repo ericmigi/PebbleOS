@@ -58,6 +58,16 @@ config SAMSA_CACHE_ENTRIES
       two, or 0 to decode every instruction each time it runs. Each entry
       takes about 12 bytes of each process's interpreter state.
 
+config SAMSA_RAMFUNC
+    bool "Run the interpreter's hot path from RAM"
+    depends on RAMFUNC
+    help
+      Link the code Samsa runs on every interpreted instruction (its loop,
+      the common instruction handlers and their helpers, about 7 KiB)
+      into RAM, for SoCs that run code in place from flash through a small
+      cache, where the interpreter otherwise waits on cache misses. Costs
+      that much RAM.
+
 module = SAMSA
 module-str = Samsa
 source "subsys/logging/Kconfig.template.log_level"
