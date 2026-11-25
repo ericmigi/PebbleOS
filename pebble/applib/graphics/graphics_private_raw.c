@@ -247,17 +247,12 @@ PBL_T_STATIC void prv_blend_vertical_line_raw(GContext *ctx, int16_t x, int16_t 
 #else
   bool black = (gcolor_equal(color, GColorBlack));
 
-  if (gbitmap_is_scaled2(framebuffer)) {
-    // Two bits in one byte, down both rows of each pixel
-    const uint8_t mask = (uint8_t)(3U << ((2 * x) % 8));
-    uint8_t *byte = (uint8_t *)framebuffer->addr + 2 * y1 * framebuffer->row_size_bytes + x / 4;
-    for (int i = 2 * y1; i < 2 * y2; i++, byte += framebuffer->row_size_bytes) {
-      *byte = black ? (*byte & ~mask) : (*byte | mask);
-    }
-    return;
-  }
-  for (int i = y1; i < y2; i++) {
-    graphics_private_set_bit_1bit(framebuffer, x, i, !black);
+  // One byte per row down the column: two bits and both rows of each pixel at twice the size
+  const int s = gbitmap_is_scaled2(framebuffer) ? 2 : 1;
+  const uint8_t mask = (uint8_t)(((1U << s) - 1U) << ((s * x) % 8));
+  uint8_t *byte = (uint8_t *)framebuffer->addr + s * y1 * framebuffer->row_size_bytes + s * x / 8;
+  for (int i = s * y1; i < s * y2; i++, byte += framebuffer->row_size_bytes) {
+    *byte = black ? (*byte & ~mask) : (*byte | mask);
   }
 #endif // CONFIG_SCREEN_COLOR_DEPTH_BITS == 8
 }

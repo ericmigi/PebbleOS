@@ -772,6 +772,13 @@ PBL_T_MOCKABLE bool graphics_release_frame_buffer(GContext *ctx, GBitmap *buffer
     framebuffer_dirty_all(ctx->parent_framebuffer);
     return true;
   }
+  // The graphics routines release it after every line: skip the format look-up, which asks the
+  // process manager whether the app is a legacy one
+  if (buffer == &ctx->dest_bitmap) {
+    ctx->lock = false;
+    framebuffer_dirty_all(ctx->parent_framebuffer);
+    return true;
+  }
 #endif
   GBitmap *native_framebuffer = graphics_context_get_bitmap(ctx);
   if (gbitmap_get_format(buffer) != GBITMAP_NATIVE_FORMAT) {
