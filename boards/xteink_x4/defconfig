@@ -1,5 +1,8 @@
 # xteink_x4 board configuration
 
 CONFIG_SOC_ESP32C3=y
+# Flash at 80 MHz, as the stock firmware runs it: code runs from it through a 16 KiB cache, and
+# Bluetooth needs at least 40 MHz to keep its timing
+CONFIG_SOC_ESP32C3_FLASH_CLOCK_DIV=1
 
 CONFIG_UART=y
