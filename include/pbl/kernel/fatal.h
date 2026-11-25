@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include <pbl/kernel/compiler.h>
@@ -102,6 +103,18 @@ void pbl_fault_fatal_record(const struct pbl_fault_info *info);
  * @param info Fault.
  */
 [[noreturn]] void pbl_fault_thread_handler(const struct pbl_fault_info *info);
+
+/**
+ * @brief Whether a fault of the current thread is its own, on an architecture without
+ * unprivileged threads.
+ *
+ * Such a fault goes to pbl_fault_thread_handler() rather than pbl_fault_fatal_handler(). The
+ * default is false; an application overrides it, e.g. for code it loaded and runs on a thread of
+ * its own. Called in the fault handler, with interrupts masked.
+ *
+ * @param info Fault.
+ */
+bool pbl_fault_thread_is_own(const struct pbl_fault_info *info);
 
 /** @cond INTERNAL */
 [[noreturn]] void pbl_panic_hashed(uint32_t packed_loghash, ...);

@@ -33,8 +33,9 @@ static_assert(RISCV_FRAME_SIZE % 16 == 0, "the ABI wants sp 16-byte aligned");
 //! Called by the trap entry for every trap, on the ISR stack unless nested.
 void riscv_trap(struct riscv_frame *frame);
 
-//! Fault: logs the frame and ends in the fatal handler.
-[[noreturn]] void riscv_fault(struct riscv_frame *frame, uint32_t mcause);
+//! Fault: logs the frame and ends in the fatal handler, or returns to the thread in
+//! pbl_fault_thread_handler() when the fault is the thread's own (pbl_fault_thread_is_own()).
+void riscv_fault(struct riscv_frame *frame, uint32_t mcause);
 
 //! Restores the frame at @p sp and returns from the trap there.
 [[noreturn]] void riscv_trap_restore(void *sp);

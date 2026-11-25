@@ -27,6 +27,10 @@ PBL_WEAK void pbl_fault_fatal_record(const struct pbl_fault_info *info) {
   pbl_reboot_emergency();
 }
 
+PBL_WEAK bool pbl_fault_thread_is_own(const struct pbl_fault_info *info) {
+  return false;
+}
+
 [[noreturn]] PBL_WEAK void pbl_fault_thread_handler(const struct pbl_fault_info *info) {
   pbl_fault_fatal_record(info);
   pbl_fault_fatal_handler(info);

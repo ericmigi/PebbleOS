@@ -41,6 +41,17 @@ static const char *prv_thread_name(void) {
   return (pbl_cur != nullptr && riscv_isr_nesting == 1U) ? pbl_cur->name : "ISR";
 }
 
+[[noreturn]] static void prv_thread_fault(uint32_t reason, uintptr_t pc, uintptr_t lr,
+                                          uintptr_t addr) {
+  const struct pbl_fault_info info = {
+    .reason = (enum pbl_fault_reason)reason,
+    .pc = pc,
+    .lr = lr,
+    .addr = addr,
+  };
+  pbl_fault_thread_handler(&info);
+}
+
 void riscv_fault(struct riscv_frame *frame, uint32_t mcause) {
   static bool s_in_fault;
 
@@ -63,7 +74,13 @@ void riscv_fault(struct riscv_frame *frame, uint32_t mcause) {
   };
   const uint32_t *x = (const uint32_t *)frame;
 
-  pbl_fault_fatal_record(&info);
+  // A thread's own fault, taken with interrupts on so it holds no critical section, only stops
+  // the thread
+  const bool own = (riscv_isr_nesting == 1U) && (frame->mstatus & RISCV_MSTATUS_MPIE) &&
+                   pbl_fault_thread_is_own(&info);
+  if (!own) {
+    pbl_fault_fatal_record(&info);
+  }
 
   PBL_LOG_FAULT("\r\n\r\n[Fault: %s, thread %s]", cause, prv_thread_name());
   PBL_LOG_FAULT("mcause  = 0x%08" PRIx32 "  mepc = 0x%08" PRIx32 "  mtval = 0x%08" PRIx32, mcause,
@@ -75,6 +92,18 @@ void riscv_fault(struct riscv_frame *frame, uint32_t mcause) {
                   x[i + 1], x[i + 2], x[i + 3]);
   }
   PBL_LOG_FAULT("ra  = 0x%08" PRIx32, frame->ra);
+
+  // Back to the thread, in prv_thread_fault(), which never returns to the code that faulted
+  if (own) {
+    frame->a[0] = (uint32_t)info.reason;
+    frame->a[1] = info.pc;
+    frame->a[2] = info.lr;
+    frame->a[3] = info.addr;
+    frame->ra = 0U;
+    frame->mepc = (uint32_t)(uintptr_t)prv_thread_fault;
+    s_in_fault = false;
+    return;
+  }
 
   pbl_fault_fatal_handler(&info);
 }
