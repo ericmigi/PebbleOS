@@ -107,7 +107,14 @@ def bits(x):
 
 class Font:
     def __init__(
-        self, ttf_path, height, max_glyphs, max_glyph_size, legacy, baseline=None
+        self,
+        ttf_path,
+        height,
+        max_glyphs,
+        max_glyph_size,
+        legacy,
+        baseline=None,
+        line_height=None,
     ):
         self.version = FONT_VERSION_3
         self.ttf_path = ttf_path
@@ -115,6 +122,8 @@ class Font:
         # Baseline row; defaults to max_height. Extended fonts pass the base
         # font's baseline so both align on a mixed line.
         self.baseline = int(baseline) if baseline is not None else self.max_height
+        # Height stored in the font, which lays out its lines; defaults to the render size
+        self.line_height = int(line_height) if line_height is not None else self.max_height
         self.legacy = legacy
         self.face = freetype.Face(self.ttf_path)
         self.face.set_pixel_sizes(0, self.max_height)
@@ -365,7 +374,7 @@ class Font:
             s = struct.Struct("<BBHHBB")
             return s.pack(
                 self.version,
-                self.max_height,
+                self.line_height,
                 self.number_of_glyphs,
                 self.wildcard_codepoint,
                 self.table_size,
@@ -375,7 +384,7 @@ class Font:
             s = struct.Struct("<BBHHBBBB")
             return s.pack(
                 self.version,
-                self.max_height,
+                self.line_height,
                 self.number_of_glyphs,
                 self.wildcard_codepoint,
                 self.table_size,
