@@ -343,42 +343,68 @@ static PBL_NOINLINE void prv_record_edges(GContext *ctx, const GlyphData *glyph,
 // Mask words per row of a glyph drawn at twice its size: any glyph width, up to 255 pixels
 #define SCALED2_GLYPH_WORDS 16
 
-// n (up to 8) bits of a glyph bitmap from bit p, LSB first
-static PBL_ALWAYS_INLINE unsigned prv_glyph_bits(const uint8_t *bits, uint32_t p, unsigned n) {
-  unsigned v = bits[p / 8];
-  if ((p % 8) + n > 8) {
-    v |= (unsigned)bits[p / 8 + 1] << 8;
-  }
-  return (v >> (p % 8)) & ((1U << n) - 1U);
+// Each bit of a byte twice, bit 0 into bits 0 and 1
+static const uint16_t s_doubled[256] = {
+#define D1(n)                                                                  \
+  ((((n) >> 0) & 1) * 0x3 | (((n) >> 1) & 1) * 0xC | (((n) >> 2) & 1) * 0x30 | \
+   (((n) >> 3) & 1) * 0xC0)
+#define D2(n)  (D1(n) | (D1((n) >> 4) << 8))
+#define R4(n)  D2(n), D2(n + 1), D2(n + 2), D2(n + 3)
+#define R16(n) R4(n), R4(n + 4), R4(n + 8), R4(n + 12)
+  R16(0),   R16(16),  R16(32),  R16(48),  R16(64),  R16(80),  R16(96),  R16(112),
+  R16(128), R16(144), R16(160), R16(176), R16(192), R16(208), R16(224), R16(240),
+#undef R16
+#undef R4
+#undef D2
+#undef D1
+};
+
+// The panel pixels an edge cell's levels ink (at least half covered): bits 1:0 the top pair,
+// left first, bits 3:2 the bottom pair
+static PBL_ALWAYS_INLINE unsigned prv_edge_ink(unsigned levels) {
+  return ((levels & 0x02U) >> 1) | ((levels & 0x08U) >> 2) | ((levels & 0x20U) >> 3) |
+         ((levels & 0x80U) >> 4);
 }
 
-// Writes the set bits of a mask row whose bit 0 is native column x0 into native row y, within
+// Writes two mask rows whose bit 0 is native column x0 into native rows y and y + 1, within
 // native columns [cx0, cx1)
-static void prv_write_scaled2_row(GBitmap *dest, int y, int x0, int cx0, int cx1,
-                                  const uint32_t *mask, int words, bool white) {
-  uint32_t *row = (uint32_t *)((uint8_t *)dest->addr + y * dest->row_size_bytes);
-  for (int k = 0; k < words; k++) {
-    uint32_t v = mask[k];
+static void prv_write_scaled2_rows(GBitmap *dest, int y, int x0, int cx0, int cx1,
+                                   const uint32_t (*mask)[SCALED2_GLYPH_WORDS], int words,
+                                   bool white) {
+  const int stride = dest->row_size_bytes / 4;
+  uint32_t *row = (uint32_t *)dest->addr + y * stride;
+  // Arithmetic floor for columns left of 0, whose bits are clipped off
+  const int sh = ((x0 % 32) + 32) % 32;
+  int wi = (x0 - sh) / 32;
+  for (int k = 0; k < words; k++, wi++) {
     const int bx = x0 + 32 * k;
-    if (v == 0 || bx >= cx1 || bx + 32 <= cx0) {
+    if (bx >= cx1) {
+      break;
+    }
+    if (bx + 32 <= cx0) {
       continue;
     }
+    uint32_t clip = ~0U;
     if (cx0 > bx) {
-      v &= ~0U << (cx0 - bx);
+      clip &= ~0U << (cx0 - bx);
     }
     if (cx1 - bx < 32) {
-      v &= (1U << (cx1 - bx)) - 1U;
+      clip &= (1U << (cx1 - bx)) - 1U;
     }
-    // Arithmetic floor for columns left of 0, whose bits are clipped off by now
-    const int sh = ((bx % 32) + 32) % 32;
-    const int wi = (bx - sh) / 32;
-    const uint32_t lo = v << sh;
-    const uint32_t hi = sh ? (v >> (32 - sh)) : 0U;
-    if (wi >= 0) {
-      row[wi] = white ? (row[wi] | lo) : (row[wi] & ~lo);
-    }
-    if (hi) {
-      row[wi + 1] = white ? (row[wi + 1] | hi) : (row[wi + 1] & ~hi);
+    for (int r = 0; r < 2; r++) {
+      const uint32_t v = mask[r][k] & clip;
+      if (v == 0) {
+        continue;
+      }
+      uint32_t *out = row + r * stride;
+      const uint32_t lo = v << sh;
+      const uint32_t hi = sh ? (v >> (32 - sh)) : 0U;
+      if (wi >= 0) {
+        out[wi] = white ? (out[wi] | lo) : (out[wi] & ~lo);
+      }
+      if (hi) {
+        out[wi + 1] = white ? (out[wi + 1] | hi) : (out[wi + 1] & ~hi);
+      }
     }
   }
 }
@@ -400,11 +426,13 @@ static PBL_NOINLINE void prv_render_glyph_scaled2(GContext *ctx, const GlyphData
   const unsigned count = has_edges ? (unsigned)(edges[0] | (edges[1] << 8)) : 0U;
   edges += 2;
   unsigned e = 0;
-  const int words = (2 * w + 31) / 32;
+  // One mask word per 16 glyph pixels
+  const int words = (w + 15) / 16;
   const int x0 = 2 * target->origin.x;
   const int cx0 = 2 * clipped->origin.x;
   const int cx1 = 2 * grect_get_max_x(clipped);
-  for (int gy = 0; gy < h; gy++) {
+  uint32_t p = 0;
+  for (int gy = 0; gy < h; gy++, p += w) {
     const int y = target->origin.y + gy;
     if (y >= grect_get_max_y(clipped)) {
       break;
@@ -416,36 +444,36 @@ static PBL_NOINLINE void prv_render_glyph_scaled2(GContext *ctx, const GlyphData
       continue;
     }
     uint32_t mask[2][SCALED2_GLYPH_WORDS];
-    memset(mask[0], 0, words * sizeof(uint32_t));
-    for (int gx = 0; gx < w; gx += 8) {
-      const unsigned n = (unsigned)PBL_MIN(8, w - gx);
-      const unsigned v = prv_glyph_bits(bits, (uint32_t)(gy * w + gx), n);
-      if (v) {
-        const uint32_t doubled = graphics_private_double_bits16((uint16_t)v);
-        // gx is a multiple of 8: the 16 bits never straddle a word
-        mask[0][gx / 16] |= doubled << (2 * gx % 32);
+    for (int k = 0; k < words; k++) {
+      // 16 pixels of the row from bit p + 16k: three bytes hold them, the last past the row's
+      // end only when its bits are masked off
+      const uint32_t q = p + 16 * k;
+      const unsigned left = (unsigned)(w - 16 * k);
+      const unsigned n = left < 16 ? left : 16;
+      uint32_t v = bits[q / 8];
+      if ((q % 8) + n > 8) {
+        v |= (uint32_t)bits[q / 8 + 1] << 8;
       }
+      if ((q % 8) + n > 16) {
+        v |= (uint32_t)bits[q / 8 + 2] << 16;
+      }
+      v = (v >> (q % 8)) & ((1U << n) - 1U);
+      mask[0][k] = mask[1][k] = s_doubled[v & 0xFF] | ((uint32_t)s_doubled[v >> 8] << 16);
     }
-    memcpy(mask[1], mask[0], words * sizeof(uint32_t));
     for (; e < count && edges[3 * e + 1] == gy; e++) {
-      const int ex = edges[3 * e];
-      const unsigned levels = edges[3 * e + 2];
-      if (ex >= w) {
+      const unsigned ex = edges[3 * e];
+      if (ex >= (unsigned)w) {
         // Not in the glyph: the font is malformed
         continue;
       }
-      for (int i = 0; i < 4; i++) {
-        const int c = 2 * ex + (i & 1);
-        const uint32_t bit = 1U << (c % 32);
-        if (((levels >> (2 * i)) & 3U) >= 2U) {
-          mask[i >> 1][c / 32] |= bit;
-        } else {
-          mask[i >> 1][c / 32] &= ~bit;
-        }
-      }
+      const unsigned ink = prv_edge_ink(edges[3 * e + 2]);
+      const unsigned sh = (2 * ex) % 32;
+      uint32_t *m0 = &mask[0][ex / 16];
+      uint32_t *m1 = &mask[1][ex / 16];
+      *m0 = (*m0 & ~(3U << sh)) | ((ink & 3U) << sh);
+      *m1 = (*m1 & ~(3U << sh)) | ((ink >> 2) << sh);
     }
-    prv_write_scaled2_row(dest, 2 * y, x0, cx0, cx1, mask[0], words, white);
-    prv_write_scaled2_row(dest, 2 * y + 1, x0, cx0, cx1, mask[1], words, white);
+    prv_write_scaled2_rows(dest, 2 * y, x0, cx0, cx1, mask, words, white);
   }
 }
 #endif

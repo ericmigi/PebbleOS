@@ -95,6 +95,15 @@ PBL_T_STATIC void prv_fill_rect_legacy2(GContext *ctx, GRect rect, uint16_t radi
   // Mark the destination dirty before clipped_rect is modified.
   graphics_context_mark_dirty_rect(ctx, clipped_rect);
 
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+  // A plain rectangle at twice the size: its rows in one pass
+  if ((radius == 0 || corner_mask == GCornerNone) && gbitmap_is_scaled2(bitmap) &&
+      ctx->draw_state.draw_implementation == &g_default_draw_implementation) {
+    graphics_private_fill_rect_scaled2(bitmap, clipped_rect, fill_color);
+    return;
+  }
+#endif
+
   // bit-block fiddling:
   const int16_t max_y = clipped_rect.origin.y + clipped_rect.size.h;
   for (; clipped_rect.origin.y < max_y; ++clipped_rect.origin.y) {
