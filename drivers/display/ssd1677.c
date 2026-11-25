@@ -396,6 +396,35 @@ static void prv_map_row(const struct pbl_display_ssd1677 *epd, const struct plan
   }
 }
 
+/*
+ * prv_map_row for a panel at the framebuffer's own size mounted a quarter turn, the common case at
+ * 480x800: each RAM byte is 8 consecutive framebuffer rows of one column, gathered with a pointer
+ * step instead of unpacking the column into line first. Rows in xor_rows are inverted.
+ */
+static void prv_map_row_quarter1(const struct pbl_display_ssd1677 *epd, const struct plane_src *src,
+                                 uint32_t across, uint32_t x0, uint32_t len, uint8_t *out) {
+  uint32_t pitch = (epd->disp.props.width + 7U) / 8U;
+  uint32_t shift = across % 8U;
+  const int16_t *along = &epd->along[x0 * 8U];
+
+  for (uint32_t i = 0U; i < len; i++, along += 8) {
+    // The column's rows for this byte, first to last bit, run up or down the framebuffer
+    int32_t step = (along[1] > along[0]) ? (int32_t)pitch : -(int32_t)pitch;
+    const uint8_t *p = &src->frame[(uint32_t)along[0] * pitch + across / 8U];
+    uint32_t v = 0U;
+
+    for (uint32_t b = 0U; b < 8U; b++, p += step) {
+      v = (v << 1) | ((*p >> shift) & 1U);
+    }
+    if (src->xor_rows != nullptr) {
+      for (uint32_t b = 0U; b < 8U; b++) {
+        v ^= (uint32_t)prv_row_bit(src->xor_rows, (uint32_t)along[b]) << (7U - b);
+      }
+    }
+    out[i] = (uint8_t)v;
+  }
+}
+
 // A window of a frame, scaled and turned, to a RAM plane; rows a scale-up repeats are mapped once,
 // unless detail tells them apart, and several go out per transfer
 static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint8_t ram,
@@ -428,6 +457,9 @@ static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint8_t ram,
 
   // The controller rows meet the framebuffer's columns in order, backwards flipped
   bool asc = !flip;
+  // Every RAM bit a framebuffer pixel: no border, no scaling
+  bool quarter1 = epd->quarter && epd->scale == 1U && !cells && src->frame != nullptr &&
+                  src->xor == nullptr && lo <= hi && hi - lo + 1U == len * 8U;
 
   if (cells && epd->quarter) {
     for (uint32_t y = lo; y <= hi && lo <= hi; y++) {
@@ -446,6 +478,8 @@ static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint8_t ram,
 
     if (fill != 0U && across == prev && !prev_cells) {
       memcpy(row, row - len, len);
+    } else if (quarter1 && across >= 0) {
+      prv_map_row_quarter1(epd, src, (uint32_t)across, w->x0, len, row);
     } else {
       prv_map_row(epd, src, (lo <= hi) ? across : -1, w->x0, len, lo, hi, row);
       prev_cells = cells && lo <= hi && across >= 0 &&
