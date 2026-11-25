@@ -36,8 +36,6 @@
 #define CMD_AUTO_WRITE_RED 0x47U
 #define CMD_RAM_X_COUNTER  0x4EU
 #define CMD_RAM_Y_COUNTER  0x4FU
-// With a RAM write command: the frame inverted
-#define WRITE_INVERTED 0x100U
 
 // Interlaced gate scan
 #define DRIVER_OUTPUT_SCAN 0x02U
@@ -245,7 +243,7 @@ static void prv_map_row(const struct pbl_display_ssd1677 *epd, const uint8_t *fr
 
 // A window of a frame, scaled and turned, to a RAM plane; rows a scale-up repeats are mapped once,
 // and several go out per transfer
-static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint32_t ram,
+static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint8_t ram,
                            const struct pbl_display_ssd1677_window *w, const uint8_t *frame) {
   struct display_geometry g = prv_geometry(epd);
   bool flip = epd->state->flip;
@@ -272,7 +270,7 @@ static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint32_t ram,
 
   ret = prv_ram_window(epd, w);
   if (ret == 0) {
-    ret = prv_cmd(epd, (uint8_t)(ram & ~WRITE_INVERTED), nullptr, 0U);
+    ret = prv_cmd(epd, ram, nullptr, 0U);
   }
 
   for (uint32_t cy = w->y0; ret == 0 && cy <= w->y1; cy++) {
@@ -283,11 +281,6 @@ static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint32_t ram,
       memcpy(row, row - len, len);
     } else {
       prv_map_row(epd, frame, (lo <= hi) ? across : -1, w->x0, len, lo, hi, row);
-      if ((ram & WRITE_INVERTED) != 0U) {
-        for (uint32_t i = 0U; i < len; i++) {
-          row[i] = (uint8_t)~row[i];
-        }
-      }
     }
     prev = across;
     fill += len;
@@ -302,7 +295,7 @@ static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint32_t ram,
 }
 
 static bool prv_has_idle_work(const struct pbl_display_ssd1677 *epd) {
-  return epd->state->wave.topup_frames != 0U || epd->full_on_idle || epd->power_off_ms != 0U;
+  return epd->touched != nullptr || epd->full_on_idle || epd->power_off_ms != 0U;
 }
 
 // Ends the refresh in flight once, from the BUSY interrupt or the timeout
@@ -573,7 +566,9 @@ static int prv_load_lut(const struct pbl_display_ssd1677 *epd, const uint8_t pha
   return ret;
 }
 
-static int prv_refresh(const struct pbl_display *disp, enum refresh_mode mode, bool own) {
+// A fast refresh drives changes boost frames more than the fast waveform's main phase
+static int prv_refresh(const struct pbl_display *disp, enum refresh_mode mode, bool own,
+                       uint8_t boost) {
   const struct pbl_display_ssd1677 *epd = prv_epd(disp);
   struct pbl_display_ssd1677_state *state = epd->state;
   uint8_t ctrl1 = (mode == REFRESH_HALF) ? CTRL1_BYPASS_RED : CTRL1_NORMAL;
@@ -591,8 +586,12 @@ static int prv_refresh(const struct pbl_display *disp, enum refresh_mode mode, b
   if (ret == 0 && mode == REFRESH_FAST) {
     seq = SEQ_FAST;
     if (state->wave.phases[1] != 0U) {
+      uint8_t phases[4];
+
+      memcpy(phases, state->wave.phases, sizeof(phases));
+      phases[1] = (uint8_t)PBL_MIN(phases[1] + boost, UINT8_MAX);
       seq = state->powered ? SEQ_CUSTOM_LUT : (SEQ_CLOCK_ANALOG | SEQ_CUSTOM_LUT);
-      ret = prv_load_lut(epd, state->wave.phases, state->wave.vs);
+      ret = prv_load_lut(epd, phases, state->wave.vs);
     }
   }
   if (ret == 0 && mode == REFRESH_TOPUP) {
@@ -639,6 +638,10 @@ static int prv_refresh(const struct pbl_display *disp, enum refresh_mode mode, b
   return refreshing ? ret : 0;
 }
 
+static uint32_t prv_frame_size(const struct pbl_display_ssd1677 *epd) {
+  return (epd->disp.props.width + 7U) / 8U * epd->disp.props.height;
+}
+
 static void prv_union(struct pbl_display_ssd1677_window *a,
                       const struct pbl_display_ssd1677_window *b) {
   a->x0 = PBL_MIN(a->x0, b->x0);
@@ -661,29 +664,41 @@ static int prv_write_half(const struct pbl_display_ssd1677 *epd) {
     ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &w, epd->shadow);
   }
   state->dirty_valid = false;
+  if (epd->touched != nullptr) {
+    memset(epd->touched, 0, prv_frame_size(epd));
+  }
 
   return ret;
 }
 
 /*
- * A top up drives every pixel of the rows changed since the last one towards its colour: short
- * drives leave both the new colour and the one a change passed through grey. The new plane gets
- * the frame shown, over the window the last fast refresh left stale; the old one its inverse over
- * the changed rows, which makes each of them a change. The refresh then swaps the planes, so the
- * new one holds the inverse over the changed rows.
+ * A top up drives the pixels changed by fast refreshes since the last one, those changed back
+ * too, towards their colour: short drives leave both the new colour and the one a change passed
+ * through grey. Over those rows, and where the planes may differ, the new plane gets the frame
+ * shown and the old one the frame with those pixels inverted, which makes each of them a change
+ * and leaves the others undriven.
  */
 static int prv_topup(const struct pbl_display_ssd1677 *epd) {
   struct pbl_display_ssd1677_state *state = epd->state;
+  uint32_t size = prv_frame_size(epd);
   int ret = 0;
 
+  for (uint32_t i = 0U; i < size; i++) {
+    epd->touched[i] ^= epd->shadow[i];
+  }
+
+  struct pbl_display_ssd1677_window u = state->dirty;
+
   if (state->stale_valid) {
-    ret = prv_write_plane(epd, CMD_WRITE_RAM_BW, &state->stale, epd->shadow);
+    prv_union(&u, &state->stale);
   }
+  ret = prv_write_plane(epd, CMD_WRITE_RAM_BW, &u, epd->shadow);
   if (ret == 0) {
-    ret = prv_write_plane(epd, CMD_WRITE_RAM_RED | WRITE_INVERTED, &state->dirty, epd->shadow);
+    ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &u, epd->touched);
   }
+  memset(epd->touched, 0, size);
   if (ret == 0) {
-    ret = prv_refresh(state->disp, REFRESH_TOPUP, true);
+    ret = prv_refresh(state->disp, REFRESH_TOPUP, true, 0U);
   }
   if (ret != 0) {
     state->need_half = true;
@@ -734,10 +749,10 @@ static void prv_idle_work(struct pbl_work *work) {
   if (epd->full_on_idle && !state->need_half && epd->full_interval != 0U &&
       state->updates >= epd->full_interval) {
     state->updates = 0U;
-    if (prv_write_half(epd) != 0 || prv_refresh(disp, REFRESH_HALF, true) != 0) {
+    if (prv_write_half(epd) != 0 || prv_refresh(disp, REFRESH_HALF, true, 0U) != 0) {
       state->need_half = true;
     }
-  } else if (state->wave.topup_frames != 0U && state->dirty_valid && !state->need_half) {
+  } else if (epd->touched != nullptr && state->dirty_valid && !state->need_half) {
     (void)prv_topup(epd);
   } else if (epd->power_off_ms != 0U && state->powered) {
     idle = (uint32_t)pbl_uptime_ms() - state->idle_since_ms;
@@ -755,19 +770,18 @@ static void prv_idle_work(struct pbl_work *work) {
 }
 
 /*
- * A fast refresh swaps the planes at its end (seen on the panel: rows outside the window flipped
- * between two old frames): the old plane is the frame shown, the new one the frame before it,
- * which differs only in the window that refresh changed. A fast update so writes its own rows to
- * the shadow, then that window and its own to the new plane; a half one writes its window to both
- * planes, which the half refresh does not swap.
+ * Which plane holds what after a fast refresh is not relied on: the controller may swap them
+ * (seen on the panel) or not. A fast update writes both over its own rows and the window where
+ * the last refresh left them different; elsewhere both hold the frame shown. A half one writes
+ * both whole.
  */
 static int prv_update(const struct pbl_display *disp, const struct pbl_display_buffer *buf,
                       uint16_t y0, uint16_t y1) {
   const struct pbl_display_ssd1677 *epd = prv_epd(disp);
   struct pbl_display_ssd1677_state *state = epd->state;
   uint32_t pitch = (disp->props.width + 7U) / 8U;
-  struct pbl_display_ssd1677_window w;
-  struct pbl_display_ssd1677_window bw;
+  struct pbl_display_ssd1677_window w = {0};
+  struct pbl_display_ssd1677_window bw = {0};
   enum refresh_mode mode;
   int ret = 0;
 
@@ -794,11 +808,7 @@ static int prv_update(const struct pbl_display *disp, const struct pbl_display_b
   int32_t last = -1;
 
   for (uint32_t y = y0; y <= y1; y++) {
-    const uint8_t *src = &buf->data[y * buf->pitch];
-    uint8_t *dst = &epd->shadow[y * pitch];
-
-    if (memcmp(dst, src, pitch) != 0) {
-      memcpy(dst, src, pitch);
+    if (memcmp(&epd->shadow[y * pitch], &buf->data[y * buf->pitch], pitch) != 0) {
       first = (first < 0) ? (int32_t)y : first;
       last = (int32_t)y;
     }
@@ -812,19 +822,46 @@ static int prv_update(const struct pbl_display *disp, const struct pbl_display_b
 
   mode = prv_mode(epd);
 
-  if (mode == REFRESH_HALF) {
-    ret = prv_write_half(epd);
-  } else {
+  // A change over half the frame or more, as an app switch, gets the top up's drive at once, so
+  // large fields come out as dark as the ones the top up finishes; smaller ones are left for it
+  bool large = epd->touched != nullptr && mode == REFRESH_FAST &&
+               (uint32_t)(last - first + 1) * 2U >= disp->props.height;
+
+  // Both planes over the changed rows and wherever they may differ: the old one gets the frame
+  // shown, from the shadow before the new rows go in, the new one the new frame
+  if (mode == REFRESH_FAST) {
     w = prv_window(epd, (uint16_t)first, (uint16_t)last);
     bw = w;
     if (state->stale_valid) {
       prv_union(&bw, &state->stale);
     }
     state->stale_valid = false;
+    ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &bw, epd->shadow);
+  }
+
+  for (int32_t y = first; y >= 0 && y <= last; y++) {
+    const uint8_t *src = &buf->data[(uint32_t)y * buf->pitch];
+    uint8_t *dst = &epd->shadow[(uint32_t)y * pitch];
+
+    if (epd->touched != nullptr && mode == REFRESH_FAST) {
+      uint8_t *t = &epd->touched[(uint32_t)y * pitch];
+
+      for (uint32_t i = 0U; i < pitch; i++) {
+        uint8_t changed = dst[i] ^ src[i];
+
+        t[i] = large ? (uint8_t)(t[i] & ~changed) : (uint8_t)(t[i] | changed);
+      }
+    }
+    memcpy(dst, src, pitch);
+  }
+
+  if (mode == REFRESH_HALF) {
+    ret = prv_write_half(epd);
+  } else if (ret == 0) {
     ret = prv_write_plane(epd, CMD_WRITE_RAM_BW, &bw, epd->shadow);
   }
   if (ret == 0) {
-    ret = prv_refresh(disp, mode, false);
+    ret = prv_refresh(disp, mode, false, large ? state->wave.topup_frames : 0U);
   }
   if (ret != 0) {
     state->need_half = true;

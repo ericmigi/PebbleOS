@@ -73,7 +73,7 @@ struct pbl_display_ssd1677_state {
   bool need_half;
   // Clock and analog on
   bool powered;
-  // The new plane is a frame behind in stale
+  // The planes may differ in stale
   bool stale_valid;
   // Rows changed by fast refreshes since the last top up or clean refresh, in dirty
   bool dirty_valid;
@@ -106,6 +106,8 @@ struct pbl_display_ssd1677 {
   uint8_t *row;
   /** The pixels along one controller row, one byte each. */
   uint8_t *line;
+  /** Pixels fast refreshes changed since the last top up; nullptr without top ups. */
+  uint8_t *touched;
   /** Panel width as mounted, in pixels. */
   uint16_t panel_width;
   /** Panel height as mounted, in pixels. */
@@ -187,6 +189,7 @@ extern const struct pbl_display_ops pbl_display_ssd1677_ops;
   static struct pbl_display_ssd1677_state sym##_state;                                            \
   static uint8_t sym##_shadow[((_width) + 7) / 8 * (_height)];                                    \
   static int16_t sym##_along[SSD1677_SCAN_WIDTH(_panel_width, _panel_height, _rotation)];         \
+  static uint8_t sym##_touched[(_topup_frames) != 0 ? ((_width) + 7) / 8 * (_height) : 1];        \
   static uint8_t sym##_line[(_width) > (_height) ? (_width) : (_height)];                         \
   static uint8_t sym##_row[SSD1677_SCAN_WIDTH(_panel_width, _panel_height, _rotation) / 8 *       \
                            SSD1677_ROWS_PER_WRITE];                                               \
@@ -196,7 +199,8 @@ extern const struct pbl_display_ops pbl_display_ssd1677_ops;
                              PBL_DISPLAY_FORMAT_MONO, (_rotation) >= 180),                        \
     .state = &sym##_state, .spi = PBL_SPI_DEV(_bus, _cs, _max_hz, _mode), .dc = _dc,              \
     .reset = _reset, .busy = _busy, .shadow = sym##_shadow, .along = sym##_along,                 \
-    .row = sym##_row, .line = sym##_line, .panel_width = (_panel_width),                          \
+    .row = sym##_row, .line = sym##_line,                                                         \
+    .touched = (_topup_frames) != 0 ? sym##_touched : nullptr, .panel_width = (_panel_width),     \
     .panel_height = (_panel_height), .scale = (_scale), .quarter = ((_rotation) % 180) != 0,      \
     .full_interval = (_full_interval), .fast_frames = (_fast_frames),                             \
     .fast_differential = (_fast_differential) != 0, .fast_frame_rate = (_fast_frame_rate),        \
