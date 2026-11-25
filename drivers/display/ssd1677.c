@@ -761,9 +761,9 @@ static int prv_init(const struct pbl_display *disp) {
   state->wave.frame_rate = epd->fast_frame_rate;
   memcpy(state->wave.source, epd->source, sizeof(state->wave.source));
   state->wave.topup_frames = epd->topup_frames;
-  // Measured on the X4: the fast drive alone, every pixel of the rows, leaves no ghost and whites
-  // 2 % short of 10 frames more, which take 200 ms
-  state->wave.large_frames = 0U;
+  // Four extra frames on a large change (~138 ms total) clear white-to-black and black-to-white
+  // app-switch ghosts in a single drive without needing a second idle pass
+  state->wave.large_frames = 4U;
   state->need_half = true;
   state->powered = false;
   state->stale_valid = false;
