@@ -53,6 +53,8 @@ enum pbl_input_type : uint8_t {
 enum : uint16_t {
   PBL_INPUT_KEY_UP = 103,
   PBL_INPUT_KEY_DOWN = 108,
+  /** Power key, apart from the four Pebble buttons. */
+  PBL_INPUT_KEY_POWER = 116,
   PBL_INPUT_KEY_BACK = 158,
   /** Touch contact. */
   PBL_INPUT_BTN_TOUCH = 330,
