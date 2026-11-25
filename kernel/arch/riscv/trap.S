@@ -22,7 +22,7 @@ riscv_vectors:
 	.endr
 	.option pop
 
-	.section .text.riscv_trap_entry, "ax"
+	/* Next to the vectors, which reach it with a jump of at most 1 MiB */
 	.balign 4
 riscv_trap_entry:
 	addi sp, sp, -RISCV_FRAME_SIZE
@@ -151,4 +151,5 @@ Reset_Handler:
 	la t0, riscv_vectors
 	ori t0, t0, 1
 	csrw mtvec, t0
-	j kernel_prep_c
+	/* Wherever the linker puts it */
+	tail kernel_prep_c

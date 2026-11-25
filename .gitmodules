@@ -57,3 +57,11 @@
 	path = third_party/lvgl/lvgl
 	url = https://github.com/lvgl/lvgl
 	shallow = true
+[submodule "third_party/espressif_bt/esp32c3-bt-lib"]
+	path = third_party/espressif_bt/esp32c3-bt-lib
+	url = https://github.com/espressif/esp32c3-bt-lib
+	shallow = true
+[submodule "third_party/espressif_bt/esp-phy-lib"]
+	path = third_party/espressif_bt/esp-phy-lib
+	url = https://github.com/espressif/esp-phy-lib
+	shallow = true
