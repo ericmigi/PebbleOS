@@ -24,6 +24,7 @@ symbol that enables it. Some are forks under
 | [QR-Code-generator](https://github.com/nayuki/QR-Code-generator) | QR code rendering | MIT |
 | [TinyMT](https://github.com/MersenneTwister-Lab/TinyMT) | Pseudorandom numbers | BSD-3-Clause |
 | [iconography](https://github.com/pebble-dev/iconography) | System icons | Apache-2.0 |
+| [esp32c3-bt-lib](https://github.com/espressif/esp32c3-bt-lib), [esp-phy-lib](https://github.com/espressif/esp-phy-lib) | ESP32-C3 Bluetooth LE controller and PHY libraries, with glue derived from ESP-IDF in `third_party/espressif_bt` | Apache-2.0 |
 
 `third_party/nonfree` holds the vendor binaries and libraries the hardware
 needs but that are not open source: the nRF Fuel Gauge library, the
