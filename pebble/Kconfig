@@ -83,6 +83,16 @@ config USERSPACE
 # The SDK platform, and what follows from it.
 rsource "Kconfig.platform"
 
+config APP_NATIVE_RISCV32
+    bool "Run riscv32 apps natively"
+    depends on CPU_RISCV && PLATFORM_ABI = "riscv32"
+    default y
+    help
+      Run third-party apps built for the platform's riscv32 ABI from app
+      RAM, through the instruction-bus window of the RAM. Nothing protects
+      the system from them: this port has no userspace or PMP, so an app
+      runs privileged, as a built-in app does, and can write any memory.
+
 # RAM of the apps of the legacy SDK execution environments. 2.x apps are
 # rectangular; 3.x apps are those of the frozen platform of the same shape
 # and colour depth. A platform states the RAM of its own, 4.x, apps.

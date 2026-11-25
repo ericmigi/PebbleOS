@@ -721,7 +721,7 @@ size_t process_runtime_host_stack_size(const PebbleProcessMd *app_md) {
 #ifdef CONFIG_SOC_POSIX
   return 0;
 #else
-  return app_md->process_storage == ProcessStorageBuiltin ? 0 : CONFIG_SAMSA_HOST_STACK_SIZE;
+  return process_metadata_runs_natively(app_md) ? 0 : CONFIG_SAMSA_HOST_STACK_SIZE;
 #endif
 }
 
@@ -731,7 +731,7 @@ uint32_t process_runtime_sdk_table(PebbleTask task) {
 
 void process_runtime_run(const PebbleProcessMd *app_md, PebbleTask task, void *entry,
                          void *stack_top) {
-  if (app_md->process_storage == ProcessStorageBuiltin) {
+  if (process_metadata_runs_natively(app_md)) {
     const PebbleMain main_func = entry;
     main_func();
     return;
