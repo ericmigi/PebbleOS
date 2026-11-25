@@ -23,7 +23,7 @@ typedef struct __attribute__((packed)) {
   uint32_t utc;
   uint16_t millivolts;
   uint8_t percent;
-  uint8_t usb;
+  uint8_t flags;
 } Record;
 
 // The records of a log file, until the first empty one
@@ -34,7 +34,7 @@ static int prv_read(const char *path, Record *records, int max) {
   }
   int n = 0;
   while ((n < max) && (pbl_fs_read(&file, &records[n], sizeof(Record)) == sizeof(Record)) &&
-         (records[n].utc != UINT32_MAX) && (records[n].utc != 0)) {
+         !((records[n].utc == UINT32_MAX) && (records[n].millivolts == UINT16_MAX))) {
     n++;
   }
   pbl_fs_close(&file);
@@ -45,6 +45,7 @@ void test_battery_log__initialize(void) {
   fake_spi_flash_init(0, 0x1000000);
   fake_pfs_mount();
   pbl_fs_format("/");
+  battery_log_reset_for_tests();
   s_now = 1795611600;
 }
 
@@ -60,10 +61,10 @@ void test_battery_log__records_once_a_minute(void) {
   cl_assert_equal_i(r[0].utc, 1795611600);
   cl_assert_equal_i(r[0].millivolts, 4100);
   cl_assert_equal_i(r[0].percent, 90);
-  cl_assert_equal_i(r[0].usb, 0);
+  cl_assert_equal_i(r[0].flags, 0x02); // boot
   cl_assert_equal_i(r[1].utc, 1795611660);
   cl_assert_equal_i(r[1].millivolts, 4080);
-  cl_assert_equal_i(r[1].usb, 1);
+  cl_assert_equal_i(r[1].flags, 0x01); // usb
 }
 
 void test_battery_log__rotates_when_full(void) {
@@ -80,4 +81,32 @@ void test_battery_log__rotates_when_full(void) {
   cl_assert_equal_i(prv_read("/batlog0", r, n), 2);
   cl_assert_equal_i(r[0].millivolts, 4000 - 2 * n);
   cl_assert_equal_i(r[1].millivolts, 4000 - 2 * n - 1);
+}
+
+void test_battery_log__carries_on_after_a_torn_write_and_a_reboot(void) {
+  battery_log_sample(3900, 60, false);
+  s_now += 60;
+  battery_log_sample(3890, 59, false);
+
+  // The cell browns out while the next record is written: only its time reaches flash
+  struct pbl_fs_file file;
+  cl_assert_equal_i(pbl_fs_open(&file, "/batlog0", PBL_FS_O_RDWR), 0);
+  cl_assert(pbl_fs_seek(&file, 2 * sizeof(Record), PBL_FS_SEEK_SET) >= 0);
+  const uint32_t torn = (uint32_t)s_now + 60;
+  cl_assert_equal_i(pbl_fs_write(&file, &torn, sizeof(torn)), sizeof(torn));
+  pbl_fs_close(&file);
+
+  // A reboot, with the clock lost
+  battery_log_reset_for_tests();
+  s_now = 0;
+  battery_log_sample(3700, 21, true);
+
+  Record r[8];
+  cl_assert_equal_i(prv_read("/batlog0", r, 8), 4);
+  cl_assert_equal_i(r[0].millivolts, 3900);
+  cl_assert_equal_i(r[1].millivolts, 3890);
+  cl_assert_equal_i(r[2].millivolts, UINT16_MAX); // the torn one, left as it is
+  cl_assert_equal_i(r[3].utc, 0);
+  cl_assert_equal_i(r[3].millivolts, 3700);
+  cl_assert_equal_i(r[3].flags, 0x03); // boot, usb
 }
