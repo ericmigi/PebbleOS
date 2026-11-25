@@ -52,11 +52,14 @@ config SAMSA_MAX_OBJS
 config SAMSA_CACHE_ENTRIES
     int "Decoded instructions a process keeps"
     range 0 1024
+    default 256 if SOC_POSIX
     default 0
     help
       Thumb instructions kept decoded per process, by address: a power of
       two, or 0 to decode every instruction each time it runs. Each entry
-      takes about 12 bytes of each process's interpreter state.
+      takes about 12 bytes of each process's interpreter state. The cache
+      also keeps the regions the last accesses used, which the fast
+      memory paths need.
 
 config SAMSA_RAMFUNC
     bool "Run the interpreter's hot path from RAM"
