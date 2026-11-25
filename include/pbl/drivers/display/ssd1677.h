@@ -99,6 +99,13 @@ struct pbl_display_ssd1677_state {
   struct pbl_display_ssd1677_window stale;
   struct pbl_display_ssd1677_window dirty;
   uint32_t idle_since_ms;
+  // The last update's times, in ms: plane writes, refresh, re-sync
+  uint16_t last_write_ms;
+  uint16_t last_refresh_ms;
+  uint16_t last_post_ms;
+  uint32_t refresh_start_ms;
+  // Planes re-synced after a refresh: 0 both, 1 the old one only, 2 the new one only
+  uint8_t resync_planes;
 };
 /** @endcond */
 
