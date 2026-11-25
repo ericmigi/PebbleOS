@@ -183,6 +183,15 @@ config MODDABLE_XS
     help
       Build Moddable XS support for running JavaScript apps.
 
+config RAMFUNC_DRAWING
+    bool "Run the hottest drawing code from RAM"
+    depends on RAMFUNC
+    help
+      Link the functions most of a UI redraw runs (about 16 KiB: raster
+      and text primitives, the heap, memset and memcpy) into RAM, for
+      SoCs that run in place from flash through a small cache, where a
+      redraw otherwise waits on cache misses. Costs that much RAM.
+
 config MMAP_RESOURCES
     bool "Memory-mapped (zero-copy) resource reads"
     help

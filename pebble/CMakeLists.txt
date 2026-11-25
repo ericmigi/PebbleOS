@@ -51,6 +51,30 @@ if(NOT CONFIG_RECOVERY_FW AND (CONFIG_CPU_CORTEX_M OR CONFIG_SAMSA))
   pbl_sdk()
 endif()
 
+# The code most of a UI redraw runs, from RAM: about 20 KiB that covered most of the instructions
+# of launcher, Settings and watchface redraws on qemu_esp32c3 (QEMU exec traces). Not memset and
+# memcpy: the startup code copies .ramfunc with them.
+if(CONFIG_RAMFUNC_DRAWING)
+  set(applib "*/CMakeFiles/pebble__applib.dir/graphics")
+  set_property(GLOBAL APPEND PROPERTY PBL_RAMFUNC_OBJECTS
+    "*libkernel.a:heap.c.obj"
+    "*libkernel.a:mutex.c.obj"
+    "*liblibutil.a:keyed_circular_cache.c.obj"
+    "*liblibutil.a:math.c.obj"
+    "${applib}/1_bit/bitblt_private.c.obj"
+    "${applib}/1_bit/framebuffer.c.obj"
+    "${applib}/bitblt.c.obj"
+    "${applib}/framebuffer.c.obj"
+    "${applib}/gbitmap.c.obj"
+    "${applib}/graphics_line.c.obj"
+    "${applib}/graphics_private.c.obj"
+    "${applib}/graphics_private_raw.c.obj"
+    "${applib}/text_render.c.obj"
+    "${applib}/text_resources.c.obj"
+    "*/CMakeFiles/pebble__applib.dir/fonts/codepoint.c.obj"
+  )
+endif()
+
 # Samsa runs the apps built against the SDK generated above.
 if(CONFIG_SAMSA)
   add_subdirectory(${PBL_BASE}/subsys/samsa ${CMAKE_BINARY_DIR}/subsys/samsa)
