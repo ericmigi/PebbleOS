@@ -1,6 +1,8 @@
 /* SPDX-FileCopyrightText: 2024 Google LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include <errno.h>
+#include <inttypes.h>
 #include <string.h>
 
 #include <pbl/analytics/analytics.h>
@@ -18,6 +20,12 @@
 #include <applib/graphics/gcolor_definitions.h>
 #include <applib/graphics/gtypes.h>
 #include <kernel/events.h>
+
+#ifdef CONFIG_TEXT_DETAIL
+#include <pbl/services/evented_timer.h>
+
+#include <applib/graphics/text_detail.h>
+#endif
 
 static void (*s_update_complete_handler)(bool success);
 // From the start of a flush until its completion has run here, after the display's own: a flush
@@ -100,6 +108,39 @@ static void prv_corners_apply(FrameBuffer *fb, bool mask) {
 }
 #endif
 
+#ifdef CONFIG_TEXT_DETAIL
+// Text edges of the frame on the display, at panel resolution
+static TextDetailFrame s_detail_frame;
+static EventedTimerID s_grey_timer = EVENTED_TIMER_INVALID_ID;
+
+static bool prv_detail_row(const struct pbl_display_detail *detail, uint16_t y, uint8_t *cells) {
+  TextDetailFrame frame = s_detail_frame;
+  frame.grey = detail->grey;
+  return text_detail_row(
+      &frame, y, (const uint8_t *)framebuffer_get_line(compositor_get_framebuffer(), y), cells);
+}
+
+static struct pbl_display_detail s_detail = {.row = prv_detail_row};
+
+// Grey levels come once the screen is idle, as on e-ink, where they take a pass of their own after
+// the black and white frame and its top-up: interaction keeps the speed of black and white.
+#define GREY_IDLE_MS (150 + 200)
+
+static void prv_send(uint16_t y0, uint16_t y1, bool grey);
+
+static void prv_grey_refine(void *data) {
+  s_grey_timer = EVENTED_TIMER_INVALID_ID;
+  if (s_flush_pending || !text_detail_wants_grey()) {
+    return;
+  }
+  s_flush_pending = true;
+  s_flush_y0 = 0;
+  s_flush_y1 = PBL_DISPLAY_HEIGHT - 1;
+  s_flush_start_ticks = pbl_uptime_ticks();
+  prv_send(s_flush_y0, s_flush_y1, true);
+}
+#endif
+
 static void prv_flush_finish(void *data) {
   bool success = (data == nullptr);
 
@@ -116,6 +157,13 @@ static void prv_flush_finish(void *data) {
   pbl_irq_unlock();
 
   framebuffer_reset_dirty(compositor_get_framebuffer());
+
+#ifdef CONFIG_TEXT_DETAIL
+  if (success && !s_detail.grey && text_detail_wants_grey()) {
+    s_grey_timer =
+        evented_timer_register_or_reschedule(s_grey_timer, GREY_IDLE_MS, prv_grey_refine, nullptr);
+  }
+#endif
 
   if (s_update_complete_handler) {
     s_update_complete_handler(success);
@@ -187,6 +235,12 @@ void compositor_display_update(void (*handle_update_complete_cb)(bool success)) 
   prv_corners_apply(fb, true);
 #endif
 
+#ifdef CONFIG_TEXT_DETAIL
+  evented_timer_cancel(s_grey_timer);
+  s_grey_timer = EVENTED_TIMER_INVALID_ID;
+  compositor_get_text_detail_frame(&s_detail_frame);
+  prv_send(s_flush_y0, s_flush_y1, false);
+#else
   struct pbl_display_buffer buf = {
     .data = (uint8_t *)framebuffer_get_line(fb, 0),
     .pitch = FRAMEBUFFER_BYTES_PER_ROW,
@@ -195,7 +249,23 @@ void compositor_display_update(void (*handle_update_complete_cb)(bool success)) 
   if (pbl_display_update(DISPLAY, &buf, s_flush_y0, s_flush_y1, prv_flush_done, nullptr) != 0) {
     prv_flush_finish((void *)1);
   }
+#endif
 }
+
+#ifdef CONFIG_TEXT_DETAIL
+static void prv_send(uint16_t y0, uint16_t y1, bool grey) {
+  s_detail.grey = grey;
+  struct pbl_display_buffer buf = {
+    .data = (uint8_t *)framebuffer_get_line(compositor_get_framebuffer(), 0),
+    .pitch = FRAMEBUFFER_BYTES_PER_ROW,
+    .detail = &s_detail,
+  };
+
+  if (pbl_display_update(DISPLAY, &buf, y0, y1, prv_flush_done, nullptr) != 0) {
+    prv_flush_finish((void *)1);
+  }
+}
+#endif
 
 bool compositor_display_update_in_progress(void) {
   return s_flush_pending;
@@ -213,3 +283,51 @@ static void prv_collect_display_stats(void) {
   PBL_ANALYTICS_SET_UNSIGNED(display_flush_time_ms, (uint32_t)((ticks * 1000) / PBL_TICK_HZ));
 }
 PBL_ANALYTICS_COLLECTOR_DEFINE(prv_collect_display_stats);
+
+#ifdef CONFIG_TEXT_DETAIL
+#include <pbl/shell/shell.h>
+
+#include <kernel/event_loop.h>
+
+static const char *const s_mode_names[TextDetailModeCount] = {
+  [TextDetailModeMono] = "mono",
+  [TextDetailModeGrey] = "grey",
+  [TextDetailModeSubpixel] = "sub",
+};
+
+static void prv_redraw(void *data) {
+  compositor_redraw();
+}
+
+static int prv_cmd_text_mode(const struct pbl_shell *sh, size_t argc, char **argv) {
+  if (argc > 1) {
+    TextDetailMode mode = TextDetailModeCount;
+    for (int i = 0; i < TextDetailModeCount; i++) {
+      if (strcmp(argv[1], s_mode_names[i]) == 0) {
+        mode = (TextDetailMode)i;
+      }
+    }
+    if (mode == TextDetailModeCount) {
+      pbl_shell_error(sh, "modes: mono, grey, sub");
+      return -EINVAL;
+    }
+    text_detail_set_mode(mode);
+    launcher_task_add_callback(prv_redraw, nullptr);
+  }
+  uint32_t used;
+  uint32_t peak;
+  uint32_t dropped;
+  text_detail_get_stats(&used, &peak, &dropped);
+  pbl_shell_print(sh, "%s; edge pixels %" PRIu32 " (peak %" PRIu32 " of %d, %" PRIu32 " dropped)",
+                  s_mode_names[text_detail_get_mode()], used, peak, CONFIG_TEXT_DETAIL_CELLS,
+                  dropped);
+  return 0;
+}
+
+static const struct pbl_shell_cmd sub_text[] = {
+  PBL_SHELL_CMD(mode, nullptr, "Show or set the text mode: mono, grey or sub", prv_cmd_text_mode),
+  PBL_SHELL_SUBCMD_SET_END,
+};
+
+PBL_SHELL_CMD_REGISTER(text, sub_text, "System UI text", nullptr);
+#endif

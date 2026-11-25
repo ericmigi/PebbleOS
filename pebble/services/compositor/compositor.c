@@ -24,6 +24,9 @@
 #include <process_management/app_manager.h>
 #include <process_management/process_manager.h>
 #include <process_state/app_state/app_state.h>
+#ifdef CONFIG_TEXT_DETAIL
+#include <applib/graphics/text_detail.h>
+#endif
 #include <shell/prefs.h>
 
 PBL_PROFILER_NODE_DEFINE(compositor);
@@ -355,6 +358,10 @@ void compositor_render_app(void) {
 
 void compositor_render_modal(void) {
   GContext *ctx = kernel_ui_get_graphics_context();
+#ifdef CONFIG_TEXT_DETAIL
+  // The modals are drawn whole, their text edges with them
+  text_detail_kernel_frame_begin(s_state == CompositorState_Modal);
+#endif
 
   // We make this GDrawState static to save stack space, thus the declaration and init must be
   // performed on two separate lines because the initializer value is not constant
@@ -677,6 +684,25 @@ void compositor_transition(const CompositorTransition *compositor_animation) {
 FrameBuffer *compositor_get_framebuffer(void) {
   return &s_framebuffer;
 }
+
+#ifdef CONFIG_TEXT_DETAIL
+void compositor_redraw(void) {
+  PBL_ASSERT_TASK(PebbleTask_KernelMain);
+  if (prv_should_render()) {
+    framebuffer_dirty_all(&s_framebuffer);
+    prv_compositor_flush();
+  }
+}
+
+void compositor_get_text_detail_frame(TextDetailFrame *frame) {
+  // The app's records hold for its frame where it is copied to the display one to one
+  const bool app_shown = (s_state == CompositorState_App || s_state == CompositorState_AppAndModal);
+  *frame = (TextDetailFrame){
+    .app = app_shown && s_app_frame_verbatim && gpoint_equal(&s_app_frame_origin, &GPointZero),
+    .modal = (s_state == CompositorState_AppAndModal) ? s_modal_rect : GRectZero,
+  };
+}
+#endif
 
 void compositor_app_framebuffer_mirror_invalidate(void) {
   s_app_framebuffer_mirrored = false;
