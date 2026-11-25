@@ -12,6 +12,7 @@
 #include <pbl/kernel/assert.h>
 #include <pbl/kernel/delay.h>
 #include <pbl/kernel/irq.h>
+#include <pbl/kernel/section.h>
 #include <pbl/kernel/time.h>
 #include <pbl/util/math.h>
 #include <pbl/util/misc.h>
@@ -402,8 +403,9 @@ static void prv_map_row(const struct pbl_display_ssd1677 *epd, const struct plan
  * 480x800: each RAM byte is 8 consecutive framebuffer rows of one column, gathered with a pointer
  * step instead of unpacking the column into line first. Rows in xor_rows are inverted.
  */
-static void prv_map_row_quarter1(const struct pbl_display_ssd1677 *epd, const struct plane_src *src,
-                                 uint32_t across, uint32_t x0, uint32_t len, uint8_t *out) {
+static PBL_SECTION_RAM void prv_map_row_quarter1(const struct pbl_display_ssd1677 *epd,
+                                                 const struct plane_src *src, uint32_t across,
+                                                 uint32_t x0, uint32_t len, uint8_t *out) {
   uint32_t pitch = (epd->disp.props.width + 7U) / 8U;
   uint32_t shift = across % 8U;
   const int16_t *along = &epd->along[x0 * 8U];
