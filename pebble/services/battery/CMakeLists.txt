@@ -22,5 +22,8 @@ else()
     voltage/battery_state.c
   )
 endif()
+if(CONFIG_SERVICE_BATTERY_LOG)
+  list(APPEND sources battery_log.c)
+endif()
 pbl_library()
 pbl_library_sources(${sources})
