@@ -1,6 +1,17 @@
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
 # SPDX-License-Identifier: Apache-2.0
 
+# Espressif's closed libraries come from two submodules, which a plain checkout leaves empty
+foreach(lib esp32c3-bt-lib/esp32c3/libbtdm_app.a esp-phy-lib/esp32c3/libphy.a)
+  if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${lib})
+    message(FATAL_ERROR
+      "CONFIG_ESP32C3_BT: ${lib} is missing. Fetch Espressif's libraries with\n"
+      "  git submodule update --init --depth 1 -- third_party/espressif_bt/esp32c3-bt-lib "
+      "third_party/espressif_bt/esp-phy-lib\n"
+      "or build without Bluetooth: -DCONFIG_ESP32C3_BT=n")
+  endif()
+endforeach()
+
 pbl_library()
 pbl_library_sources(
   esp32c3/bt.c
