@@ -209,6 +209,41 @@ config SYSTEM_UI_FONT
     help
       The system UI has a typeface of its own, the UI_SANS_* fonts.
 
+config SYSTEM_UI_FONT_SCALE2
+    bool
+    help
+      The UI_SANS_* fonts are stored at twice their resolution, for a
+      display scaled by two.
+
+config TEXT_DETAIL
+    bool "Text edges at panel resolution and in grey"
+    default y
+    depends on SYSTEM_UI_FONT_SCALE2 && !RECOVERY_FW
+    help
+      Record the edge pixels of the system UI's text, so a display that
+      shows each pixel as 2x2 panel pixels can draw them at panel
+      resolution (sub-pixel edges) or in grey, without a frame at panel
+      resolution. Choose with the console's "text mode" command.
+
+if TEXT_DETAIL
+
+config TEXT_DETAIL_CELLS
+    int "Edge pixels recorded"
+    range 8 8184
+    default 7200
+    help
+      Edge pixels of text on the display that get their detail; the pool
+      takes 1.75 bytes each, plus 2 bytes per display row. A full
+      notification takes about 5,500, packed in rows of 8. A frame whose
+      text does not fit is shown without detail.
+
+config TEXT_DETAIL_DEFAULT_MODE
+    int "Mode at boot (0 none, 1 grey, 2 sub-pixel edges)"
+    range 0 2
+    default 2
+
+endif # TEXT_DETAIL
+
 config ORIENTATION_MANAGER
     bool "Orientation manager UI"
     help
