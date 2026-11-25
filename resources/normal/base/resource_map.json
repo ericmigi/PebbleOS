@@ -2852,6 +2852,7 @@
       "renderHeight": 14,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
     {
@@ -2864,6 +2865,7 @@
       "renderHeight": 14,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
     {
@@ -2876,6 +2878,7 @@
       "renderHeight": 16,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
     {
@@ -2888,6 +2891,7 @@
       "renderHeight": 16,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
     {
@@ -2900,6 +2904,7 @@
       "renderHeight": 20,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
     {
@@ -2912,6 +2917,7 @@
       "renderHeight": 20,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
     {
@@ -2924,6 +2930,7 @@
       "renderHeight": 26,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
     {
@@ -2936,6 +2943,7 @@
       "renderHeight": 28,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
     {
@@ -2948,6 +2956,7 @@
       "renderHeight": 32,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
     {
@@ -2960,6 +2969,7 @@
       "renderHeight": 34,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
     {
@@ -2971,6 +2981,7 @@
       "renderHeight": 13,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
     },
     {
@@ -2982,6 +2993,7 @@
       "renderHeight": 14,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
     },
     {
@@ -2993,6 +3005,7 @@
       "renderHeight": 16,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
     },
     {
@@ -3004,6 +3017,7 @@
       "renderHeight": 16,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
     },
     {
@@ -3015,6 +3029,7 @@
       "renderHeight": 19,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
     },
     {
@@ -3026,6 +3041,7 @@
       "renderHeight": 20,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
     },
     {
@@ -3037,6 +3053,7 @@
       "renderHeight": 25,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
     },
     {
@@ -3048,6 +3065,7 @@
       "renderHeight": 28,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
     },
     {
@@ -3059,6 +3077,7 @@
       "renderHeight": 31,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
     },
     {
@@ -3070,6 +3089,7 @@
       "renderHeight": 34,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LITERATA_ATKINSON"
     },
     {
@@ -3081,6 +3101,7 @@
       "renderHeight": 13,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
     },
@@ -3093,6 +3114,7 @@
       "renderHeight": 14,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
     },
     {
@@ -3104,6 +3126,7 @@
       "renderHeight": 16,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
     },
@@ -3116,6 +3139,7 @@
       "renderHeight": 16,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
     },
     {
@@ -3127,6 +3151,7 @@
       "renderHeight": 20,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
     },
@@ -3139,6 +3164,7 @@
       "renderHeight": 20,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
     },
     {
@@ -3150,6 +3176,7 @@
       "renderHeight": 25,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
     },
@@ -3162,6 +3189,7 @@
       "renderHeight": 28,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
     },
     {
@@ -3173,6 +3201,7 @@
       "renderHeight": 31,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
     },
@@ -3185,6 +3214,7 @@
       "renderHeight": 34,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY_ATKINSON"
     },
     {
@@ -3196,6 +3226,7 @@
       "renderHeight": 13,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
     },
@@ -3208,6 +3239,7 @@
       "renderHeight": 13,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
     },
@@ -3220,6 +3252,7 @@
       "renderHeight": 16,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
     },
@@ -3232,6 +3265,7 @@
       "renderHeight": 16,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
     },
@@ -3244,6 +3278,7 @@
       "renderHeight": 20,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
     },
@@ -3256,6 +3291,7 @@
       "renderHeight": 19,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
     },
@@ -3268,6 +3304,7 @@
       "renderHeight": 25,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
     },
@@ -3280,6 +3317,7 @@
       "renderHeight": 25,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
     },
@@ -3292,6 +3330,7 @@
       "renderHeight": 31,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
     },
@@ -3304,6 +3343,7 @@
       "renderHeight": 32,
       "scale": 2,
       "bits": 2,
+      "edges": true,
       "autohint": true,
       "config": "CONFIG_SYSTEM_UI_FONT_LOCAL_BOOKERLY"
     }
