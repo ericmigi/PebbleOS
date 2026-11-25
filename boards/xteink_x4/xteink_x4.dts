@@ -194,7 +194,12 @@
 		panel-width = <480>;
 		panel-height = <800>;
 		rotation = <270>;
-		// 5 + 5 frames, 198 ms, against 21 frames, 416 ms, for the panel's own
-		fast-frames = <5>;
+		// Changes only, 3 frames, 60 ms; the rows they touched get 10 more once the UI pauses.
+		// For the panel's own waveform shortened (198 ms, solid at once): fast-frames = <5> alone
+		fast-frames = <3>;
+		fast-differential;
+		topup-frames = <10>;
+		full-refresh-on-idle;
+		power-off-idle-ms = <15000>;
 	};
 };
