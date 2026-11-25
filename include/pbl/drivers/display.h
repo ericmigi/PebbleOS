@@ -99,6 +99,12 @@ struct pbl_display_props {
  * update with grey true comes once the screen has been idle after one with grey false, for the
  * same frame: the display adds the levels of the detail to the rows it already shows, and leaves
  * every other pixel alone.
+ *
+ * With a framebuffer at the panel's resolution (@ref PBL_DISPLAY_FRAMEBUFFER_SCALE 2, shown at
+ * scale 1) only grey updates use the detail, and row() takes a row @p y of the framebuffer and
+ * fills @p cells with 2 bits per pixel, four pixels a byte, the leftmost in the lowest bits: 1
+ * light grey, 2 dark grey, 0 none. Every pixel it gives a level is black in the frame shown, so
+ * the grey pass only lightens. It is called during the update, for its rows.
  */
 struct pbl_display_detail {
   /**

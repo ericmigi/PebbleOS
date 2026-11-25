@@ -90,6 +90,23 @@ static int prv_update(const struct pbl_display *disp, const struct pbl_display_b
     }
   }
 
+  // A grey pass at panel resolution: 2 bits a pixel, 1 light and 2 dark grey
+  if (SCALE == 1 && buf->detail != nullptr && buf->detail->grey &&
+      disp->props.format == PBL_DISPLAY_FORMAT_MONO) {
+    uint8_t levels[(CONFIG_DISPLAY_SDL_WIDTH + 3) / 4];
+    for (uint16_t y = y0; y <= y1; y++) {
+      if (!buf->detail->row(buf->detail, y, levels)) {
+        continue;
+      }
+      for (uint16_t x = 0U; x < width; x++) {
+        const uint8_t level = (levels[x / 4U] >> (2U * (x % 4U))) & 3U;
+        if (level == 1U || level == 2U) {
+          s_fb[y * width + x] = s_levels[level];
+        }
+      }
+    }
+  }
+
   prv_flush(disp);
   pbl_display_complete(disp, 0);
 
