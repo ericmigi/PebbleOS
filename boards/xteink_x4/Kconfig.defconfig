@@ -4,3 +4,8 @@
 # The firmware runs Folio on it, with the Flint resources
 config RESOURCES_BOARD
     default "qemu_flint"
+
+# The radio, once CONFIG_ESP32C3_BT links Espressif's controller in
+choice NIMBLE_HCI
+    default NIMBLE_HCI_ESP32C3 if ESP32C3_BT
+endchoice

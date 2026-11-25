@@ -38,6 +38,16 @@ config NIMBLE_HCI_UART
       option; either can be attached to a host controller such as an
       nRF52840 dongle running an H4 HCI firmware.
 
+config NIMBLE_HCI_ESP32C3
+    bool "ESP32-C3 controller over VHCI"
+    depends on ESP32C3_BT
+    help
+      Talk H4 HCI to the ESP32-C3's own controller, Espressif's library,
+      through its virtual HCI. The controller is used only once armed
+      with btc arm, from the next boot on, and while its bring-up has not
+      failed; until then the transport answers as the fake controller
+      does.
+
 config NIMBLE_HCI_FAKE
     bool "Fake controller"
     help
