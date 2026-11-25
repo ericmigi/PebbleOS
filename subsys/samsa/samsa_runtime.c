@@ -86,6 +86,8 @@ typedef struct {
   // Set while converting objects the firmware keeps, which marks everything
   // they point to as kept too.
   bool retaining;
+  // The SDK call trampoline that has the SVC, or 0
+  uint32_t tramp;
 } Process;
 
 static uint8_t s_app_scratch[APP_SCRATCH_SIZE] __attribute__((aligned(8)));
@@ -618,11 +620,188 @@ static const char *prv_stop_name(SamsaStop stop) {
   process_manager_task_exit();
 }
 
-static SamsaStop prv_handler(SamsaCpu *cpu, SamsaStop why, void *ctx) {
-  if (why != SAMSA_STOP_HOOK) {
-    return why;
+// An app calls the SDK through a stub per function, which jumps to a
+// trampoline that looks the function up in the SDK's table:
+//
+//   stub:        push {r0-r3}; r1 = offset (ldr literal, mov.w or movw); b tramp
+//   tramp:       adr r3, table; ldr r0, [r3]; add r0, r1; ldr r2, [r0]
+//                mov ip, r2; pop {r0-r3}; bx ip; nop
+//   table:       .word <the SDK table, written by the loader>
+//
+// Seen in a call, the trampoline gets an SVC instead of its first
+// instruction, which does its work at once: seven interpreted instructions
+// fewer per call. The stubs run as written.
+#define TRAMPOLINE_SVC 0xfe
+
+static const uint16_t s_trampoline[] = {0xa303, 0x6818, 0x4408, 0x6802,
+                                        0x4694, 0xbc0f, 0x4760, 0xbf00};
+
+//! Host pointer to len bytes at g, if they are in one region of the process.
+static uint8_t *prv_mem(const Process *p, uint32_t g, uint32_t len) {
+  for (unsigned i = 0; i < PBL_ARRAY_SIZE(p->regions); i++) {
+    const SamsaRegion *r = &p->regions[i];
+    if (g - r->guest_base <= r->size && len <= r->size - (g - r->guest_base)) {
+      return r->host + (g - r->guest_base);
+    }
   }
+  return nullptr;
+}
+
+//! Host pointer to len bytes at g in the process's own RAM, the region it can
+//! write.
+static uint8_t *prv_ram(const Process *p, uint32_t g, uint32_t len) {
+  const SamsaRegion *r = &p->regions[0];
+  return g - r->guest_base <= r->size && len <= r->size - (g - r->guest_base)
+             ? r->host + (g - r->guest_base)
+             : nullptr;
+}
+
+static uint32_t prv_le16(const uint8_t *h) {
+  return h[0] | (uint32_t)h[1] << 8;
+}
+
+static uint32_t prv_le32(const uint8_t *h) {
+  return prv_le16(h) | prv_le16(h + 2) << 16;
+}
+
+static bool prv_word(const Process *p, uint32_t g, uint32_t *v) {
+  const uint8_t *h = prv_mem(p, g, 4);
+  if (h) {
+    *v = prv_le32(h);
+  }
+  return h;
+}
+
+//! Target of a B.W or BL at g.
+static bool prv_wide_branch(const Process *p, uint32_t g, uint32_t link, uint32_t *target) {
+  const uint8_t *code = prv_mem(p, g, 4);
+  if (!code) {
+    return false;
+  }
+  const uint32_t h = prv_le16(code), l = prv_le16(code + 2);
+  if ((h & 0xf800u) != 0xf000u || (l & 0xd000u) != (link ? 0xd000u : 0x9000u)) {
+    return false;
+  }
+  const uint32_t s = h >> 10 & 1u, i1 = 1u ^ (l >> 13 & 1u) ^ s, i2 = 1u ^ (l >> 11 & 1u) ^ s;
+  const uint32_t off = s << 24 | i1 << 23 | i2 << 22 | (h & 1023u) << 12 | (l & 2047u) << 1;
+  *target = g + 4 + ((off ^ (1u << 24)) - (1u << 24));
+  return true;
+}
+
+//! The trampoline an SDK call came through: the stub the BL before lr calls
+//! branches to it.
+static bool prv_find_trampoline(const Process *p, uint32_t lr, uint32_t *tramp) {
+  uint32_t s;
+  if (!prv_wide_branch(p, (lr & ~1u) - 4, true, &s)) {
+    return false;
+  }
+  const uint8_t *code = prv_mem(p, s, 8);
+  if (!code || prv_le16(code) != 0xb40f) { // push {r0-r3}
+    return false;
+  }
+  const uint32_t h = prv_le16(code + 2), l = prv_le16(code + 4);
+  uint32_t b;
+  if (h == 0x4901) { // ldr r1, [pc, #4]
+    b = s + 4;
+  } else if ((l & 0x8f00u) == 0x0100u &&
+             ((h & 0xfbffu) == 0xf04fu || (h & 0xfbf0u) == 0xf240u)) { // mov.w or movw r1
+    b = s + 6;
+  } else {
+    return false;
+  }
+  const uint32_t bh = prv_le16(code + (b - s));
+  if ((bh & 0xf800u) == 0xe000u) { // b.n
+    *tramp = b + 4 + (((bh & 2047u) << 1 ^ 2048u) - 2048u);
+    return true;
+  }
+  return prv_wide_branch(p, b, false, tramp);
+}
+
+//! Whether the code at tramp is the trampoline, after its first instruction.
+static bool prv_trampoline_rest(const uint8_t *t) {
+  for (unsigned i = 1; i < PBL_ARRAY_SIZE(s_trampoline); i++) {
+    if (prv_le16(t + 2 * i) != s_trampoline[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+//! On an SDK call through the trampoline, give it the SVC.
+static void prv_patch_trampoline(Process *p, SamsaCpu *cpu) {
+  uint32_t tramp;
+  uint8_t *t;
+  if (p->tramp || !prv_find_trampoline(p, cpu->r[14], &tramp) ||
+      !(t = prv_ram(p, tramp, sizeof(s_trampoline))) || prv_le16(t) != s_trampoline[0] ||
+      !prv_trampoline_rest(t)) {
+    return;
+  }
+  t[0] = TRAMPOLINE_SVC;
+  t[1] = 0xdf;
+  samsa_invalidate(cpu, tramp, 2);
+  p->tramp = tramp;
+}
+
+//! The trampoline's work, from just after its first instruction: false if
+//! any of it would not go as on the hardware.
+static bool prv_trampoline(Process *p, SamsaCpu *cpu, uint32_t tramp) {
+  const uint8_t *t = prv_mem(p, tramp, sizeof(s_trampoline));
+  const uint32_t sp = cpu->r[13];
+  const uint8_t *stack = prv_mem(p, sp, 16);
+  uint32_t table, entry;
+  // adr r3, table: the word at Align(pc, 4) + 12; ldr r0, [r3]; add r0, r1;
+  // ldr r2, [r0]; mov ip, r2
+  if (!t || !prv_trampoline_rest(t) || !prv_word(p, ((tramp + 4) & ~3u) + 12, &table) ||
+      !prv_word(p, table + cpu->r[1], &entry) ||
+      (entry & ~1u) - SAMSA_GUEST_HOOKS >= g_samsa_num_thunks * 4 || (sp & 3u) || !stack) {
+    return false;
+  }
+  // pop {r0-r3}; bx ip
+  for (unsigned i = 0; i < 4; i++) {
+    cpu->r[i] = prv_le32(stack + 4 * i);
+  }
+  cpu->r[13] = sp + 16;
+  cpu->r[12] = entry;
+  cpu->r[15] = entry & ~1u;
+  return true;
+}
+
+//! ITSTATE before an instruction that passed its IT condition, from the
+//! ITSTATE after it, when the block goes on: the advance drops bit 4, the
+//! low bit of the condition that passed.
+static uint8_t prv_itstate_before(const SamsaCpu *cpu) {
+  // Bit NZCV of entry cond: whether cond holds for those flags
+  static const uint16_t s_holds[16] = {0xf0f0, 0x0f0f, 0xcccc, 0x3333, 0xff00, 0x00ff,
+                                       0xaaaa, 0x5555, 0x0c0c, 0xf3f3, 0xaa55, 0x55aa,
+                                       0x0a05, 0xf5fa, 0xffff, 0xffff};
+  const uint8_t it = (uint8_t)((cpu->itstate & 0xe0u) | (cpu->itstate >> 1 & 0x0fu));
+  const unsigned nzcv = samsa_get_xpsr(cpu) >> 28;
+  return s_holds[it >> 4] >> nzcv & 1u ? it : (uint8_t)(it | 0x10u);
+}
+
+static SamsaStop prv_handler(SamsaCpu *cpu, SamsaStop why, void *ctx) {
   Process *p = cpu->user;
+  if (why == SAMSA_STOP_SVC && cpu->stop_info == TRAMPOLINE_SVC && p->tramp &&
+      cpu->r[15] - 2 == p->tramp) {
+    if (cpu->itstate || !prv_trampoline(p, cpu, p->tramp)) {
+      // Put the trampoline back and let it run as written; inside an IT block
+      // (never so in an app's code), from where it was
+      if (cpu->itstate) {
+        cpu->itstate = prv_itstate_before(cpu);
+      }
+      uint8_t *const t = prv_ram(p, p->tramp, 2);
+      t[0] = (uint8_t)s_trampoline[0];
+      t[1] = (uint8_t)(s_trampoline[0] >> 8);
+      samsa_invalidate(cpu, p->tramp, 2);
+      cpu->r[15] = p->tramp;
+      p->tramp = 0;
+      return SAMSA_STOP_BUDGET;
+    }
+  } else if (why != SAMSA_STOP_HOOK) {
+    return why;
+  } else {
+    prv_patch_trampoline(p, cpu);
+  }
   const uint32_t idx = (cpu->r[15] - SAMSA_GUEST_HOOKS) / 4;
   if (idx >= g_samsa_num_thunks) {
     return SAMSA_STOP_USAGE;
@@ -677,6 +856,7 @@ static void prv_reset(Process *p) {
   p->num_objs = 0;
   p->retaining = false;
   p->last_call = 0;
+  p->tramp = 0;
 
   samsa_reset(&p->cpu);
   p->regions[0] = (SamsaRegion){
