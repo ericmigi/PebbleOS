@@ -99,7 +99,7 @@ def device_object(request, build, results_dir, lab_setup, lab_locks, supply):
     config = request.config
     device_type = config.pbl_device_type
     main_build = config.getoption("main_build")
-    device = get_device(device_type)(
+    device = get_device(device_type, build)(
         DeviceConfig(
             build=build,
             results_dir=results_dir,

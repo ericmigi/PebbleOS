@@ -92,7 +92,12 @@ class Build:
 
     @property
     def emulated(self):
-        return bool(self.config.get("CONFIG_QEMU"))
+        return bool(self.config.get("CONFIG_QEMU")) or self.qemu_esp32
+
+    @property
+    def qemu_esp32(self):
+        """Runs on Espressif's QEMU rather than the Pebble one."""
+        return bool(self.config.get("CONFIG_BOARD_QEMU_ESP32C3"))
 
     @property
     def native(self):
