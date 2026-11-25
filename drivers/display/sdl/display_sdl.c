@@ -78,7 +78,12 @@ static int prv_update(const struct pbl_display *disp, const struct pbl_display_b
         pixel = src[x];
       }
       for (uint16_t i = 0U; i < SCALE * SCALE; i++) {
-        const uint8_t level = detail ? (cells[x] >> (2U * i)) & 3U : 0U;
+        uint8_t level = detail ? (cells[x] >> (2U * i)) & 3U : 0U;
+
+        // Black and white until the grey pass
+        if (detail && !buf->detail->grey) {
+          level = (level >= 2U) ? 3U : 0U;
+        }
         s_fb[(y * SCALE + i / SCALE) * width * SCALE + x * SCALE + i % SCALE] =
             (detail && cells[x] != 0U) ? s_levels[level] : pixel;
       }

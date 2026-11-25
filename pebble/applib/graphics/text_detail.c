@@ -198,7 +198,9 @@ static uint8_t prv_panel_levels(uint8_t levels, bool white, TextDetailMode mode,
       }
       return (uint8_t)(((prv_sum(levels) + 2U) / 4U) * 0x55U);
     case TextDetailModeSubpixelGrey:
-      if (grey && !white) {
+      // Coverage as is, black ink: the display shows it black and white until the grey pass,
+      // at a threshold of its own (see struct pbl_display_detail)
+      if (!white) {
         return levels;
       }
       return prv_black_white(levels, white);
