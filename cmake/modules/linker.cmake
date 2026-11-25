@@ -144,13 +144,31 @@ function(pbl_linker_script out_script out_depends)
     list(APPEND depends ${snippet})
   endforeach()
 
+  # Their read-only data stay in flash where .ramfunc runs through an
+  # instruction-bus alias, which data loads may not use.
   get_property(objects GLOBAL PROPERTY PBL_RAMFUNC_OBJECTS)
+  if(CONFIG_RAMFUNC_ALIAS_OFFSET)
+    set(ramfunc_inputs ".text*")
+  else()
+    set(ramfunc_inputs ".text* .rodata*")
+  endif()
   set(content "")
   foreach(object ${objects})
-    string(APPEND content "${object} (.text* .rodata*)\n")
+    string(APPEND content "${object} (${ramfunc_inputs})\n")
   endforeach()
   file(CONFIGURE OUTPUT ${dir}/ramfunc-objects.ld CONTENT "${content}" @ONLY)
   list(APPEND depends ${dir}/ramfunc-objects.ld)
+
+  # For a code section that gathers .text ahead of .ramfunc: the linker
+  # places an input section by the first pattern that matches it.
+  if(objects)
+    string(REPLACE ";" " " exclude "${objects}")
+    set(content "#define PBL_RAMFUNC_EXCLUDE EXCLUDE_FILE(${exclude})\n")
+  else()
+    set(content "#define PBL_RAMFUNC_EXCLUDE\n")
+  endif()
+  file(CONFIGURE OUTPUT ${dir}/ramfunc-exclude.ld CONTENT "${content}" @ONLY)
+  list(APPEND depends ${dir}/ramfunc-exclude.ld)
 
   get_property(include_dirs GLOBAL PROPERTY PBL_LINKER_INCLUDE_DIRS)
   list(PREPEND include_dirs ${PBL_BASE}/kernel/linker)

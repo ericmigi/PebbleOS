@@ -8,11 +8,14 @@
  * data after it, and the load image of .data, stay at FLASH addresses.
  */
 
+#include <ramfunc-exclude.ld>
+
     .code ORIGIN(FLASH) + CONFIG_RISCV_CODE_ALIAS_OFFSET : {
         KEEP(*(.boot_header))
         KEEP(*(.reset))
         KEEP(*(.vectors))
-        *(.text .text.*)
+        /* Not what .ramfunc takes, which comes later */
+        *(PBL_RAMFUNC_EXCLUDE .text PBL_RAMFUNC_EXCLUDE .text.*)
         . = ALIGN(16);
     } AT>FLASH
     ASSERT(LOADADDR(.code) == ORIGIN(FLASH), "Error: the code does not start the FLASH region")
