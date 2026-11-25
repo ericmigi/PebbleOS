@@ -147,6 +147,20 @@ static void prv_poll(void) {
   SDL_RenderPresent(s_renderer);
 }
 
+int display_sdl_bottom_save(const char *path) {
+  int ret = -1;
+  pthread_mutex_lock(&s_lock);
+  if (s_fb != nullptr) {
+    prv_convert();
+    SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormatFrom(
+        s_fb, s_width, s_height, 32, s_width * (int)sizeof(uint32_t), SDL_PIXELFORMAT_ARGB8888);
+    ret = SDL_SaveBMP(surface, path);
+    SDL_FreeSurface(surface);
+  }
+  pthread_mutex_unlock(&s_lock);
+  return ret;
+}
+
 static void prv_exit(void) {
   if (s_screenshot_path == nullptr) {
     return;

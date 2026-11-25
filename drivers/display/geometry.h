@@ -60,3 +60,24 @@ static inline int32_t display_geometry_across(const struct display_geometry *g, 
   return g->quarter ? display_geometry_axis(cy, g->panel_width, flip, g->width, g->scale)
                     : display_geometry_axis(cy, g->panel_height, flip, g->height, g->scale);
 }
+
+// Panel coordinate of sub-pixel sub of framebuffer coordinate k on a panel_len axis
+static inline uint32_t display_geometry_panel_axis(uint32_t k, uint32_t sub, uint32_t panel_len,
+                                                   bool reverse, uint32_t fb_len, uint32_t scale) {
+  uint32_t m = (panel_len - fb_len * scale) / 2U + k * scale + sub;
+
+  return reverse ? panel_len - 1U - m : m;
+}
+
+// Controller column and row of panel pixel (dx, dy) of framebuffer pixel (x, y)
+static inline void display_geometry_scan_pos(const struct display_geometry *g, bool flip,
+                                             uint32_t x, uint32_t y, uint32_t dx, uint32_t dy,
+                                             uint32_t *cx, uint32_t *cy) {
+  if (g->quarter) {
+    *cx = display_geometry_panel_axis(y, dy, g->panel_height, !flip, g->height, g->scale);
+    *cy = display_geometry_panel_axis(x, dx, g->panel_width, flip, g->width, g->scale);
+  } else {
+    *cx = display_geometry_panel_axis(x, dx, g->panel_width, flip, g->width, g->scale);
+    *cy = display_geometry_panel_axis(y, dy, g->panel_height, flip, g->height, g->scale);
+  }
+}

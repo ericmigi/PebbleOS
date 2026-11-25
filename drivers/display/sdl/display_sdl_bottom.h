@@ -19,3 +19,6 @@ void display_sdl_bottom_set_sunlight(bool sunlight);
 
 //! Whether the colors are shown as in sunlight.
 bool display_sdl_bottom_sunlight(void);
+
+//! Saves the frame shown, at the window's own resolution, as a BMP. Returns 0 or -1.
+int display_sdl_bottom_save(const char *path);
