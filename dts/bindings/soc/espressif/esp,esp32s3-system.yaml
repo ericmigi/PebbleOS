@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/soc/espressif/esp,esp32s3-system.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif ESP32-S3 system controller
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+properties:
+  compatible:
+    const: esp,esp32s3-system
+
+  reg:
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false

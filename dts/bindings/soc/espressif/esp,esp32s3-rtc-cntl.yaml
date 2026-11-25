@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/soc/espressif/esp,esp32s3-rtc-cntl.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif ESP32-S3 RTC controller
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+properties:
+  compatible:
+    const: esp,esp32s3-rtc-cntl
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false

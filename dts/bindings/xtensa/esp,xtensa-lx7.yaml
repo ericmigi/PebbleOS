@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/xtensa/esp,xtensa-lx7.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif Xtensa LX7 CPU
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+description:
+  Xtensa LX7 core of the ESP32-S3 with 64 windowed address registers,
+  single-precision FPU and CCOUNT cycle counter.
+
+allOf:
+  - $ref: /schemas/cpu.yaml#
+
+properties:
+  compatible:
+    const: esp,xtensa-lx7
+
+  reg:
+    maxItems: 1
+
+  clock-frequency:
+    description:
+      CPU clock set by early init (240, 160, 80 or 40 MHz) and the rate
+      the CCOUNT cycle counter ticks at.
+
+required:
+  - compatible
+  - device_type
+  - reg
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    cpus {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        cpu@0 {
+            compatible = "esp,xtensa-lx7";
+            device_type = "cpu";
+            reg = <0>;
+            clock-frequency = <240000000>;
+        };
+    };

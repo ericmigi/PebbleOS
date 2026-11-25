@@ -1,0 +1,111 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu0: cpu@0 {
+			compatible = "esp,xtensa-lx7";
+			device_type = "cpu";
+			reg = <0>;
+			clock-frequency = <240000000>;
+		};
+	};
+
+	// SRAM1 on the data bus, from 0x3fc88000 up to the ROM's reserved data/stack (~0x3fcdb700).
+	// 0x3fc88000 aliases IRAM 0x40378000 (+0x6f0000) where .ramfunc and VECBASE run.
+	sram0: memory@3fc88000 {
+		device_type = "memory";
+		reg = <0x3fc88000 0x53000>;
+	};
+
+	clocks {
+		clk_apb: clk-apb {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <80000000>;
+		};
+	};
+
+	soc {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		interrupt-parent = <&intmatrix>;
+		ranges;
+
+		uart0: serial@60000000 {
+			compatible = "esp,esp32c3-uart";
+			reg = <0x60000000 0x1000>;
+			interrupts = <27>;
+			clocks = <&clk_apb>;
+			status = "disabled";
+		};
+
+		efuse: efuse@60007000 {
+			compatible = "esp,esp32c3-efuse";
+			reg = <0x60007000 0x200>;
+		};
+
+		rtc_cntl: rtc@60008000 {
+			compatible = "esp,esp32s3-rtc-cntl";
+			reg = <0x60008000 0x1000>;
+			interrupts = <39>;
+		};
+
+		uart1: serial@60010000 {
+			compatible = "esp,esp32c3-uart";
+			reg = <0x60010000 0x1000>;
+			interrupts = <28>;
+			clocks = <&clk_apb>;
+			status = "disabled";
+		};
+
+		timg0: timer@6001f000 {
+			compatible = "esp,esp32c3-timg";
+			reg = <0x6001f000 0x1000>;
+			interrupts = <50>, <52>;
+		};
+
+		timg1: timer@60020000 {
+			compatible = "esp,esp32c3-timg";
+			reg = <0x60020000 0x1000>;
+			interrupts = <53>, <55>;
+		};
+
+		systimer: timer@60023000 {
+			compatible = "esp,esp32c3-systimer";
+			reg = <0x60023000 0x1000>;
+			interrupts = <57>, <58>, <59>;
+		};
+
+		rng: rng@6003507c {
+			compatible = "esp,esp32c3-rng";
+			reg = <0x6003507c 0x4>;
+		};
+
+		usb_serial_jtag: serial@60038000 {
+			compatible = "esp,esp32c3-usb-serial-jtag";
+			reg = <0x60038000 0x1000>;
+			interrupts = <96>;
+			status = "disabled";
+		};
+
+		system: syscon@600c0000 {
+			compatible = "esp,esp32s3-system";
+			reg = <0x600c0000 0x1000>;
+		};
+
+		intmatrix: interrupt-controller@600c2000 {
+			compatible = "esp,esp32s3-intmatrix";
+			reg = <0x600c2000 0x800>;
+			interrupt-controller;
+			#interrupt-cells = <1>;
+		};
+	};
+};

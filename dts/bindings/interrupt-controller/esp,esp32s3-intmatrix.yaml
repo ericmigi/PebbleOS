@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/interrupt-controller/esp,esp32s3-intmatrix.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Espressif ESP32-S3 interrupt matrix
+
+maintainers:
+  - Eric Migicovsky <eric@repebble.com>
+
+description:
+  Routes each of the 99 peripheral interrupt sources of the ESP32-S3 to one
+  of the 32 interrupt lines of Core 0. The specifier is the source number.
+
+properties:
+  compatible:
+    const: esp,esp32s3-intmatrix
+
+  reg:
+    maxItems: 1
+
+  interrupt-controller: true
+
+  "#interrupt-cells":
+    const: 1
+
+required:
+  - compatible
+  - reg
+  - interrupt-controller
+  - "#interrupt-cells"
+
+additionalProperties: false
+
+examples:
+  - |
+    interrupt-controller@600c2000 {
+        compatible = "esp,esp32s3-intmatrix";
+        reg = <0x600c2000 0x800>;
+        interrupt-controller;
+        #interrupt-cells = <1>;
+    };
