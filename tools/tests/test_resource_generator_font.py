@@ -28,7 +28,9 @@ def warning_for(name):
     return out.getvalue()
 
 
-def font_definition(name, pixel_height=None, extended=False, regex="[0]"):
+def font_definition(
+    name, pixel_height=None, extended=False, regex="[0]", render_height=None
+):
     definition = ResourceDefinition("font", name, TTF_PATH)
     definition.max_glyph_size = 256
     definition.character_list = None
@@ -38,12 +40,13 @@ def font_definition(name, pixel_height=None, extended=False, regex="[0]"):
     definition.extended = extended
     definition.tracking_adjust = None
     definition.pixel_height = pixel_height
+    definition.render_height = render_height
     return definition
 
 
-def build_font(name, pixel_height=None, extended=False, regex="[0]"):
+def build_font(name, pixel_height=None, extended=False, regex="[0]", render_height=None):
     """Build a few glyphs of the font, returning the stored height and anything printed."""
-    definition = font_definition(name, pixel_height, extended, regex)
+    definition = font_definition(name, pixel_height, extended, regex, render_height)
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
         data = FontResourceGenerator.build_font_data(TTF_PATH, definition)
@@ -149,6 +152,18 @@ class TestBuildFontData(unittest.TestCase):
         )
         self.assertEqual(height, 20)
         self.assertIn("the name gives 24", out)
+
+    def test_render_height_keeps_the_name_height_and_baseline(self):
+        # A stand-in for GOTHIC_24: glyphs drawn at 20 px on Gothic 24's line box and baseline
+        render = font_definition("UI_24", extended=True, regex="[H]", render_height=20)
+        # An extended font with pixelHeight draws the same glyphs on the same baseline
+        extension = font_definition("UI_24", 20, extended=True, regex="[H]")
+        with contextlib.redirect_stdout(io.StringIO()):
+            data = FontResourceGenerator.build_font_data(TTF_PATH, render)
+            expected = FontResourceGenerator.build_font_data(TTF_PATH, extension)
+        self.assertEqual(data[1], 24)
+        self.assertEqual(expected[1], 20)
+        self.assertEqual(data[:1] + data[2:], expected[:1] + expected[2:])
 
     def test_pixel_height_refuses_a_boolean(self):
         # int() would turn true into a 1 pixel font
