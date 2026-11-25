@@ -12,6 +12,8 @@
 // clang-format off
 #include <os/os_mbuf.h>
 // clang-format on
+#include "hci_fake.h"
+
 #include <nimble/hci_common.h>
 #include <nimble/transport.h>
 #include <nimble/transport_impl.h>
@@ -98,10 +100,7 @@ static const struct fake_rp *prv_find_rp(uint16_t opcode) {
   return NULL;
 }
 
-void ble_transport_ll_init(void) {
-}
-
-int ble_transport_to_ll_cmd_impl(void *buf) {
+int hci_fake_cmd(void *buf) {
   struct ble_hci_cmd *cmd = buf;
   const struct fake_rp *rp = prv_find_rp(le16toh(cmd->opcode));
   uint8_t rp_len = rp ? rp->len : 0;
@@ -135,6 +134,14 @@ done:
   return rc;
 }
 
+#ifdef CONFIG_NIMBLE_HCI_FAKE
+void ble_transport_ll_init(void) {
+}
+
+int ble_transport_to_ll_cmd_impl(void *buf) {
+  return hci_fake_cmd(buf);
+}
+
 int ble_transport_to_ll_acl_impl(struct os_mbuf *om) {
   os_mbuf_free_chain(om);
   return 0;
@@ -144,3 +151,4 @@ int ble_transport_to_ll_iso_impl(struct os_mbuf *om) {
   os_mbuf_free_chain(om);
   return 0;
 }
+#endif

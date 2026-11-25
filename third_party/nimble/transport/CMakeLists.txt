@@ -3,6 +3,9 @@
 
 pbl_library()
 pbl_library_sources_ifdef(CONFIG_NIMBLE_HCI_FAKE hci_fake.c)
+if(CONFIG_NIMBLE_HCI_ESP32C3)
+  pbl_library_sources(hci_esp32c3.c hci_fake.c)
+endif()
 pbl_library_sources_ifdef(CONFIG_NIMBLE_HCI_SF32LB hci_sf32lb.c)
 pbl_library_sources_ifdef(CONFIG_NIMBLE_HCI_UART hci_uart.c)
 pbl_library_sources_ifdef(CONFIG_NIMBLE_ID_ADDR_POSIX id_addr_posix.c)
