@@ -1237,7 +1237,6 @@ static int prv_update_nocopy(const struct pbl_display_ssd1677 *epd,
     return ret;
   }
 
-  bool large = epd->touched_rows != nullptr && (uint32_t)(last - first + 1) * 2U >= height;
   struct pbl_display_ssd1677_window w = prv_window(epd, (uint16_t)first, (uint16_t)last);
   uint32_t lo;
   uint32_t hi;
@@ -1270,7 +1269,7 @@ static int prv_update_nocopy(const struct pbl_display_ssd1677 *epd,
   state->resync_hi = (uint16_t)last;
   state->resync_valid = true;
   if (ret == 0) {
-    ret = prv_refresh(state->disp, REFRESH_FAST, false, large ? state->wave.topup_frames : 0U);
+    ret = prv_refresh(state->disp, REFRESH_FAST, false, 0U);
   }
   if (ret != 0) {
     state->resync_valid = false;
