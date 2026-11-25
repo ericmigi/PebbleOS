@@ -43,6 +43,7 @@ class FontResourceGenerator(ResourceGenerator):
         definition.scale = definition_dict.get("scale", 1)
         definition.autohint = bool(definition_dict.get("autohint"))
         definition.bits = definition_dict.get("bits", 1)
+        definition.fallback = definition_dict.get("fallback")
         return definition
 
     @staticmethod
@@ -144,6 +145,8 @@ class FontResourceGenerator(ResourceGenerator):
                 )
             if bits == 2:
                 font.set_bits2()
+            if getattr(definition, "fallback", None):
+                font.set_fallback(definition.fallback)
 
             if definition.character_regex is not None:
                 font.set_regex_filter(definition.character_regex)
