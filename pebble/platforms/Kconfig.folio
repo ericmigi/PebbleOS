@@ -6,6 +6,10 @@ if PLATFORM_FOLIO
 config PLATFORM_NAME
     default "folio"
 
+# Apps are the X4's own RISC-V code
+config PLATFORM_ABI
+    default "riscv32"
+
 config PLATFORM_DISPLAY_WIDTH
     default 240
 
