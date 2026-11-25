@@ -13,8 +13,32 @@ typedef struct VoltagePoint {
 } VoltagePoint;
 
 // When the voltage drops below these (mV), the watch will start heading for standby (after delay)
-#define BATTERY_CRITICAL_VOLTAGE_CHARGING    3550
+#define BATTERY_CRITICAL_VOLTAGE_CHARGING 3550
+#ifdef CONFIG_PLATFORM_XTEINKX4
+#define BATTERY_CRITICAL_VOLTAGE_DISCHARGING 3450
+#else
 #define BATTERY_CRITICAL_VOLTAGE_DISCHARGING 3300
+#endif
+
+#ifdef CONFIG_PLATFORM_XTEINKX4
+// The Xteink X4's 1S Li-ion cell at rest, a notch per 10 %, from CrossPoint's BatteryMonitor
+// (FreeInk, MIT). Empty is 3.45 V: below it only minutes are left, and an e-paper refresh sags
+// the cell further. Rounding to the nearest 10 % puts each notch's edge at the midpoint of its
+// segment, as CrossPoint does.
+static VoltagePoint discharge_curve[] = {
+  {0, BATTERY_CRITICAL_VOLTAGE_DISCHARGING},
+  {10, 3680},
+  {20, 3740},
+  {30, 3770},
+  {40, 3790},
+  {50, 3820},
+  {60, 3870},
+  {70, 3920},
+  {80, 3980},
+  {90, 4060},
+  {100, 4200}
+};
+#else
 // Battery Tables for Silk
 static VoltagePoint discharge_curve[] = {
   {0, BATTERY_CRITICAL_VOLTAGE_DISCHARGING},
@@ -31,6 +55,7 @@ static VoltagePoint discharge_curve[] = {
   {90, 4120},
   {100, 4230}
 };
+#endif
 
 static const VoltagePoint charge_curve[] = {
   {0, BATTERY_CRITICAL_VOLTAGE_CHARGING},
