@@ -12,7 +12,9 @@
 #include <pbl/kernel/debug.h>
 #include <pbl/kernel/delay.h>
 #include <pbl/kernel/fatal.h>
+#include <pbl/kernel/heap.h>
 #include <pbl/kernel/irq.h>
+#include <pbl/kernel/malloc.h>
 #include <pbl/kernel/mpu.h>
 #include <pbl/kernel/reboot.h>
 #include <pbl/kernel/time.h>
@@ -254,6 +256,23 @@ static int prv_cmd_stacks(const struct pbl_shell *sh, size_t argc, char **argv) 
   return 0;
 }
 
+static int prv_cmd_heap(const struct pbl_shell *sh, size_t argc, char **argv) {
+  struct pbl_heap *heap = pbl_malloc_heap();
+  unsigned int used = 0U;
+  unsigned int free = 0U;
+  unsigned int max_free = 0U;
+  size_t total = pbl_heap_size(heap);
+  size_t min_headroom = pbl_heap_min_headroom(heap);
+
+  pbl_heap_stats(heap, &used, &free, &max_free);
+  pbl_shell_print(sh, "kernel heap: %u used, %u free (%u largest), peak %u, min free %u / %u",
+                  used, free, max_free, (unsigned int)(total - min_headroom),
+                  (unsigned int)min_headroom, (unsigned int)total);
+  return 0;
+}
+
+PBL_SHELL_SUBCMD_ADD(sub_sys, heap, nullptr, "Show kernel heap usage and headroom", prv_cmd_heap, 0,
+                     0);
 PBL_SHELL_SUBCMD_ADD(sub_sys, stacks, nullptr,
                      "Show how much of each thread's stack was never used", prv_cmd_stacks, 0, 0);
 PBL_SHELL_SUBCMD_ADD(sub_sys, reset, nullptr, "Reset the system", prv_cmd_reset, 0, 0);
