@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig ESP32C3_BT
+    bool "Espressif ESP32-C3 Bluetooth LE controller"
+    depends on SOC_ESP32C3
+    select MCU
+    select RNG
+    help
+      Link Espressif's Bluetooth LE controller and PHY libraries, from
+      the esp32c3-bt-lib and esp-phy-lib submodules, with the glue that
+      runs them on PebbleOS.
+
+if ESP32C3_BT
+
+config ESP32C3_BT_CONTROLLER_PRIO
+    int "Controller thread priority"
+    default 4
+    help
+      Priority of the controller's thread, above the NimBLE host's, as
+      ESP-IDF runs it two below its highest.
+
+config ESP32C3_BT_CONTROLLER_STACK_SIZE
+    int "Controller thread stack size in bytes"
+    default 3584
+    help
+      ESP-IDF gives the controller task 3584 bytes.
+
+config ESP32C3_BT_BLE_MAX_ACT
+    int "BLE activities"
+    range 1 10
+    default 3
+    help
+      Advertising, scanning, connection and initiating instances the
+      controller allocates for: each costs heap. The watch advertises
+      and keeps one connection.
+
+module = ESP32C3_BT
+module-str = ESP32-C3 Bluetooth controller
+source "subsys/logging/Kconfig.template.log_level"
+
+endif # ESP32C3_BT

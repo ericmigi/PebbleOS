@@ -60,6 +60,23 @@ components:
     license: Apache-2.0
     url: https://github.com/espressif/esp-phy-lib
 
+  - name: esp-idf-bt-glue
+    paths:
+      - espressif_bt/esp32c3/bt.c
+      - espressif_bt/esp32c3/esp32c3_regs.h
+      - espressif_bt/esp32c3/esp_bt.h
+      - espressif_bt/esp32c3/phy.c
+      - espressif_bt/esp32c3/phy.h
+      - espressif_bt/esp32c3/phy_init_data.c
+      - espressif_bt/esp32c3/phy_init_data.h
+      - espressif_bt/esp32c3/rom.ld
+    supplier: Espressif Systems (Shanghai) Co., Ltd.
+    description: Controller and PHY bring-up and ROM symbols derived from ESP-IDF
+    version: 5.5.5
+    license: Apache-2.0
+    purl: pkg:github/espressif/esp-idf@v{version}
+    url: https://github.com/espressif/esp-idf
+
   - name: fff
     path: fff/fff
     supplier: Michael Long
