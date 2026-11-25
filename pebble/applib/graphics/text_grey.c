@@ -87,7 +87,9 @@ void text_detail_add_glyph(const GBitmap *dest, const FontInfo *font, uint32_t c
   }
   unsigned owner;
   if (pebble_task_get_current() == PebbleTask_App) {
-    if (dest->addr != app_state_get_framebuffer()->buffer) {
+    const PebbleProcessMd *md = app_manager_get_current_app_md();
+    if (!md || md->is_unprivileged || dest->addr != app_state_get_framebuffer()->buffer ||
+        dest->bounds.size.w != PBL_DISPLAY_WIDTH || dest->bounds.size.h != PBL_DISPLAY_HEIGHT) {
       return;
     }
     owner = 0;
@@ -141,6 +143,9 @@ PBL_SYSCALL(void, sys_text_detail_app_frame_begin) {
 }
 
 static void prv_set(int row, int x, unsigned level) {
+  if (row < 0 || row >= BAND_ROWS || x < 0 || x >= PBL_DISPLAY_WIDTH * 2) {
+    return;
+  }
   s_band[row][x / 4] |= (uint8_t)(level << (2 * (x % 4)));
   s_band_any[row] = true;
 }
@@ -230,7 +235,8 @@ static void prv_fill_band(const TextDetailFrame *frame, int band) {
         const int y = 2 * cy + (int)(s >> 1);
         const int x = 2 * cx + (int)(s & 1U);
         // Only pixels the frame still shows black, as the text left them
-        if ((level == 1U || level == 2U) && y >= y0 && y < y0 + BAND_ROWS && prv_black(fb, x, y)) {
+        if ((level == 1U || level == 2U) && x >= 0 && x < PBL_DISPLAY_WIDTH * 2 && y >= 0 &&
+            y < ROWS && y >= y0 && y < y0 + BAND_ROWS && prv_black(fb, x, y)) {
           prv_set(y - y0, x, level);
         }
       }

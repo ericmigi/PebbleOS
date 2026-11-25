@@ -758,12 +758,14 @@ void graphics_draw_line(GContext *ctx, GPoint p0, GPoint p1) {
   GScaled2Scope saved;
   if (p0.x != p1.x && p0.y != p1.y && ctx->draw_state.stroke_width <= 1 &&
       graphics_private_scaled2_begin(ctx, &saved)) {
-    // Two 1-pixel lines a diagonal pixel apart: through the centres of the 2x2 blocks, two
-    // pixels wide, and a fraction of the stroked line's cost
+    // Two 1-pixel lines offset orthogonally to the dominant axis: two native pixels wide, and a
+    // fraction of the stroked line's cost
     const GPoint a = GPoint(2 * p0.x, 2 * p0.y);
     const GPoint b = GPoint(2 * p1.x, 2 * p1.y);
+    const GPoint step =
+        (PBL_ABS(p1.y - p0.y) >= PBL_ABS(p1.x - p0.x)) ? GPoint(1, 0) : GPoint(0, 1);
     graphics_line_draw_1px_non_aa(ctx, a, b);
-    graphics_line_draw_1px_non_aa(ctx, gpoint_add(a, GPoint(1, 1)), gpoint_add(b, GPoint(1, 1)));
+    graphics_line_draw_1px_non_aa(ctx, gpoint_add(a, step), gpoint_add(b, step));
     graphics_private_scaled2_end(ctx, &saved);
     return;
   }
