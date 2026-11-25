@@ -392,7 +392,8 @@ void render_glyph(GContext *const ctx, const uint32_t codepoint, FontInfo *const
 #endif
 
 #ifdef CONFIG_TEXT_DETAIL
-  if (text_resources_glyph_has_edges(&location)) {
+  // An empty glyph (a space) has no body to carry edges
+  if (text_resources_glyph_has_edges(&location) && glyph_target.size.w && glyph_target.size.h) {
     prv_record_edges(ctx, glyph, &glyph_target);
   }
 #endif
