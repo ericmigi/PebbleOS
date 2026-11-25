@@ -70,6 +70,7 @@ components:
       - espressif_bt/esp32c3/phy_init_data.c
       - espressif_bt/esp32c3/phy_init_data.h
       - espressif_bt/esp32c3/rom.ld
+      - espressif_bt/esp32c3/rom_patch.ld
     supplier: Espressif Systems (Shanghai) Co., Ltd.
     description: Controller and PHY bring-up and ROM symbols derived from ESP-IDF
     version: 5.5.5

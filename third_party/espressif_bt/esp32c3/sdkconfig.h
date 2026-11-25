@@ -36,13 +36,17 @@
 #define CONFIG_BT_BLE_CCA_MODE                        0
 #define CONFIG_BT_CTRL_CHAN_ASS_EN                    1
 #define CONFIG_BT_CTRL_LE_PING_EN                     1
-#define CONFIG_BT_CTRL_RUN_IN_FLASH_ONLY              1
-#define CONFIG_BT_CTRL_DTM_ENABLE                     1
-#define CONFIG_BT_CTRL_BLE_MASTER                     1
-#define CONFIG_BT_CTRL_BLE_SCAN                       1
-#define CONFIG_BT_CTRL_BLE_SECURITY_ENABLE            1
-#define CONFIG_BT_CTRL_BLE_ADV                        1
-#define CONFIG_BT_CTRL_CHECK_CONFIG_EFF               1
+#ifdef CONFIG_ESP32C3_BT_CONTROLLER_IN_FLASH
+#define CONFIG_BT_CTRL_RUN_IN_FLASH_ONLY 1
+#else
+#define CONFIG_BT_CTRL_RUN_IN_FLASH_ONLY 0
+#endif
+#define CONFIG_BT_CTRL_DTM_ENABLE          1
+#define CONFIG_BT_CTRL_BLE_MASTER          1
+#define CONFIG_BT_CTRL_BLE_SCAN            1
+#define CONFIG_BT_CTRL_BLE_SECURITY_ENABLE 1
+#define CONFIG_BT_CTRL_BLE_ADV             1
+#define CONFIG_BT_CTRL_CHECK_CONFIG_EFF    1
 // The host is NimBLE, built without the extended advertising of BLE 5.0
 #define CONFIG_BT_NIMBLE_ENABLED            1
 #define CONFIG_BT_NIMBLE_50_FEATURE_SUPPORT 0

@@ -34,7 +34,9 @@
 #include <pbl/kernel/time.h>
 #include <pbl/logging/logging.h>
 
+#include <devicetree/regs.h>
 #include <esp32c3_bt.h>
+#include <hardware/esp32c3_systimer.h>
 #include <intmatrix.h>
 
 PBL_LOG_MODULE_DEFINE(espressif_bt, CONFIG_ESP32C3_BT_LOG_LEVEL);
@@ -167,8 +169,42 @@ extern void ets_delay_us(uint32_t us);
 // The controller library allocates three interrupts, BT_BB, RWBT and RWBLE
 #define INTR_SLOTS 4
 
-static pbl_irq_t s_intr[INTR_SLOTS];
+// Timing statistics, for btc status: ISR handler duration, ISR signal to thread wake-up
+static int64_t get_time_us_wrapper(void);
+static volatile int64_t s_isr_signal_us;
+static uint32_t s_isr_max_us, s_wake_max_us;
+static void prv_woken(void);
+
+// The source first: the handle the library gets points at it
+static struct btdm_intr {
+  pbl_irq_t source;
+  intr_handler_t fn;
+  void *arg;
+  uint32_t count;
+} s_intr[INTR_SLOTS];
 static uint32_t s_intr_count;
+
+static void prv_intr_trampoline(void *arg) {
+  struct btdm_intr *intr = arg;
+
+  const int64_t start = get_time_us_wrapper();
+
+  intr->count++;
+  intr->fn(intr->arg);
+  const uint32_t d = (uint32_t)(get_time_us_wrapper() - start);
+  if (d > s_isr_max_us) {
+    s_isr_max_us = d;
+  }
+}
+
+bool esp32c3_bt_intr_stats(uint32_t i, uint32_t *source, uint32_t *count) {
+  if (i >= s_intr_count) {
+    return false;
+  }
+  *source = s_intr[i].source;
+  *count = s_intr[i].count;
+  return true;
+}
 
 // low power clock period in micro seconds, and its fractional bits: the main crystal, divided to
 // 1 MHz
@@ -193,15 +229,20 @@ static int interrupt_alloc_wrapper(int cpu_id, int source, intr_handler_t handle
     return -ENOSPC;
   }
 
-  ret = esp32c3_irq_attach((pbl_irq_t)source, handler, arg);
+  struct btdm_intr *intr = &s_intr[s_intr_count];
+
+  intr->source = (pbl_irq_t)source;
+  intr->fn = handler;
+  intr->arg = arg;
+  ret = esp32c3_irq_attach((pbl_irq_t)source, prv_intr_trampoline, intr);
   PBL_LOG_DBG("interrupt source %d: %d", source, ret);
   if (ret != 0) {
     return ret;
   }
 
   // ESP-IDF's esp_intr_alloc() enables it at once
-  s_intr[s_intr_count] = (pbl_irq_t)source;
-  *ret_handle = &s_intr[s_intr_count++];
+  s_intr_count++;
+  *ret_handle = &intr->source;
   pbl_irq_enable((pbl_irq_t)source);
 
   return 0;
@@ -282,11 +323,15 @@ static int semphr_give_from_isr_wrapper(void *semphr, void *hptw) {
   if (hptw != nullptr) {
     *(int *)hptw = 0;
   }
+  s_isr_signal_us = get_time_us_wrapper();
   return prv_sem_give(semphr);
 }
 
 static int semphr_take_wrapper(void *semphr, uint32_t block_time_ms) {
-  return pbl_sem_take(semphr, prv_timeout(block_time_ms)) == 0 ? OSI_OK : OSI_FAIL;
+  const int ret = pbl_sem_take(semphr, prv_timeout(block_time_ms)) == 0 ? OSI_OK : OSI_FAIL;
+
+  prv_woken();
+  return ret;
 }
 
 static int semphr_give_wrapper(void *semphr) {
@@ -314,6 +359,25 @@ static int mutex_lock_wrapper(void *mutex) {
 static int mutex_unlock_wrapper(void *mutex) {
   pbl_mutex_unlock(mutex);
   return OSI_OK;
+}
+
+void esp32c3_bt_timing_stats(uint32_t *isr_max_us, uint32_t *wake_max_us) {
+  *isr_max_us = s_isr_max_us;
+  *wake_max_us = s_wake_max_us;
+  s_isr_max_us = 0U;
+  s_wake_max_us = 0U;
+}
+
+static void prv_woken(void) {
+  const int64_t sent = s_isr_signal_us;
+
+  if (sent != 0) {
+    const uint32_t d = (uint32_t)(get_time_us_wrapper() - sent);
+    s_isr_signal_us = 0;
+    if (d > s_wake_max_us) {
+      s_wake_max_us = d;
+    }
+  }
 }
 
 struct btdm_queue {
@@ -349,13 +413,18 @@ static int queue_send_from_isr_wrapper(void *queue, void *item, void *hptw) {
   if (hptw != nullptr) {
     *(int *)hptw = 0;
   }
+  s_isr_signal_us = get_time_us_wrapper();
   return pbl_msgq_put(&((struct btdm_queue *)queue)->q, item, PBL_NO_WAIT) == 0 ? OSI_OK : OSI_FAIL;
 }
 
 static int queue_recv_wrapper(void *queue, void *item, uint32_t block_time_ms) {
-  return pbl_msgq_get(&((struct btdm_queue *)queue)->q, item, prv_timeout(block_time_ms)) == 0
-             ? OSI_OK
-             : OSI_FAIL;
+  const int ret =
+      pbl_msgq_get(&((struct btdm_queue *)queue)->q, item, prv_timeout(block_time_ms)) == 0
+          ? OSI_OK
+          : OSI_FAIL;
+
+  prv_woken();
+  return ret;
 }
 
 static int queue_recv_from_isr_wrapper(void *queue, void *item, void *hptw) {
@@ -535,12 +604,49 @@ static void btdm_backup_dma_copy_wrapper(uint32_t reg, uint32_t mem_addr, uint32
                                          bool to_mem) {
 }
 
-// The library linked whole in flash patches no ROM function table
+#ifndef CONFIG_ESP32C3_BT_CONTROLLER_IN_FLASH
+extern void ble_scan_funcs_reset(void);
+extern void ble_42_adv_funcs_reset(void);
+extern void ble_init_funcs_reset(void);
+extern void ble_con_funcs_reset(void);
+extern void ble_base_funcs_reset(void);
+extern void ble_enc_funcs_reset(void);
+extern void ble_dtm_funcs_reset(void);
+#endif
+
+// The controller in ROM, patched: point its function tables at the features configured. The
+// library linked whole in flash has none.
 static void btdm_funcs_table_ready_wrapper(void) {
+#ifndef CONFIG_ESP32C3_BT_CONTROLLER_IN_FLASH
+  ble_base_funcs_reset();
+  ble_42_adv_funcs_reset();
+  ble_dtm_funcs_reset();
+  ble_scan_funcs_reset();
+  ble_enc_funcs_reset();
+  ble_init_funcs_reset();
+  ble_con_funcs_reset();
+#endif
 }
 
+// esp_timer_get_time(): microseconds from SYSTIMER unit 0, which counts at 16 MHz. The snapshot
+// is taken under the lock, as the kernel's timer driver takes its own.
 static int64_t get_time_us_wrapper(void) {
-  return (int64_t)(pbl_uptime_ticks() * (1000000U / PBL_TICK_HZ));
+  uint64_t now;
+
+  pbl_irq_lock();
+  pbl_writel(SYSTIMER_UNIT_OP_UPDATE,
+             PBL_DT_REG_ESP_ESP32C3_SYSTIMER + ESP32C3_SYSTIMER_UNIT0_OP_OFFSET);
+  while ((pbl_readl(PBL_DT_REG_ESP_ESP32C3_SYSTIMER + ESP32C3_SYSTIMER_UNIT0_OP_OFFSET) &
+          SYSTIMER_UNIT_OP_VALUE_VALID) == 0U) {
+  }
+  now = ((uint64_t)(pbl_readl(PBL_DT_REG_ESP_ESP32C3_SYSTIMER +
+                              ESP32C3_SYSTIMER_UNIT0_VALUE_HI_OFFSET) &
+                    SYSTIMER_VALUE_HI_MASK)
+         << 32) |
+        pbl_readl(PBL_DT_REG_ESP_ESP32C3_SYSTIMER + ESP32C3_SYSTIMER_UNIT0_VALUE_LO_OFFSET);
+  pbl_irq_unlock();
+
+  return (int64_t)(now / 16U);
 }
 
 static void assert_wrapper(void) {
@@ -649,6 +755,11 @@ int esp32c3_bt_controller_init(void) {
   esp_bt_power_domain_on();
 
   btdm_controller_rom_data_init();
+#ifdef CONFIG_ESP32C3_BT_LOG_LEVEL_DEBUG
+  // The controller prints its asserts' file and line through ets_printf() above 0
+  extern int g_bt_plf_log_level;
+  g_bt_plf_log_level = 1;
+#endif
 
   osi_funcs_p = pbl_malloc(sizeof(struct osi_funcs_t));
   if (osi_funcs_p == nullptr) {

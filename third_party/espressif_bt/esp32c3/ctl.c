@@ -232,7 +232,17 @@ static int prv_cmd_status(const struct pbl_shell *sh, size_t argc, char **argv) 
                     mac[3], mac[4], (uint8_t)(mac[5] + 2U));
   }
   if (esp32c3_bt_controller_enabled()) {
+    uint32_t source, count;
+
     pbl_shell_print(sh, "version: %s", esp32c3_bt_controller_version());
+    uint32_t isr_us, wake_us;
+
+    esp32c3_bt_timing_stats(&isr_us, &wake_us);
+    pbl_shell_print(sh, "since last: longest ISR %" PRIu32 " us, ISR to thread %" PRIu32 " us",
+                    isr_us, wake_us);
+    for (uint32_t i = 0U; esp32c3_bt_intr_stats(i, &source, &count); i++) {
+      pbl_shell_print(sh, "interrupt source %" PRIu32 ": %" PRIu32 " calls", source, count);
+    }
   }
   pbl_shell_print(sh, "kernel heap: %u used of %u, %u headroom at worst",
                   (unsigned int)pbl_heap_used(pbl_malloc_heap()),
@@ -269,7 +279,7 @@ static int prv_cmd_clear(const struct pbl_shell *sh, size_t argc, char **argv) {
 // btc hci 01 03 0c 00: an H4 packet, type byte first; prints what comes back within 500 ms
 static int prv_cmd_hci(const struct pbl_shell *sh, size_t argc, char **argv) {
   static bool s_registered;
-  uint8_t pkt[32];
+  uint8_t pkt[64];
   size_t len = 0U;
 
   if (!esp32c3_bt_controller_enabled()) {
@@ -280,15 +290,25 @@ static int prv_cmd_hci(const struct pbl_shell *sh, size_t argc, char **argv) {
     pbl_shell_error(sh, "NimBLE owns the controller");
     return -EBUSY;
   }
-  for (size_t i = 1U; i < argc && len < sizeof(pkt); i++) {
-    char *end;
-    unsigned long b = strtoul(argv[i], &end, 16);
+  // Hex bytes, several to an argument if need be: the shell takes few arguments
+  for (size_t i = 1U; i < argc; i++) {
+    const size_t n = strlen(argv[i]);
 
-    if (*argv[i] == '\0' || *end != '\0' || b > 0xffUL) {
-      pbl_shell_error(sh, "bad byte '%s'", argv[i]);
+    if (n == 0U || n % 2U != 0U || len + n / 2U > sizeof(pkt)) {
+      pbl_shell_error(sh, "bad bytes '%s'", argv[i]);
       return -EINVAL;
     }
-    pkt[len++] = (uint8_t)b;
+    for (size_t j = 0U; j < n; j += 2U) {
+      char byte[3] = {argv[i][j], argv[i][j + 1U], '\0'};
+      char *end;
+      unsigned long b = strtoul(byte, &end, 16);
+
+      if (*end != '\0') {
+        pbl_shell_error(sh, "bad bytes '%s'", argv[i]);
+        return -EINVAL;
+      }
+      pkt[len++] = (uint8_t)b;
+    }
   }
   if (!s_registered) {
     int ret = esp32c3_bt_vhci_register(&s_raw_cb);
@@ -343,6 +363,8 @@ static const struct {
   {"SYSCON_WIFI_RST_EN", 0x60026018U},
   {"SYSTEM_CPU_PER_CONF", 0x600c0008U},
   {"SYSTEM_SYSCLK_CONF", 0x600c0058U},
+  {"SYSTEM_BT_LPCK_DIV_INT", 0x600c0020U},
+  {"SYSTEM_BT_LPCK_DIV_FRAC", 0x600c0024U},
   {"PWDET_CONF", 0x6000e060U},
   {"USB_SERIAL_JTAG_CONF0", 0x60043018U},
   {"USB_SERIAL_JTAG_FRAM_NUM", 0x60043024U},
@@ -357,6 +379,21 @@ static int prv_cmd_regs(const struct pbl_shell *sh, size_t argc, char **argv) {
   return 0;
 }
 
+// btc rd ADDR [COUNT]: read words, for the registers regs does not list
+static int prv_cmd_rd(const struct pbl_shell *sh, size_t argc, char **argv) {
+  unsigned long addr = strtoul(argv[1], nullptr, 16);
+  unsigned long count = argc > 2 ? strtoul(argv[2], nullptr, 0) : 1UL;
+
+  if ((addr & 3UL) != 0UL || addr < 0x3fc80000UL || count == 0UL || count > 64UL) {
+    pbl_shell_error(sh, "bad address or count");
+    return -EINVAL;
+  }
+  for (unsigned long i = 0UL; i < count; i++) {
+    pbl_shell_print(sh, "%08lx = %08" PRIx32, addr + 4UL * i, pbl_readl(addr + 4UL * i));
+  }
+  return 0;
+}
+
 static const struct pbl_shell_cmd sub_btc[] = {
   PBL_SHELL_CMD_ARG(status, nullptr, "State, controller, expected address", prv_cmd_status, 1, 0),
   PBL_SHELL_CMD_ARG(start, nullptr, "Bring the controller up (watchdog armed)", prv_cmd_start, 1,
@@ -366,9 +403,10 @@ static const struct pbl_shell_cmd sub_btc[] = {
   PBL_SHELL_CMD_ARG(arm, nullptr, "Let NimBLE use the controller from the next boot", prv_cmd_arm,
                     1, 0),
   PBL_SHELL_CMD_ARG(clear, nullptr, "Forget a failed attempt and the arming", prv_cmd_clear, 1, 0),
-  PBL_SHELL_CMD_ARG(hci, nullptr, "Send an H4 packet <type> <bytes...>, print the answer",
-                    prv_cmd_hci, 2, 31),
+  PBL_SHELL_CMD_ARG(hci, nullptr, "Send an H4 packet <hex bytes...>, print the answer", prv_cmd_hci,
+                    2, 31),
   PBL_SHELL_CMD_ARG(regs, nullptr, "Dump clock, power and USB registers", prv_cmd_regs, 1, 0),
+  PBL_SHELL_CMD_ARG(rd, nullptr, "Read words <hex address> [count]", prv_cmd_rd, 2, 1),
   PBL_SHELL_SUBCMD_SET_END,
 };
 

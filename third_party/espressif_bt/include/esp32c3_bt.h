@@ -44,6 +44,10 @@ int esp32c3_bt_controller_init(void);
 int esp32c3_bt_controller_enable(void);
 bool esp32c3_bt_controller_enabled(void);
 const char *esp32c3_bt_controller_version(void);
+/** @brief The source and the call count of the controller's i-th interrupt, while there is one. */
+/** @brief The longest ISR and ISR-to-thread wake-up since the last call, in microseconds. */
+void esp32c3_bt_timing_stats(uint32_t *isr_max_us, uint32_t *wake_max_us);
+bool esp32c3_bt_intr_stats(uint32_t i, uint32_t *source, uint32_t *count);
 
 /** @brief Whether the controller takes a packet now. */
 bool esp32c3_bt_vhci_send_available(void);

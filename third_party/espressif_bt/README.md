@@ -9,11 +9,11 @@ host; it talks to the controller over its virtual HCI (VHCI), see
 
 | Path | What | License |
 | --- | --- | --- |
-| `esp32c3-bt-lib/` | Submodule, [espressif/esp32c3-bt-lib](https://github.com/espressif/esp32c3-bt-lib) at the commit ESP-IDF 5.5.5 pins: `esp32c3/libbtdm_app_flash.a`, the controller | Apache-2.0 |
+| `esp32c3-bt-lib/` | Submodule, [espressif/esp32c3-bt-lib](https://github.com/espressif/esp32c3-bt-lib) at the commit ESP-IDF 5.5.5 pins: `esp32c3/libbtdm_app.a`, the controller (`libbtdm_app_flash.a` with `CONFIG_ESP32C3_BT_CONTROLLER_IN_FLASH`) | Apache-2.0 |
 | `esp-phy-lib/` | Submodule, [espressif/esp-phy-lib](https://github.com/espressif/esp-phy-lib) at the commit ESP-IDF 5.5.5 pins: `esp32c3/libphy.a`, `libbtbb.a` | Apache-2.0 |
 | `esp32c3/bt.c`, `phy.c`, `esp_bt.h`, `phy.h`, `phy_init_data.h`, `esp32c3_regs.h` | Derived from ESP-IDF 5.5.5 `components/bt/controller/esp32c3/bt.c`, `components/esp_phy/src/*.c` and their headers, cut down to BLE alone, the FreeRTOS calls mapped to the PebbleOS kernel | Apache-2.0, Espressif and Core Devices |
 | `esp32c3/phy_init_data.c` | ESP-IDF 5.5.5 `components/esp_phy/esp32c3/phy_init_data.c`, unchanged | Apache-2.0, Espressif |
-| `esp32c3/rom.ld` | The ROM symbols the libraries use, picked from ESP-IDF's `esp32c3.rom.ld` by `gen_rom_ld.py` | Apache-2.0, Espressif |
+| `esp32c3/rom.ld`, `rom_patch.ld` | The ROM symbols the libraries use, picked from ESP-IDF's ROM scripts by `gen_rom_ld.py`; `rom_patch.ld` adds those of the controller patched in ROM | Apache-2.0, Espressif |
 | `esp32c3/sdkconfig.h` | The ESP-IDF configuration the derived code reads | Apache-2.0 |
 | `esp32c3/ctl.c`, `include/` | PebbleOS's own: the guarded bring-up and the `btc` shell command | Apache-2.0 |
 
@@ -22,12 +22,12 @@ The libraries are byte for byte those of PlatformIO's `framework-espidf`
 
 ## Choices
 
-- **The flash-only controller** (`libbtdm_app_flash.a`, ESP-IDF's
-  `BT_CTRL_RUN_IN_FLASH_ONLY`), which the Arduino core's sdkconfig selects
-  too. The other one patches the controller in ROM and wants 28 KiB of RAM
-  code, which buys nothing here: the flash driver masks every interrupt during an erase
-  anyway. This one needs 5 KiB of RAM code (`.iram1`, placed in `.ramfunc`)
-  and only `esp32c3.rom.ld` from the ROM.
+- **The controller patched in ROM** (`libbtdm_app.a`), ESP-IDF's default,
+  with about 23 KiB of RAM code (`.iram1`, placed in `.ramfunc`). The one
+  linked whole in flash (`CONFIG_ESP32C3_BT_CONTROLLER_IN_FLASH`,
+  `libbtdm_app_flash.a`, which the Arduino core's sdkconfig selects) needs
+  5 KiB, but its interrupt handlers run from flash through the cache: on
+  the Xteink X4 they took over 3 ms and no advertising event went on air.
 - **BLE only**: no Wi-Fi coexistence (`libcoexist.a` is not needed), no
   modem sleep, no power management, no PLL tracking (the controller turns
   it off for BLE), the low power clock on the main crystal.
@@ -47,8 +47,10 @@ must match the library, and `bt.c` checks their sizes. Move both submodules
 to the commits the release's `components/bt/controller/lib_esp32c3_family`
 and `components/esp_phy/lib` point to, diff the release's `bt.c`,
 `phy_init.c` and `esp_bt.h` against the previous one and carry the changes
-over, then regenerate `rom.ld` from the names a link without it leaves
-undefined:
+over, then regenerate `rom.ld` from the names a link of the flash-only
+controller without it leaves undefined, and `rom_patch.ld` likewise for the
+ROM-patched one, from `esp32c3.rom.ld`, `rom.bt_funcs.ld`, `rom.eco3.ld`
+and `rom.eco3_bt_funcs.ld`:
 
 ```shell
 grep -o "undefined reference to .[A-Za-z0-9_]*" build.log | cut -c25- | sort -u > symbols.txt
