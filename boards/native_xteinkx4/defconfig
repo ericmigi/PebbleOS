@@ -1,4 +1,4 @@
-# native_folio board configuration
+# native_xteinkx4 board configuration
 
 CONFIG_SOC_POSIX=y
 

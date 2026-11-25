@@ -28,7 +28,7 @@ copies the app into the RAM reserved for it and prepares it:
 The app then runs as its own task, unprivileged, with the MPU limiting it
 to its own memory.
 
-A `riscv32` app (Folio) is loaded the same way, with two differences
+A `riscv32` app (xteinkx4) is loaded the same way, with two differences
 ({doc}`xteink_x4`):
 
 - **Code and data addresses.** The ESP32-C3 fetches instructions from its

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Core Devices LLC
 // SPDX-License-Identifier: Apache-2.0
 
-// Folio's 240x400, twice as large: the whole 480x800 panel. For Flint (see
+// xteinkx4's 240x400, twice as large: the whole 480x800 panel. For Flint (see
 // qemu_esp32c3.conf): width 144, height 168, scale 3.
 &display {
 	width = <240>;

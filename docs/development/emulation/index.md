@@ -5,8 +5,8 @@ PebbleOS runs on a desktop in two ways, without a watch:
 | | {doc}`Emulator <emulator>` | {doc}`Native simulator <native_simulator>` |
 | --- | --- | --- |
 | Runs | The ARM firmware, in QEMU | The firmware compiled for the host |
-| Boards | `qemu_flint`, `qemu_emery`, `qemu_gabbro` | `native_flint`, `native_emery`, `native_gabbro`, `native_folio` |
-| Platforms | Flint, Emery, Gabbro | Flint, Emery, Gabbro, Folio |
+| Boards | `qemu_flint`, `qemu_emery`, `qemu_gabbro` | `native_flint`, `native_emery`, `native_gabbro`, `native_xteinkx4` |
+| Platforms | Flint, Emery, Gabbro | Flint, Emery, Gabbro, xteinkx4 |
 | Third-party apps | Yes: `.pbw` files install and run | Yes, with `CONFIG_SAMSA`, which interprets their ARM code |
 | Speed | Boots as on a watch | Builds and boots much faster |
 | Debugging | GDB, through QEMU | The host's debugger, sanitizers and profilers |

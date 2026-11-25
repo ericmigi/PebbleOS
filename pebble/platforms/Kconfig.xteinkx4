@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
 # SPDX-License-Identifier: Apache-2.0
 
-if PLATFORM_FOLIO
+if PLATFORM_XTEINKX4
 
 config PLATFORM_NAME
-    default "folio"
+    default "xteinkx4"
 
 # Apps are the X4's own RISC-V code
 config PLATFORM_ABI
@@ -38,4 +38,4 @@ config APP_RAM_4X_RUNTIME_SIZE
 config PLATFORM_MAX_FONT_GLYPH_SIZE
     default 800
 
-endif # PLATFORM_FOLIO
+endif # PLATFORM_XTEINKX4

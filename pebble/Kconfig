@@ -193,7 +193,7 @@ config WATCHFACE_BEZEL
 
 choice SYSTEM_UI_FONT_CHOICE
     prompt "Typeface of the system UI"
-    default SYSTEM_UI_FONT_ATKINSON_NEXT if PLATFORM_FOLIO
+    default SYSTEM_UI_FONT_ATKINSON_NEXT if PLATFORM_XTEINKX4
     default SYSTEM_UI_FONT_GOTHIC
     help
       The system's own windows and the built-in apps that fill the display

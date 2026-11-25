@@ -14,10 +14,10 @@ e-paper display, the keys (two ADC ladders, polled, and the power button) and
 the battery voltage (ADC channel 0, half the cell voltage); the microSD card is
 not supported yet.
 
-The Pebble firmware (`pebble/`, the default application) runs as folio: a
+The Pebble firmware (`pebble/`, the default application) runs as xteinkx4: a
 240 × 400 screen twice as large, filling the panel, with watchfaces at
 their classic 144 × 168 centred on black; third-party apps are the X4's own
-RISC-V code, built for Folio ({doc}`../../sdk/xteink_x4`), and an app with
+RISC-V code, built for xteinkx4 ({doc}`../../sdk/xteink_x4`), and an app with
 only ARM binaries is refused, as the board has no Samsa; the system
 resources and the filesystem in the flash, the keys as Back, Up, Select and
 Down. Sensors, vibration, the microphone and the charger are simulated.

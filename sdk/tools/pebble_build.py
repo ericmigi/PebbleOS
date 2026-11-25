@@ -470,7 +470,7 @@ def configure(args):
     installed = _installed_platforms(sdk_root)
     # In the order they are asked for; an entry may ask for capabilities, and
     # so for several platforms.
-    # A platform of another ABI than ARM (folio) is only built for when named:
+    # A platform of another ABI than ARM (xteinkx4) is only built for when named:
     # its binaries need a toolchain of their own.
     arm = [p for p in installed if pebble_platforms[p]["ABI"] == "armv7m"]
     requested = info.get("targetPlatforms") or arm

@@ -386,7 +386,7 @@ static void prv_install(void *data) {
   char name[112];
   for (unsigned i = 0; i < PBL_ARRAY_SIZE(s_platforms) && !platform; i++) {
     snprintf(name, sizeof(name), "%spebble-app.bin", s_platforms[i]);
-    // Samsa runs ARM code only: the binary of a platform of another ABI (folio) is not for it
+    // Samsa runs ARM code only: the binary of a platform of another ABI (xteinkx4) is not for it
     const bool other_abi = (i == 0) && (CONFIG_PLATFORM_ABI_ID != 1);
     if (!other_abi && prv_zip_find(install->pbw, install->len, name, &install->app)) {
       platform = s_platforms[i];

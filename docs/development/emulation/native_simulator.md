@@ -19,7 +19,7 @@ The platform
   | Board | Platform | Display |
   | --- | --- | --- |
   | `native_flint` | Flint, Pebble 2 Duo | 144 × 168, black and white |
-  | `native_folio` | Folio, Xteink X4 | 240 × 400, black and white |
+  | `native_xteinkx4` | xteinkx4, Xteink X4 | 240 × 400, black and white |
   | `native_emery` | Emery, Pebble Time 2 | 200 × 228, color, touch |
   | `native_gabbro` | Gabbro, Pebble Round 2 | 260 × 260 round, color, touch |
 

@@ -25,7 +25,7 @@ native watchapps, all under `build/`:
   compiled into the firmware image
 
 The headers and the library are those of the ABI (`armv7m`, or `riscv32`
-for Folio), not of the platform the firmware is built for: every board of
+for xteinkx4), not of the platform the firmware is built for: every board of
 the ABI generates the
 same ones. The few defines that differ between platforms, such as
 `PBL_IF_COLOR_ELSE` and `PBL_PLATFORM_TYPE_CURRENT`, are decided in the

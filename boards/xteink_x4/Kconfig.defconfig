@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
 # SPDX-License-Identifier: Apache-2.0
 
-# The firmware runs Folio on it, with the Flint resources
+# The firmware runs xteinkx4 on it, with the Flint resources
 config RESOURCES_BOARD
     default "qemu_flint"
 

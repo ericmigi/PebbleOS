@@ -78,7 +78,7 @@ def _get_supported_platforms(ctx):
     ]
     # A directory of the SDK that is not a platform holds what platforms
     # share: the headers and library of an ABI, the tools.
-    # waf builds ARM code only: platforms of another ABI (folio) build with CMake.
+    # waf builds ARM code only: platforms of another ABI (xteinkx4) build with CMake.
     supported_platforms = [
         name
         for name in os.listdir(ctx.env.PEBBLE_SDK_ROOT)

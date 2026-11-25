@@ -14,7 +14,7 @@ samples, with UART0 for the console and the machine's virtual framebuffer as an
 800 × 480 display, which stands in for the [](../xteink_x4/index.md) panel;
 there is no input device or Bluetooth.
 
-The Pebble firmware (`pebble/`) runs on it as Folio, the X4's platform:
+The Pebble firmware (`pebble/`) runs on it as xteinkx4, the X4's platform:
 240 × 400, twice as large on the 480 × 800 panel, with simulated sensors.
 Flint, three times as large, is a change of the platform and of the display
 size in `pebble/boards/qemu_esp32c3.conf` and `.overlay`.
@@ -74,13 +74,13 @@ pbl itest --connection serial:socket://127.0.0.1:12345
 ```
 
 The Pebble firmware's normal variant runs third-party apps from `.pbw`
-files, installed over that connection as a phone installs them. A Folio
+files, installed over that connection as a phone installs them. An xteinkx4
 binary is RISC-V code and runs natively, as on the X4
 ({doc}`../../sdk/xteink_x4`). Samsa interprets ARM binaries, with what it keeps per
 process sized for the chip in `pebble/boards/qemu_esp32c3_normal.conf`. The
 watch reports itself as the Flint emulator, so the host tools install a
 `.pbw`'s Flint binary, which runs in a 144 × 168 bezel, unless told to take
-`folio/`. The integration harness's connection
+`xteinkx4/`. The integration harness's connection
 (`tests/integration/harness/connections.py`, `start_protocol` over
 `pblconsole`'s frame transport) carries libpebble2's app installer.
 

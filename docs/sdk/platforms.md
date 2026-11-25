@@ -7,7 +7,7 @@ A platform is what apps are built against. It is a name and a description:
 | Display | width and height; rectangular or round; colour (8-bit) or black and white (1-bit) |
 | Features | `microphone`, `smartstrap`, `smartstrap_power`, `health`, `compass`, `touch`, `rgb_backlight`, `speaker`, `barometer` |
 | Limits | what an app may take: code and memory, worker memory, resources, the largest font glyph |
-| ABI | what app binaries are compiled for: `armv7m`, Cortex-M3 Thumb code with soft float, or `riscv32`, RV32IMC code with soft float (Folio) |
+| ABI | what app binaries are compiled for: `armv7m`, Cortex-M3 Thumb code with soft float, or `riscv32`, RV32IMC code with soft float (xteinkx4) |
 
 The name labels the platform's directory in the SDK and in a `.pbw`.
 Everything the builds need to know of a platform follows from its
@@ -21,7 +21,7 @@ The firmware's platforms:
 | Flint | 144 × 168, black and white | Pebble 2 Duo |
 | Gabbro | 260 × 260 round, colour | Pebble Round 2 |
 | Cyberdeck | 400 × 240, black and white | Cyberdeck |
-| Folio | 240 × 400, black and white, `riscv32` | Xteink X4, its 480 × 800 e-paper panel at two panel pixels per pixel |
+| xteinkx4 | 240 × 400, black and white, `riscv32` | Xteink X4, its 480 × 800 e-paper panel at two panel pixels per pixel |
 
 ## Where platforms are defined
 
@@ -99,11 +99,11 @@ bar, default text sizes) is that of the nearest of Emery, Flint and Gabbro:
 Gabbro if the display is round, Emery if it is rectangular and colour, Flint
 otherwise.
 
-A platform without a type of its own, such as Folio, reports that nearest
+A platform without a type of its own, such as xteinkx4, reports that nearest
 one to apps, but its display is not that one's. Its own apps fill the
 display; a third-party app is given the display of the platform it was built
 for, which the compositor centres in a black bezel. With
-`CONFIG_WATCHFACE_BEZEL`, as on the Folio boards, the built-in watchfaces get
+`CONFIG_WATCHFACE_BEZEL`, as on the xteinkx4 boards, the built-in watchfaces get
 the 144 × 168 of the classic watches too, rather than a display whose pixels
 are too small for them.
 
