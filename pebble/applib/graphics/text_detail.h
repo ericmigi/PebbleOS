@@ -5,8 +5,9 @@
 //! pixel as 2x2 panel pixels.
 //!
 //! Text in a font stored at twice its resolution (FEATURE_SCALE2) is drawn into the 1-bit
-//! framebuffer as usual, a pixel inked when at least two of its four panel pixels are; each pixel
-//! whose four panel pixels are not all alike is also recorded here, with its 2x2 pattern. When the
+//! framebuffer as usual, a pixel inked when its four panel pixels are at least half covered; each
+//! pixel whose four panel pixels are not all fully covered is also recorded here, with their
+//! coverage. When the
 //! frame is sent, the display draws those pixels from their pattern, as sub-pixel edges or as grey
 //! levels. Nothing else needs a frame at panel resolution: the record holds only text edges, in a
 //! fixed pool, and pixels that do not fit stay as the framebuffer has them.
@@ -25,6 +26,8 @@ typedef enum {
   TextDetailModeGrey,
   //! Edge pixels drawn as their 2x2 panel pixels
   TextDetailModeSubpixel,
+  //! Edge pixels drawn as their 2x2 panel pixels, which get one of four levels when idle
+  TextDetailModeSubpixelGrey,
   TextDetailModeCount,
 } TextDetailMode;
 
@@ -32,10 +35,10 @@ typedef enum {
 //! @return the owner of the records to pass on, or -1 when @p dest is not on the display
 int text_detail_glyph_begin(const GBitmap *dest);
 
-//! Records the 2x2 panel pixels of framebuffer pixel (x, y): bit 0 top left, 1 top right, 2 bottom
-//! left, 3 bottom right, in ink of the text color (white or black). Between
-//! text_detail_glyph_begin() and text_detail_glyph_end().
-void text_detail_add(int owner, int16_t x, int16_t y, uint8_t pattern, bool white_ink);
+//! Records the coverage of the 2x2 panel pixels of framebuffer pixel (x, y), 0 to 3 each in two
+//! bits: top left in bits 0-1, top right, bottom left, bottom right in 6-7; in ink of the text
+//! color (white or black). Between text_detail_glyph_begin() and text_detail_glyph_end().
+void text_detail_add(int owner, int16_t x, int16_t y, uint8_t levels, bool white_ink);
 
 //! Ends the glyph text_detail_glyph_begin() started.
 void text_detail_glyph_end(int owner);

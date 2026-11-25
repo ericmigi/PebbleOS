@@ -293,6 +293,7 @@ static const char *const s_mode_names[TextDetailModeCount] = {
   [TextDetailModeMono] = "mono",
   [TextDetailModeGrey] = "grey",
   [TextDetailModeSubpixel] = "sub",
+  [TextDetailModeSubpixelGrey] = "subgrey",
 };
 
 static void prv_redraw(void *data) {
@@ -308,7 +309,7 @@ static int prv_cmd_text_mode(const struct pbl_shell *sh, size_t argc, char **arg
       }
     }
     if (mode == TextDetailModeCount) {
-      pbl_shell_error(sh, "modes: mono, grey, sub");
+      pbl_shell_error(sh, "modes: mono, grey, sub, subgrey");
       return -EINVAL;
     }
     text_detail_set_mode(mode);
@@ -325,7 +326,8 @@ static int prv_cmd_text_mode(const struct pbl_shell *sh, size_t argc, char **arg
 }
 
 static const struct pbl_shell_cmd sub_text[] = {
-  PBL_SHELL_CMD(mode, nullptr, "Show or set the text mode: mono, grey or sub", prv_cmd_text_mode),
+  PBL_SHELL_CMD(mode, nullptr, "Show or set the text mode: mono, grey, sub or subgrey",
+                prv_cmd_text_mode),
   PBL_SHELL_SUBCMD_SET_END,
 };
 
