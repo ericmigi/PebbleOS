@@ -20,9 +20,10 @@ config APP_RAM_4X_SEGMENT_SIZE
 config APP_RAM_4X_RUNTIME_SIZE
     default 30720
 
-# Glyphs at panel resolution, 2 bits per pixel, for the system UI's text are up to 8x larger
+# The system UI's glyphs stored with their edges: up to 778 bytes (36 px, the local Bookerly set);
+# fontgen refuses a glyph larger than this
 
 config PLATFORM_MAX_FONT_GLYPH_SIZE
-    default 1088
+    default 800
 
 endif # PLATFORM_FOLIO
