@@ -136,7 +136,7 @@ static void prv_grey_refine(void *data) {
   }
   s_flush_pending = true;
   s_flush_y0 = 0;
-  s_flush_y1 = PBL_DISPLAY_HEIGHT - 1;
+  s_flush_y1 = PBL_DISPLAY_HEIGHT * FRAMEBUFFER_SCALE - 1;
   s_flush_start_ticks = pbl_uptime_ticks();
   prv_send(s_flush_y0, s_flush_y1, true);
 }
@@ -298,6 +298,13 @@ PBL_ANALYTICS_COLLECTOR_DEFINE(prv_collect_display_stats);
 
 #include <kernel/event_loop.h>
 
+// Records: edge pixels at 2x, glyphs at panel resolution
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+#define TEXT_DETAIL_CAPACITY CONFIG_TEXT_DETAIL_GLYPHS
+#else
+#define TEXT_DETAIL_CAPACITY CONFIG_TEXT_DETAIL_CELLS
+#endif
+
 static const char *const s_mode_names[TextDetailModeCount] = {
   [TextDetailModeMono] = "mono",
   [TextDetailModeGrey] = "grey",
@@ -329,14 +336,43 @@ static int prv_cmd_text_mode(const struct pbl_shell *sh, size_t argc, char **arg
   uint32_t dropped;
   text_detail_get_stats(&used, &peak, &dropped);
   pbl_shell_print(sh, "%s; edge pixels %" PRIu32 " (peak %" PRIu32 " of %d, %" PRIu32 " dropped)",
-                  s_mode_names[text_detail_get_mode()], used, peak, CONFIG_TEXT_DETAIL_CELLS,
-                  dropped);
+                  s_mode_names[text_detail_get_mode()], used, peak, TEXT_DETAIL_CAPACITY, dropped);
   return 0;
 }
+
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+// Black bars and pixels under the test pattern of text_detail_test(), which the grey pass
+// lightens: light grey, then dark grey bars, rows 96-159, and single pixels on rows 200-201
+static void prv_greytest(void *data) {
+  FrameBuffer *fb = compositor_get_framebuffer();
+  for (uint16_t y = 0; y < PBL_DISPLAY_HEIGHT * FRAMEBUFFER_SCALE; y++) {
+    uint8_t *row = (uint8_t *)framebuffer_get_line(fb, y);
+    for (int x = 0; x < PBL_DISPLAY_WIDTH * FRAMEBUFFER_SCALE; x++) {
+      const bool bar = (y >= 96 && y < 160 && x >= 48 && x < 432);
+      const bool dot = (y == 200 && (x == 100 || x == 102)) || (y == 201 && (x == 300 || x == 301));
+      if (bar || dot) {
+        row[x / 8] &= (uint8_t)~(1U << (x % 8));
+      }
+    }
+  }
+  text_detail_test();
+  compositor_redraw();
+}
+
+static int prv_cmd_text_greytest(const struct pbl_shell *sh, size_t argc, char **argv) {
+  launcher_task_add_callback(prv_greytest, nullptr);
+  pbl_shell_print(sh, "grey test pattern: black bars, then grey at the next idle pass");
+  return 0;
+}
+#endif
 
 static const struct pbl_shell_cmd sub_text[] = {
   PBL_SHELL_CMD(mode, nullptr, "Show or set the text mode: mono, grey, sub or subgrey",
                 prv_cmd_text_mode),
+#ifdef CONFIG_FRAMEBUFFER_SCALE2
+  PBL_SHELL_CMD(greytest, nullptr, "Draw a grey test pattern through the grey pass",
+                prv_cmd_text_greytest),
+#endif
   PBL_SHELL_SUBCMD_SET_END,
 };
 
