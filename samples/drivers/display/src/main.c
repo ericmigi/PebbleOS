@@ -83,7 +83,7 @@ int main(void) {
   };
   uint16_t y0 = props->height * 2U / 3U;
   uint16_t y1 = props->height - 1U;
-  struct pbl_display_buffer fb;
+  struct pbl_display_buffer fb = {0};
   int ret;
 
   printf("display: %dx%d, %s\n", props->width, props->height, formats[props->format]);
