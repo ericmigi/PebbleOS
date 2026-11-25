@@ -67,6 +67,8 @@
 #define BUSY_TIMEOUT_MS 1000U
 // Measured: half 1.7 s, fast 0.2-0.5 s; longer in the cold
 #define REFRESH_TIMEOUT_MS 5000U
+// Waiting for an in-flight refresh and its post-refresh re-sync to finish
+#define WAIT_IDLE_TIMEOUT_MS (REFRESH_TIMEOUT_MS + BUSY_TIMEOUT_MS)
 
 enum refresh_mode {
   REFRESH_HALF,
@@ -809,6 +811,7 @@ static int prv_disable(const struct pbl_display *disp) {
     ret = prv_wait_busy(epd);
   }
 
+  epd->state->frame = nullptr;
   epd->state->need_half = true;
   epd->state->powered = false;
   pbl_mutex_unlock(&epd->state->lock);
@@ -1205,6 +1208,14 @@ static bool prv_rows_range(const struct pbl_display_ssd1677 *epd, const uint8_t 
   return any;
 }
 
+static void prv_rows_clear_mask(uint8_t *dst, const uint8_t *mask, uint32_t height) {
+  const uint32_t bytes = (height + 7U) / 8U;
+
+  for (uint32_t i = 0U; i < bytes; i++) {
+    dst[i] &= (uint8_t)~mask[i];
+  }
+}
+
 // After a refresh: both planes back to the frame shown over what it drove, then its completion
 static void prv_post(struct pbl_work *work) {
   struct pbl_display_ssd1677_state *state =
@@ -1236,11 +1247,10 @@ static void prv_post(struct pbl_work *work) {
   if (!state->own) {
     state->last_post_ms = (uint16_t)((uint32_t)pbl_uptime_ms() - t0);
   }
-  state->post_pending = false;
-
   if (prv_has_idle_work(epd)) {
     (void)pbl_delayed_work_reschedule(&pbl_sys_workq, &state->idle, PBL_MSEC(epd->idle_ms));
   }
+  state->post_pending = false;
   if (!state->own) {
     pbl_display_complete(disp, status);
   }
@@ -1267,6 +1277,7 @@ static int prv_topup_nocopy(const struct pbl_display_ssd1677 *epd) {
     ret = -EAGAIN;
   }
   if (ret == 0) {
+    prv_rows_clear_mask(epd->grey_shown_rows, epd->touched_rows, epd->disp.props.height);
     memset(epd->touched_rows, 0, (epd->disp.props.height + 7U) / 8U);
     state->resync_lo = (uint16_t)lo;
     state->resync_hi = (uint16_t)hi;
@@ -1326,7 +1337,10 @@ static int prv_grey_nocopy(const struct pbl_display_ssd1677 *epd,
 
   if (epd->touched_rows != nullptr && prv_rows_range(epd, epd->touched_rows, &tlo, &thi)) {
     ret = prv_topup_nocopy(epd);
-    (void)PBL_POLL_SLEEP_MS(!state->refreshing && !state->post_pending, 1U, REFRESH_TIMEOUT_MS);
+    if (ret == 0 && PBL_POLL_SLEEP_MS(!state->refreshing && !state->post_pending, 1U,
+                                      WAIT_IDLE_TIMEOUT_MS) != 0) {
+      return -ETIMEDOUT;
+    }
     if (ret != 0 || state->need_half) {
       return (ret != 0) ? ret : 1;
     }
@@ -1448,6 +1462,7 @@ static int prv_update_nocopy(const struct pbl_display_ssd1677 *epd,
       first = PBL_MIN(first, (int32_t)lo);
       last = PBL_MAX(last, (int32_t)hi);
       w = prv_window(epd, (uint16_t)first, (uint16_t)last);
+      prv_rows_clear_mask(epd->grey_shown_rows, epd->unsynced_rows, height);
       memset(epd->unsynced_rows, 0, (height + 7U) / 8U);
     }
     ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &w,
@@ -1465,6 +1480,7 @@ static int prv_update_nocopy(const struct pbl_display_ssd1677 *epd,
     }
     ret = prv_write_plane(epd, CMD_WRITE_RAM_RED, &u,
                           &(struct plane_src){.frame = buf->data, .xor_rows = epd->unsynced_rows});
+    prv_rows_clear_mask(epd->grey_shown_rows, epd->unsynced_rows, height);
     memset(epd->unsynced_rows, 0, (height + 7U) / 8U);
     prv_union(&w, &u);
     first = PBL_MIN(first, (int32_t)lo);
@@ -1771,7 +1787,11 @@ static int prv_update(const struct pbl_display *disp, const struct pbl_display_b
   (void)pbl_mutex_lock(&state->lock, PBL_FOREVER);
 
   // The driver's own refresh, a top up or a clean one, ends first, and its re-sync
-  (void)PBL_POLL_SLEEP_MS(!state->refreshing && !state->post_pending, 1U, REFRESH_TIMEOUT_MS);
+  if (PBL_POLL_SLEEP_MS(!state->refreshing && !state->post_pending, 1U, WAIT_IDLE_TIMEOUT_MS) !=
+      0) {
+    pbl_mutex_unlock(&state->lock);
+    return -ETIMEDOUT;
+  }
 
   // Still busy with a refresh that timed out: start the controller over, and its planes with it
   if (pbl_gpio_get(&epd->busy) != 0) {
