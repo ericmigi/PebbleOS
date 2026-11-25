@@ -368,9 +368,9 @@ static PBL_ALWAYS_INLINE unsigned prv_edge_ink(unsigned levels) {
 
 // Writes two mask rows whose bit 0 is native column x0 into native rows y and y + 1, within
 // native columns [cx0, cx1)
-static void prv_write_scaled2_rows(GBitmap *dest, int y, int x0, int cx0, int cx1,
-                                   const uint32_t (*mask)[SCALED2_GLYPH_WORDS], int words,
-                                   bool white) {
+static SCALE2_HOT void prv_write_scaled2_rows(GBitmap *dest, int y, int x0, int cx0, int cx1,
+                                              const uint32_t (*mask)[SCALED2_GLYPH_WORDS],
+                                              int words, bool white) {
   const int stride = dest->row_size_bytes / 4;
   uint32_t *row = (uint32_t *)dest->addr + y * stride;
   // Arithmetic floor for columns left of 0, whose bits are clipped off
@@ -411,9 +411,9 @@ static void prv_write_scaled2_rows(GBitmap *dest, int y, int x0, int cx0, int cx
 
 // Draws a 1-bit glyph into a framebuffer at twice its size: each pixel as 2x2, except the edge
 // pixels of a FEATURE_EDGES glyph, whose four are inked from their own coverage (at least half)
-static PBL_NOINLINE void prv_render_glyph_scaled2(GContext *ctx, const GlyphData *glyph,
-                                                  bool has_edges, const GRect *target,
-                                                  const GRect *clipped) {
+static SCALE2_HOT PBL_NOINLINE void prv_render_glyph_scaled2(GContext *ctx, const GlyphData *glyph,
+                                                             bool has_edges, const GRect *target,
+                                                             const GRect *clipped) {
   const int w = glyph->header.width_px;
   const int h = glyph->header.height_px;
   if (w == 0 || h == 0 || w > SCALED2_GLYPH_WORDS * 16) {

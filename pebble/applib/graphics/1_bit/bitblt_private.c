@@ -157,9 +157,9 @@ void bitblt_bitmap_into_bitmap_tiled_palette_to_1bit(GBitmap *dest_bitmap,
 
 // A palettized source into a framebuffer's stored pixels, each pixel as 2x2: as
 // bitblt_bitmap_into_bitmap_tiled_palette_to_1bit(), a pixel at a time but writing four
-static void prv_palette_into_scaled2(GBitmap *dest, const GBitmap *src_bitmap, GRect dest_rect,
-                                     GPoint src_origin_offset, GCompOp compositing_mode,
-                                     GColor tint_color) {
+static SCALE2_HOT void prv_palette_into_scaled2(GBitmap *dest, const GBitmap *src_bitmap,
+                                                GRect dest_rect, GPoint src_origin_offset,
+                                                GCompOp compositing_mode, GColor tint_color) {
   if (!src_bitmap->palette ||
       (compositing_mode != GCompOpAssign && compositing_mode != GCompOpSet &&
        compositing_mode != GCompOpTint && compositing_mode != GCompOpTintLuminance)) {

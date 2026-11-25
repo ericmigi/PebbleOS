@@ -4,6 +4,7 @@
 #include "bitblt.h"
 
 #include "bitblt_private.h"
+#include "framebuffer.h"
 
 #include <pbl/util/bitops.h>
 #include <pbl/util/math.h>
@@ -20,9 +21,9 @@ void bitblt_into_1bit_setup_compositing_mode(GCompOp *compositing_mode, GColor t
   }
 }
 
-void bitblt_bitmap_into_bitmap_tiled_1bit_to_1bit(GBitmap *dest_bitmap, const GBitmap *src_bitmap,
-                                                  GRect dest_rect, GPoint src_origin_offset,
-                                                  GCompOp compositing_mode, GColor tint_color) {
+SCALE2_HOT void bitblt_bitmap_into_bitmap_tiled_1bit_to_1bit(
+    GBitmap *dest_bitmap, const GBitmap *src_bitmap, GRect dest_rect, GPoint src_origin_offset,
+    GCompOp compositing_mode, GColor tint_color) {
   bitblt_into_1bit_setup_compositing_mode(&compositing_mode, tint_color);
 
   const int8_t dest_begin_x = (dest_rect.origin.x / 32);

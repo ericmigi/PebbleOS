@@ -82,8 +82,8 @@ void graphics_private_fill_rect_scaled2(GBitmap *framebuffer, GRect rect, GColor
 #endif
 
 // Fills [x, x + width) of @p rows rows, @p words_per_row apart, from @p row
-static void prv_fill_rows_1bit(uint32_t *row, int rows, int words_per_row, int16_t x, int32_t width,
-                               uint32_t pattern) {
+static SCALE2_HOT void prv_fill_rows_1bit(uint32_t *row, int rows, int words_per_row, int16_t x,
+                                          int32_t width, uint32_t pattern) {
   if (width <= 0) {
     return;
   }
