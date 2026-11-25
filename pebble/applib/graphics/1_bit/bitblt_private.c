@@ -152,32 +152,53 @@ void bitblt_bitmap_into_bitmap_tiled_palette_to_1bit(GBitmap *dest_bitmap,
 }
 
 #ifdef CONFIG_FRAMEBUFFER_SCALE2
-// Source pixels doubled per blit: a row of 2 x 64 pixels at up to 2 bits
+// 1-bit source pixels doubled per blit
 #define SCALED2_CHUNK 64
 
-// Pixel x of a source row, as its format stores it: 1-bit LSB first, palettes MSB first
-static unsigned prv_src_pixel(const uint8_t *row, GBitmapFormat fmt, int x) {
-  switch (fmt) {
-    case GBitmapFormat1Bit:
-      return (row[x / 8] >> (x % 8)) & 1U;
-    case GBitmapFormat1BitPalette:
-      return (row[x / 8] >> (7 - (x % 8))) & 1U;
-    default:
-      return (row[x / 4] >> (6 - 2 * (x % 4))) & 3U;
+// A palettized source into a framebuffer's stored pixels, each pixel as 2x2: as
+// bitblt_bitmap_into_bitmap_tiled_palette_to_1bit(), a pixel at a time but writing four
+static void prv_palette_into_scaled2(GBitmap *dest, const GBitmap *src_bitmap, GRect dest_rect,
+                                     GPoint src_origin_offset, GCompOp compositing_mode,
+                                     GColor tint_color) {
+  if (!src_bitmap->palette ||
+      (compositing_mode != GCompOpAssign && compositing_mode != GCompOpSet &&
+       compositing_mode != GCompOpTint && compositing_mode != GCompOpTintLuminance)) {
+    return;
   }
-}
-
-static void prv_put_pixel(uint8_t *row, GBitmapFormat fmt, int x, unsigned v) {
-  switch (fmt) {
-    case GBitmapFormat1Bit:
-      row[x / 8] |= (uint8_t)(v << (x % 8));
-      break;
-    case GBitmapFormat1BitPalette:
-      row[x / 8] |= (uint8_t)(v << (7 - (x % 8)));
-      break;
-    default:
-      row[x / 4] |= (uint8_t)(v << (6 - 2 * (x % 4)));
-      break;
+  const uint8_t bpp = gbitmap_get_bits_per_pixel(gbitmap_get_format(src_bitmap));
+  const uint8_t entries = 1 << bpp;
+  TwoRowLookUp look_ups;
+  prv_calc_two_row_look_ups(&look_ups, compositing_mode, src_bitmap->palette, entries, tint_color);
+  // The dither of each pixel's row, each bit twice, on both of its rows
+  uint32_t patterns[2][MAX_SUPPORTED_PALETTE_ENTRIES];
+  for (unsigned r = 0; r < 2; r++) {
+    for (unsigned i = 0; i < entries; i++) {
+      patterns[r][i] = graphics_private_double_bits16((uint16_t)look_ups[r].palette_pattern[i]);
+    }
+  }
+  const GRect *b = &src_bitmap->bounds;
+  const int words_per_row = dest->row_size_bytes / 4;
+  for (int y = 0; y < dest_rect.size.h; y++) {
+    const int dest_y = dest_rect.origin.y + y;
+    const int src_y = b->origin.y + (src_origin_offset.y + y) % b->size.h;
+    const uint32_t *pattern = patterns[dest_y % 2];
+    uint32_t *row0 = (uint32_t *)dest->addr + 2 * dest_y * words_per_row;
+    uint32_t *row1 = row0 + words_per_row;
+    int src_x = b->origin.x + src_origin_offset.x % b->size.w;
+    for (int x = 0; x < dest_rect.size.w; x++, src_x++) {
+      if (src_x >= grect_get_max_x(b)) {
+        src_x = b->origin.x;
+      }
+      const uint8_t ci = raw_image_get_value_for_bitdepth(src_bitmap->addr, src_x, src_y,
+                                                          src_bitmap->row_size_bytes, bpp);
+      if (!look_ups[0].transparent_mask[ci]) {
+        continue;
+      }
+      const int nx = 2 * (dest_rect.origin.x + x);
+      const uint32_t m = 3U << (nx % 32);
+      row0[nx / 32] = (row0[nx / 32] & ~m) | (pattern[ci] & m);
+      row1[nx / 32] = (row1[nx / 32] & ~m) | (pattern[ci] & m);
+    }
   }
 }
 
@@ -197,8 +218,12 @@ static void prv_bitblt_into_scaled2(GBitmap *dest_bitmap, const GBitmap *src_bit
     return;
   }
   const GBitmapFormat fmt = gbitmap_get_format(src_bitmap);
-  if (fmt != GBitmapFormat1Bit && fmt != GBitmapFormat1BitPalette &&
-      fmt != GBitmapFormat2BitPalette) {
+  if (fmt == GBitmapFormat1BitPalette || fmt == GBitmapFormat2BitPalette) {
+    prv_palette_into_scaled2(&dest, src_bitmap, dest_rect, src_origin_offset, compositing_mode,
+                             tint_color);
+    return;
+  }
+  if (fmt != GBitmapFormat1Bit) {
     APP_LOG(APP_LOG_LEVEL_DEBUG, "Only 1 and 2 bit palettized images can be displayed.");
     return;
   }
@@ -206,27 +231,32 @@ static void prv_bitblt_into_scaled2(GBitmap *dest_bitmap, const GBitmap *src_bit
   if (b->size.w <= 0 || b->size.h <= 0) {
     return;
   }
-  uint32_t buf[SCALED2_CHUNK * 2 * 2 / 32];
+  // A 1-bit source: each chunk of a row doubled into a row of its own, blitted onto two
+  uint32_t buf[SCALED2_CHUNK * 2 / 32];
   GBitmap chunk = *src_bitmap;
   chunk.addr = buf;
+  chunk.row_size_bytes = sizeof(buf);
   chunk.info.is_bitmap_heap_allocated = false;
-  chunk.info.is_palette_heap_allocated = false;
   for (int y = 0; y < dest_rect.size.h; y++) {
     const int src_y = b->origin.y + (src_origin_offset.y + y) % b->size.h;
     const uint8_t *src_row = (const uint8_t *)src_bitmap->addr + src_y * src_bitmap->row_size_bytes;
     for (int cx = 0; cx < dest_rect.size.w; cx += SCALED2_CHUNK) {
       const int n = PBL_MIN(SCALED2_CHUNK, dest_rect.size.w - cx);
-      memset(buf, 0, sizeof(buf));
-      for (int i = 0; i < n; i++) {
-        const int src_x = b->origin.x + (src_origin_offset.x + cx + i) % b->size.w;
-        const unsigned v = prv_src_pixel(src_row, fmt, src_x);
-        prv_put_pixel((uint8_t *)buf, fmt, 2 * i, v);
-        prv_put_pixel((uint8_t *)buf, fmt, 2 * i + 1, v);
+      int src_x = b->origin.x + (src_origin_offset.x + cx) % b->size.w;
+      for (int i = 0; i < n; i += 8) {
+        // Up to 8 source pixels, LSB first, wrapping at the source's right edge
+        unsigned bits = 0;
+        for (int k = 0; k < 8 && i + k < n; k++, src_x++) {
+          if (src_x >= grect_get_max_x(b)) {
+            src_x = b->origin.x;
+          }
+          bits |= ((src_row[src_x / 8] >> (src_x % 8)) & 1U) << k;
+        }
+        ((uint16_t *)buf)[i / 8] = (uint16_t)graphics_private_double_bits16((uint16_t)bits);
       }
       chunk.bounds = GRect(0, 0, 2 * n, 1);
-      chunk.row_size_bytes = sizeof(buf);
       for (int row = 0; row < 2; row++) {
-        bitblt_bitmap_into_bitmap_tiled(
+        bitblt_bitmap_into_bitmap_tiled_1bit_to_1bit(
             &dest, &chunk, GRect(rect2.origin.x + 2 * cx, rect2.origin.y + 2 * y + row, 2 * n, 1),
             GPointZero, compositing_mode, tint_color);
       }

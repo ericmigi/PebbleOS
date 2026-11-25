@@ -415,7 +415,8 @@ static PBL_NOINLINE void prv_render_glyph_scaled2(GContext *ctx, const GlyphData
       }
       continue;
     }
-    uint32_t mask[2][SCALED2_GLYPH_WORDS] = {};
+    uint32_t mask[2][SCALED2_GLYPH_WORDS];
+    memset(mask[0], 0, words * sizeof(uint32_t));
     for (int gx = 0; gx < w; gx += 8) {
       const unsigned n = (unsigned)PBL_MIN(8, w - gx);
       const unsigned v = prv_glyph_bits(bits, (uint32_t)(gy * w + gx), n);
@@ -425,7 +426,7 @@ static PBL_NOINLINE void prv_render_glyph_scaled2(GContext *ctx, const GlyphData
         mask[0][gx / 16] |= doubled << (2 * gx % 32);
       }
     }
-    memcpy(mask[1], mask[0], sizeof(mask[0]));
+    memcpy(mask[1], mask[0], words * sizeof(uint32_t));
     for (; e < count && edges[3 * e + 1] == gy; e++) {
       const int ex = edges[3 * e];
       const unsigned levels = edges[3 * e + 2];
