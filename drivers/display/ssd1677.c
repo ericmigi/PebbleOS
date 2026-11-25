@@ -556,7 +556,7 @@ static int prv_write_plane(const struct pbl_display_ssd1677 *epd, uint8_t ram,
 
     // Eight rows that are the columns of one framebuffer byte fill a transfer at once
     if (quarter1 && src->levels == nullptr && src->xor_rows == nullptr && fill == 0U &&
-        cy + 7U <= w->y1 && cap == 8U * len) {
+        cy + 7U <= w->y1 && 8U * len <= cap) {
       int32_t cols[8];
       bool block = true;
 
