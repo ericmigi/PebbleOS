@@ -272,18 +272,18 @@ if TEXT_DETAIL
 
 config TEXT_DETAIL_CELLS
     int "Edge pixels recorded"
-    range 8 8184
-    default 7200
+    range 8 16376
+    default 10400
     help
       Edge pixels of text on the display that get their detail; the pool
-      takes 1.75 bytes each, plus 2 bytes per display row. A full
-      notification takes about 5,500, packed in rows of 8. A frame whose
-      text does not fit is shown without detail.
+      takes 2.25 bytes each, plus 2 bytes per display row. A full
+      notification takes about 8,500 with grey edges, packed in rows of
+      8. A frame whose text does not fit is shown without detail.
 
 config TEXT_DETAIL_DEFAULT_MODE
-    int "Mode at boot (0 none, 1 grey, 2 sub-pixel edges)"
-    range 0 2
-    default 2
+    int "Mode at boot (0 none, 1 grey, 2 sub-pixel edges, 3 both)"
+    range 0 3
+    default 3
 
 endif # TEXT_DETAIL
 

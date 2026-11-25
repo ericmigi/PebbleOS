@@ -313,7 +313,8 @@ static bool prv_load_glyph_bitmap(Codepoint codepoint, const FontResource *font_
     glyph_size_bytes = (g->header.height_px + (RLE4_UNITS_PER_BYTE - 1)) / RLE4_UNITS_PER_BYTE;
   } else {
     // Number of bytes, make sure we round up to the next whole byte
-    glyph_size_bytes = ((g->header.width_px * g->header.height_px) + (8 - 1)) / 8;
+    const unsigned bits = HAS_FEATURE(font_res->md.version, VERSION_FIELD_FEATURE_AA2) ? 2 : 1;
+    glyph_size_bytes = ((g->header.width_px * g->header.height_px * bits) + (8 - 1)) / 8;
   }
 
   PBL_ASSERT(glyph_size_bytes <= CACHE_GLYPH_SIZE,
@@ -531,6 +532,12 @@ static bool prv_load_font_res(ResAppNum app_num, uint32_t resource_id, FontResou
       }
       if (header.features & FEATURE_SCALE2) {
         font_res->md.version |= VERSION_FIELD_FEATURE_SCALE2;
+      }
+      if (header.features & FEATURE_AA2) {
+        if (header.features & FEATURE_RLE4) {
+          return false;
+        }
+        font_res->md.version |= VERSION_FIELD_FEATURE_AA2;
       }
       if (header.features & FEATURE_COLOR) {
 #if CONFIG_SCREEN_COLOR_DEPTH_BITS == 8
@@ -869,6 +876,11 @@ GRect text_resources_get_glyph_frame(FontCache *font_cache, Codepoint codepoint,
 bool text_resources_glyph_is_scale2(const GlyphLocation *location) {
   return location->font_res &&
          HAS_FEATURE(location->font_res->md.version, VERSION_FIELD_FEATURE_SCALE2);
+}
+
+bool text_resources_glyph_is_aa2(const GlyphLocation *location) {
+  return location->font_res &&
+         HAS_FEATURE(location->font_res->md.version, VERSION_FIELD_FEATURE_AA2);
 }
 
 bool text_resources_glyph_is_color(const GlyphLocation *location) {

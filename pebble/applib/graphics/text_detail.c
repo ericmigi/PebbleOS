@@ -20,22 +20,23 @@ static_assert(PBL_DISPLAY_WIDTH <= 256, "records keep x in a byte");
 
 // The records of a row are a list of chunks, each of one owner (the app's frame or the kernel's)
 // and one ink. A header packs the next chunk of the row (index + 1, or 0), the owner, the ink and
-// the count; each record is x and a 4-bit 2x2 pattern: 1.75 bytes per record.
+// the count; each record is x and the coverage of the pixel's 2x2 glyph pixels: 2.25 bytes each.
 #define CHUNK_CELLS   8
 #define NUM_CHUNKS    (CONFIG_TEXT_DETAIL_CELLS / CHUNK_CELLS)
 #define OWNER_KERNEL  1U
-#define HDR_NEXT_MASK 0x03FFU
-#define HDR_OWNER     (1U << 10)
-#define HDR_WHITE     (1U << 11)
-#define HDR_COUNT(h)  ((h) >> 12)
+#define HDR_NEXT_MASK 0x07FFU
+#define HDR_OWNER     (1U << 11)
+#define HDR_WHITE     (1U << 12)
+// The count less one: a chunk on a row always holds a record
+#define HDR_COUNT(h) (((h) >> 13) + 1U)
 
 static_assert(NUM_CHUNKS < HDR_NEXT_MASK, "chunk indices must fit the header");
 
 typedef struct {
   uint16_t hdr;
   uint8_t x[CHUNK_CELLS];
-  //! 2x2 ink patterns, two per byte
-  uint8_t patterns[CHUNK_CELLS / 2];
+  //! Coverage 0 to 3 of the 2x2 glyph pixels, two bits each, top left first
+  uint8_t levels[CHUNK_CELLS];
 } Chunk;
 
 static Chunk s_chunks[NUM_CHUNKS];
@@ -123,7 +124,7 @@ void text_detail_glyph_end(int owner) {
   }
 }
 
-void text_detail_add(int owner, int16_t x, int16_t y, uint8_t pattern, bool white_ink) {
+void text_detail_add(int owner, int16_t x, int16_t y, uint8_t levels, bool white_ink) {
   // Recorded whatever the mode, so a change of mode takes only a new flush
   if (x < 0 || y < 0 || x >= PBL_DISPLAY_WIDTH || y >= PBL_DISPLAY_HEIGHT) {
     return;
@@ -142,15 +143,14 @@ void text_detail_add(int owner, int16_t x, int16_t y, uint8_t pattern, bool whit
     s_free = prv_next(chunk);
     chunk->hdr = s_rows[y] | flags;
     s_rows[y] = index;
-  }
-  const uint8_t i = HDR_COUNT(chunk->hdr);
-  chunk->x[i] = (uint8_t)x;
-  if (i % 2) {
-    chunk->patterns[i / 2] |= (uint8_t)(pattern << 4);
+    chunk->x[0] = (uint8_t)x;
+    chunk->levels[0] = levels;
   } else {
-    chunk->patterns[i / 2] = pattern;
+    const uint8_t i = HDR_COUNT(chunk->hdr);
+    chunk->x[i] = (uint8_t)x;
+    chunk->levels[i] = levels;
+    chunk->hdr += 1U << 13;
   }
-  chunk->hdr += 1U << 12;
   if (++s_used > s_peak) {
     s_peak = s_used;
   }
@@ -174,25 +174,39 @@ PBL_SYSCALL(void, sys_text_detail_app_frame_begin) {
   }
 }
 
-// Pixels set in a 2x2 pattern
-static const uint8_t s_count[16] = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4};
+// Total coverage of a pixel's four glyph pixels, 0 to 12
+static unsigned prv_sum(uint8_t levels) {
+  return (levels & 3U) + ((levels >> 2) & 3U) + ((levels >> 4) & 3U) + (levels >> 6);
+}
 
-// Panel levels of a 2x2 pattern in black ink: 3 where set, 0 elsewhere
-static const uint8_t s_sub_levels[16] = {
-  0x00, 0x03, 0x0C, 0x0F, 0x30, 0x33, 0x3C, 0x3F, 0xC0, 0xC3, 0xCC, 0xCF, 0xF0, 0xF3, 0xFC, 0xFF,
-};
-
-static uint8_t prv_levels(uint8_t pattern, bool white, TextDetailMode mode) {
-  if (mode == TextDetailModeGrey) {
-    // Grey only lightens black ink on e-ink, so white text keeps its pixels
-    if (white) {
-      return 0;
-    }
-    const uint8_t count = s_count[pattern];
-    return ((count >= 3) ? 3 : count) * 0x55U;
+// Each glyph pixel black or white, as a black and white panel shows it: inked when at least half
+static uint8_t prv_black_white(uint8_t levels, bool white) {
+  uint8_t out = 0;
+  for (unsigned i = 0; i < 4; i++) {
+    const bool ink = ((levels >> (2U * i)) & 3U) >= 2U;
+    out |= (uint8_t)(((ink != white) ? 3U : 0U) << (2U * i));
   }
-  // White ink: set panel pixels white (0), the others black (3)
-  return white ? (uint8_t)~s_sub_levels[pattern] : s_sub_levels[pattern];
+  return out;
+}
+
+static uint8_t prv_panel_levels(uint8_t levels, bool white, TextDetailMode mode, bool grey) {
+  switch (mode) {
+    case TextDetailModeGrey:
+      // One level for the whole pixel; grey only lightens black ink on e-ink
+      if (!grey || white) {
+        return 0;
+      }
+      return (uint8_t)(((prv_sum(levels) + 2U) / 4U) * 0x55U);
+    case TextDetailModeSubpixelGrey:
+      if (grey && !white) {
+        return levels;
+      }
+      return prv_black_white(levels, white);
+    case TextDetailModeSubpixel:
+      return prv_black_white(levels, white);
+    default:
+      return 0;
+  }
 }
 
 bool text_detail_row(const TextDetailFrame *frame, uint16_t y, const uint8_t *fb_row,
@@ -222,15 +236,15 @@ bool text_detail_row(const TextDetailFrame *frame, uint16_t y, const uint8_t *fb
         continue;
       }
       // Skip pixels drawn over since: the frame must hold what the text left there
-      const uint8_t pattern = (chunk->patterns[i / 2] >> (4 * (i % 2))) & 0x0FU;
-      const bool inked = s_count[pattern] >= 2;
+      const uint8_t levels = chunk->levels[i];
+      const bool inked = prv_sum(levels) >= 6U;
       const bool white = (fb_row[x / 8] >> (x % 8)) & 1U;
       if (white != (inked == white_ink)) {
         continue;
       }
-      const uint8_t levels = prv_levels(pattern, white_ink, mode);
-      if (levels) {
-        cells[x] = levels;
+      const uint8_t panel = prv_panel_levels(levels, white_ink, mode, frame->grey);
+      if (panel) {
+        cells[x] = panel;
         any = true;
       }
     }
@@ -240,7 +254,7 @@ bool text_detail_row(const TextDetailFrame *frame, uint16_t y, const uint8_t *fb
 }
 
 bool text_detail_wants_grey(void) {
-  if (s_mode != TextDetailModeGrey) {
+  if (s_mode != TextDetailModeGrey && s_mode != TextDetailModeSubpixelGrey) {
     return false;
   }
   for (uint16_t y = 0; y < PBL_DISPLAY_HEIGHT; y++) {
