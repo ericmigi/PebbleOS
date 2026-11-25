@@ -115,6 +115,14 @@ pbl_clar_test(test_battery_curve_xteinkx4
   OVERRIDES dummy_board
 )
 
+pbl_clar_test(test_battery_log
+  MODULES pfs
+  SOURCES
+    pebble/services/battery/battery_log.c
+  DEFINES CONFIG_SERVICE_BATTERY_LOG=1 CONFIG_SERVICE_BATTERY_LOG_RECORDS=8
+  OVERRIDES dummy_board
+)
+
 pbl_clar_test(test_alerts
   MODULES settings
   SOURCES
