@@ -10,6 +10,7 @@
         *(.data.*)
         *(.sdata)
         *(.sdata.*)
+#include <snippets-data.ld>
 
         . = ALIGN(8);
         __data_end = .;

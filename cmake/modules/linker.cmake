@@ -19,7 +19,7 @@ else()
   set(PBL_LINKER_SCRIPT ON)
 endif()
 
-set(PBL_LINKER_SNIPPET_LOCATIONS memory rom-start ram-sections ramfunc footer)
+set(PBL_LINKER_SNIPPET_LOCATIONS memory rom-start ram-sections ramfunc data footer)
 
 foreach(location ${PBL_LINKER_SNIPPET_LOCATIONS})
   define_property(GLOBAL PROPERTY PBL_LINKER_SNIPPETS_${location}
