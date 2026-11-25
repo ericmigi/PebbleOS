@@ -32,6 +32,16 @@
 		regulator-always-on;
 	};
 
+	// A TP4056 with its status pins not connected: GPIO20 is high while USB is present, and the
+	// battery reaches ADC channel 0 through two equal resistors
+	charger: charger {
+		compatible = "coredevices,adc-charger";
+		gpios = <&gpio 20 GPIO_ACTIVE_HIGH>;
+		io-channels = <&adc 0>;
+		output-ohms = <10000>;
+		full-ohms = <20000>;
+	};
+
 	// Six keys on two ladders that pull an ADC input down from about 3.3 V, the input clipping
 	// at full scale with none pressed. Press voltages are the mean of those other X4 projects
 	// measured; the nearest one wins, so each key's band ends halfway to its neighbour's. Key-up
