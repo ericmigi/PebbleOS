@@ -9,3 +9,4 @@ pbl_library_sources(
 )
 pbl_library_sources_ifdef(CONFIG_CRC retained.c)
 pbl_library_sources_ifdef(CONFIG_SOC_ESP32C3_POWER_OFF power_off.c)
+pbl_library_sources_ifdef(CONFIG_SOC_ESP32C3_LIGHT_SLEEP idle.c)

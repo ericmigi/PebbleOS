@@ -22,6 +22,19 @@ config SOC_ESP32C3_POWER_OFF
       node tells USB power, which keeps the board on regardless: then
       the chip resets instead, as without this.
 
+config SOC_ESP32C3_LIGHT_SLEEP
+    bool "Light sleep idle state"
+    default n
+    depends on SOC_ESP32C3 && CPU_IDLE && TIMER_ESP32C3_SYSTIMER
+    depends on SOC_ESP32C3_POWER_LATCH && $(dt_has_nodelabel,charger)
+    select SOC_HAS_IDLE_STATES
+    help
+      Add light sleep as a deeper CPU idle state for idle periods of at
+      least 5 ms. The clocks of the digital domain stop while the crystal
+      and BBPLL stay powered. Refused while USB is present, in the first
+      30 s after boot, while the RTC watchdog is already armed, or before
+      the slow clock is calibrated.
+
 config SOC_ESP32C3_FLASH_CLOCK_DIV
     int "Flash clock divider"
     range 1 4

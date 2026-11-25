@@ -26,6 +26,7 @@
 
 #define GPIO_PIN_PAD_DRIVER    PBL_BIT(2)
 #define GPIO_PIN_INT_TYPE_MASK PBL_GENMASK(9, 7)
+#define GPIO_PIN_WAKEUP_ENABLE PBL_BIT(10)
 // Bit 0 of the field is the CPU's interrupt, bit 1 its NMI
 #define GPIO_PIN_INT_ENA_MASK PBL_GENMASK(17, 13)
 #define GPIO_PIN_INT_ENA_CPU  1U

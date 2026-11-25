@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+# Blocks and pins the light sleep idle state touches with interrupts masked
+config: SOC_ESP32C3_LIGHT_SLEEP
+labels:
+  - efuse
+  - gpio
+  - rtc_cntl
+  - timg0
+props:
+  - label: power_latch
+    prop: gpios
+    cell: 1
+  - label: charger
+    prop: gpios
+    cell: 1
