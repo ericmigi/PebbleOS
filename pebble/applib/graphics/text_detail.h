@@ -40,6 +40,11 @@ int text_detail_glyph_begin(const GBitmap *dest);
 //! color (white or black). Between text_detail_glyph_begin() and text_detail_glyph_end().
 void text_detail_add(int owner, int16_t x, int16_t y, uint8_t levels, bool white_ink);
 
+//! Records @p count edges of a glyph at @p origin, each x, y (from @p origin) and levels as
+//! text_detail_add() takes them, in order of y; those outside @p clip are left out.
+void text_detail_add_edges(int owner, GPoint origin, const GRect *clip, const uint8_t *edges,
+                           uint16_t count, bool white_ink);
+
 //! Ends the glyph text_detail_glyph_begin() started.
 void text_detail_glyph_end(int owner);
 

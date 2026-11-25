@@ -157,6 +157,9 @@ bool text_resources_glyph_is_color(const GlyphLocation *location);
 //! Whether the glyph is stored at twice its font's resolution (FEATURE_SCALE2)
 bool text_resources_glyph_is_scale2(const GlyphLocation *location);
 
+//! Whether the glyph is followed by its edges at panel resolution (FEATURE_EDGES)
+bool text_resources_glyph_has_edges(const GlyphLocation *location);
+
 //! Whether the glyph holds 2 bits of coverage per pixel (FEATURE_AA2)
 bool text_resources_glyph_is_aa2(const GlyphLocation *location);
 
