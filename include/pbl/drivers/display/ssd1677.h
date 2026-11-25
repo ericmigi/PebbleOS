@@ -136,6 +136,24 @@ struct pbl_display_ssd1677 {
   uint32_t power_off_ms;
 };
 
+/**
+ * @brief Run the panel's 4-level overlay over the image shown (experimental).
+ *
+ * The image shown must have every grey pixel black, from a B/W refresh. The frames are in the
+ * display's framebuffer format and size; a pixel gets light grey where old is 1 and new 0, dark
+ * grey where both are 1, and stays as it is where both are 0. Blocks until the refresh ends; the
+ * next update is a clean one.
+ *
+ * @param disp SSD1677 display.
+ * @param old_frame Frame for the old plane.
+ * @param new_frame Frame for the new plane.
+ * @param vcom VCOM code (command 0x2C): 0x30 is -1.2 V, as the stock firmware's overlay; 0x10
+ *             -0.4 V, as the fast waveform.
+ * @return 0 on success, or a negative errno.
+ */
+int pbl_display_ssd1677_grey(const struct pbl_display *disp, const uint8_t *old_frame,
+                             const uint8_t *new_frame, uint8_t vcom);
+
 /** @cond INTERNAL_HIDDEN */
 extern const struct pbl_display_ops pbl_display_ssd1677_ops;
 
