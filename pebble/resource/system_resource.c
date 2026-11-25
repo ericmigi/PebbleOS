@@ -12,6 +12,8 @@
 #include <applib/fonts/fonts.h>
 #include <applib/graphics/text_resources.h>
 #include <kernel/event_loop.h>
+#include <kernel/pebble_tasks.h>
+#include <process_management/app_manager.h>
 #include <process_management/process_regions.h>
 #include <pbl/kernel/irq.h>
 #include <pbl/kernel/mpu.h>
@@ -49,6 +51,73 @@ bool system_resource_is_valid(void) {
 FontInfo s_system_fonts_info_table[NUM_SYSTEM_FONTS + 1] PBL_KERNEL_READONLY_DATA;
 _Atomic uint32_t g_font_language_generation PBL_KERNEL_READONLY_DATA;
 
+#if defined(CONFIG_SYSTEM_UI_FONT) && !defined(CONFIG_RECOVERY_FW)
+#define HAS_UI_FONT 1
+#else
+#define HAS_UI_FONT 0
+#endif
+
+#if HAS_UI_FONT
+// The system UI's typeface, drawn in place of Gothic for everything but third-party apps and
+// framed watchfaces, whose layouts are made for Gothic's metrics. Each stands on the line box
+// and baseline of the Gothic font it replaces, and takes that font's language pack extension.
+static const struct {
+  ResourceId gothic;
+  ResourceId ui;
+} s_ui_fonts[] = {
+  {RESOURCE_ID_GOTHIC_14, RESOURCE_ID_UI_SANS_14},
+  {RESOURCE_ID_GOTHIC_14_BOLD, RESOURCE_ID_UI_SANS_14_BOLD},
+  {RESOURCE_ID_GOTHIC_18, RESOURCE_ID_UI_SANS_18},
+  {RESOURCE_ID_GOTHIC_18_BOLD, RESOURCE_ID_UI_SANS_18_BOLD},
+  {RESOURCE_ID_GOTHIC_24, RESOURCE_ID_UI_SANS_24},
+  {RESOURCE_ID_GOTHIC_24_BOLD, RESOURCE_ID_UI_SANS_24_BOLD},
+  {RESOURCE_ID_GOTHIC_28, RESOURCE_ID_UI_SANS_28},
+  {RESOURCE_ID_GOTHIC_28_BOLD, RESOURCE_ID_UI_SANS_28_BOLD},
+  {RESOURCE_ID_GOTHIC_36, RESOURCE_ID_UI_SANS_36},
+  {RESOURCE_ID_GOTHIC_36_BOLD, RESOURCE_ID_UI_SANS_36_BOLD},
+};
+// Only privileged code draws with these (the kernel and built-in apps), so they stay in kernel
+// RAM rather than in the small region apps may read.
+static FontInfo s_ui_fonts_info_table[PBL_ARRAY_SIZE(s_ui_fonts)];
+
+// Index into s_ui_fonts of a Gothic resource (or, with ui set, of its stand-in), or -1
+static int prv_ui_font_index(uint32_t resource_id, bool ui) {
+  for (size_t i = 0; i < PBL_ARRAY_SIZE(s_ui_fonts); ++i) {
+    if (resource_id == (ui ? s_ui_fonts[i].ui : s_ui_fonts[i].gothic)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static int prv_ui_font_info_index(const FontInfo *fontinfo) {
+  for (size_t i = 0; i < PBL_ARRAY_SIZE(s_ui_fonts_info_table); ++i) {
+    if (fontinfo == &s_ui_fonts_info_table[i]) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// The kernel's own windows and the built-in apps that fill the display use the system UI's
+// typeface; third-party apps and workers, and apps framed in a bezel, keep Gothic.
+static bool prv_caller_uses_ui_font(void) {
+  switch (pebble_task_get_current()) {
+    case PebbleTask_App: {
+      const PebbleProcessMd *md = app_manager_get_current_app_md();
+      GSize size;
+      app_manager_get_framebuffer_size(&size);
+      return md && !md->is_unprivileged && size.w == PBL_DISPLAY_WIDTH &&
+             size.h == PBL_DISPLAY_HEIGHT;
+    }
+    case PebbleTask_Worker:
+      return false;
+    default:
+      return true;
+  }
+}
+#endif
+
 #ifndef CONFIG_RECOVERY_FW
 #define NUM_LANGUAGE_FONTS \
   (RESOURCE_ID_LECO_60_BOLD_NUMBERS_AM_PM_EXTENDED - RESOURCE_ID_GOTHIC_14_EXTENDED + 1)
@@ -85,6 +154,13 @@ static void prv_invalidate_system_fonts(void) {
     info.loaded = false;
     pbl_mpu_user_ro_write(&s_system_fonts_info_table[i], &info, sizeof(info));
   }
+#if HAS_UI_FONT
+  for (size_t i = 0; i < PBL_ARRAY_SIZE(s_ui_fonts_info_table); ++i) {
+    FontInfo info = s_ui_fonts_info_table[i];
+    info.loaded = false;
+    pbl_mpu_user_ro_write(&s_ui_fonts_info_table[i], &info, sizeof(info));
+  }
+#endif
   // Publish last: a renderer that sees the new generation must find the fonts unloaded, or it
   // would refill its cache from the old ones under the new generation.
   pbl_irq_lock();
@@ -134,6 +210,12 @@ static LanguageFonts *prv_get_language_fonts(uint8_t slot) {
 }
 
 static int prv_language_font_index(uint32_t base_resource_id) {
+#if HAS_UI_FONT
+  const int ui = prv_ui_font_index(base_resource_id, true);
+  if (ui >= 0) {
+    base_resource_id = s_ui_fonts[ui].gothic;
+  }
+#endif
   for (size_t i = 0; i < NUM_SYSTEM_FONTS; ++i) {
     if (s_font_resource_keys[i].resource_id == base_resource_id) {
       const uint32_t extension = s_font_resource_keys[i].extension_id;
@@ -233,6 +315,17 @@ static GFont prv_load_system_font(const char *font_key) {
       FontInfo *fontinfo = &s_system_fonts_info_table[i];
       uint32_t resource = s_font_resource_keys[i].resource_id;
       uint32_t extension = s_font_resource_keys[i].extension_id;
+#if HAS_UI_FONT
+      // The stand-ins are only reached through the Gothic keys they replace
+      if (prv_ui_font_index(resource, true) >= 0) {
+        return nullptr;
+      }
+      const int ui = prv_ui_font_index(resource, false);
+      if (ui >= 0 && prv_caller_uses_ui_font()) {
+        fontinfo = &s_ui_fonts_info_table[ui];
+        resource = s_ui_fonts[ui].ui;
+      }
+#endif
 #ifndef CONFIG_RECOVERY_FW
       if (extension) {
         extension =
@@ -289,8 +382,16 @@ PBL_SYSCALL(void, sys_font_reload_font, (VAL, FontInfo *, fontinfo)) {
 
   uint32_t extension = fontinfo->extension.resource_id;
 #ifndef CONFIG_RECOVERY_FW
+#if HAS_UI_FONT
+  // A stand-in takes the extension of the Gothic font it replaces
+  const int ui = prv_ui_font_info_index(fontinfo);
+  const uint32_t gothic = (ui >= 0) ? s_ui_fonts[ui].gothic : 0;
+#else
+  const uint32_t gothic = 0;
+#endif
   for (size_t i = 0; i < NUM_SYSTEM_FONTS; ++i) {
-    if (fontinfo == &s_system_fonts_info_table[i]) {
+    if (fontinfo == &s_system_fonts_info_table[i] ||
+        (gothic && s_font_resource_keys[i].resource_id == gothic)) {
       extension = s_font_resource_keys[i].extension_id;
       if (extension) {
         extension =
