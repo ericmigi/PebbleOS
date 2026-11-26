@@ -8,6 +8,12 @@
   <a href="https://forum.repebble.com/"><img src="https://img.shields.io/discourse/posts?server=https%3A%2F%2Fforum.repebble.com&label=forum"></a>
 </p>
 
+## Xteink X4 and X4 Pro
+
+[Flash a reader, install watchfaces, or build the firmware, SDK and Android companion](extras/xteink/README.md). The original X4 uses RISC-V and the X4 Pro uses Xtensa. The downloadable 34-watchface collection targets the Pro.
+
+Firmware updates for both readers require **USB**. PBZ over-the-air firmware updates are unavailable. The Android companion supports installing PBW apps and watchfaces over Bluetooth.
+
 ## Resources
 
 Here's a quick summary of resources to help you find your way around:
