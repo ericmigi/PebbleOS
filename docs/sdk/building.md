@@ -169,3 +169,12 @@ binary under `flint/` with the same app UUID. The X4 Pro console installer
 and CoreApp with X4 Pro support select the native binary first. Older phone
 software that recognizes Flint can select the ARM binary, which the Pro
 runs through Samsa. Keep each binary in its own architecture's directory.
+
+
+For a legacy phone that presents the original X4 as Flint, make a separate
+reader-specific PBW from the native RISC-V variant. The output targets the
+original X4. A stock Flint requires ARM code.
+
+```shell
+python3 tools/pbw_as_platform.py app.pbw app-x4-legacy-phone.pbw
+```
