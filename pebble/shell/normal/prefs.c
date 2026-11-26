@@ -200,7 +200,7 @@ static Uuid s_default_worker = UUID_INVALID_INIT;
 static uint8_t s_text_style = PreferredContentSizeDefault;
 
 #define PREF_KEY_SYSTEM_TEXT_SIZE "systemTextSize"
-static uint8_t s_system_text_size = PreferredContentSizeDefault;
+static uint8_t s_system_text_size = PreferredContentSizeInitial;
 #if !UNITTEST
 static_assert(sizeof(PreferredContentSize) == sizeof(s_system_text_size),
               "sizeof(PreferredContentSize) grew, pref needs to be migrated!");

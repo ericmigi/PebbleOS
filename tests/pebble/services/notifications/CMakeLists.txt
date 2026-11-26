@@ -8,6 +8,14 @@ pbl_clar_test(test_alerts_preferences
   OVERRIDES dummy_board
 )
 
+pbl_clar_test(test_alerts_preferences_smaller
+  SOURCE test_alerts_preferences.c
+  MODULES settings
+  SOURCES pebble/services/notifications/alerts_preferences.c
+  DEFINES CONFIG_SMALLER_TEXT_BY_DEFAULT=1
+  OVERRIDES dummy_board
+)
+
 pbl_clar_test(test_notification_storage
   MODULES pfs timeline_item time rand
   SOURCES

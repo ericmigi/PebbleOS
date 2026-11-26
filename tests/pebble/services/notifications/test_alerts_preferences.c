@@ -56,11 +56,22 @@ void test_alerts_preferences__initialize(void) {
 void test_alerts_preferences__cleanup(void) {
 }
 
-void test_alerts_preferences__text_size_defaults_to_platform(void) {
+void test_alerts_preferences__text_size_defaults_to_initial_setting(void) {
   alerts_preferences_init();
   cl_assert_equal_i(alerts_preferences_get_notification_content_size(),
-                    PreferredContentSizeDefault);
+                    PreferredContentSizeInitial);
   cl_assert(prv_notification_text_size_stored());
+#ifdef CONFIG_SMALLER_TEXT_BY_DEFAULT
+  cl_assert_equal_i(alerts_preferences_get_notification_content_size(),
+                    PreferredContentSizeDefault - 1);
+#endif
+}
+
+void test_alerts_preferences__explicit_standard_text_size_survives(void) {
+  alerts_preferences_init();
+  alerts_preferences_set_notification_content_size(PreferredContentSizeDefault);
+  alerts_preferences_init();
+  cl_assert_equal_i(alerts_preferences_get_notification_content_size(), PreferredContentSizeDefault);
 }
 
 void test_alerts_preferences__text_size_migrates_from_system(void) {
@@ -87,7 +98,7 @@ void test_alerts_preferences__text_size_ignores_invalid_system_value(void) {
   prv_set_system_text_style(0xff);
   alerts_preferences_init();
   cl_assert_equal_i(alerts_preferences_get_notification_content_size(),
-                    PreferredContentSizeDefault);
+                    PreferredContentSizeInitial);
 }
 
 static void prv_set_notification_window_timeout(uint32_t timeout_ms) {

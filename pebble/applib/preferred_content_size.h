@@ -28,6 +28,13 @@ typedef enum PreferredContentSize {
 #else
 #define PreferredContentSizeDefault PreferredContentSizeMedium
 #endif
+
+// Initial user preference, distinct from the platform's reference size for SDK layouts.
+#ifdef CONFIG_SMALLER_TEXT_BY_DEFAULT
+#define PreferredContentSizeInitial (PreferredContentSizeDefault - 1)
+#else
+#define PreferredContentSizeInitial PreferredContentSizeDefault
+#endif
 #endif
 
 //! @internal

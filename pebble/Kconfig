@@ -274,6 +274,12 @@ config SYSTEM_UI_FONT_LOCAL_DIR
       Holds Bookerly-Regular.ttf and Bookerly-Bold.ttf. Development only:
       do not commit these fonts or anything built from them.
 
+config SMALLER_TEXT_BY_DEFAULT
+    bool "Start with the Smaller system and notification text setting"
+    default y if BOARD_XTEINK_X4 || BOARD_XTEINK_X4_PRO
+    help
+      Use the Smaller size in Settings until a saved size is available.
+
 config SYSTEM_UI_FONT_SCALE2
     bool
     help

@@ -23,7 +23,7 @@ static bool s_is_24h_style;
 static Uuid s_default_watchface = UUID_INVALID_INIT;
 
 #define PREF_KEY_CONTENT_SIZE "contentSize"
-static uint8_t s_content_size;
+static uint8_t s_content_size = PreferredContentSizeInitial;
 #if !UNITTEST
 static_assert(sizeof(PreferredContentSize) == sizeof(s_content_size),
               "sizeof(PreferredContentSize) grew, pref needs to be migrated!");
@@ -51,7 +51,7 @@ void shell_prefs_init(void) {
   }
   if (pbl_settings_get(&file, PREF_KEY_CONTENT_SIZE, sizeof(PREF_KEY_CONTENT_SIZE), &s_content_size,
                        sizeof(s_content_size)) != 0) {
-    s_content_size = PreferredContentSizeDefault;
+    s_content_size = PreferredContentSizeInitial;
   }
   pbl_settings_close(&file);
 cleanup:

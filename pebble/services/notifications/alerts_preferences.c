@@ -124,7 +124,7 @@ static NotificationStatusBarStyle s_notification_status_bar_style =
 
 #define PREF_KEY_NOTIF_TEXT_SIZE  "notifTextSize"
 #define SHELL_PREF_KEY_TEXT_STYLE "textStyle"
-static PreferredContentSize s_notification_content_size = PreferredContentSizeDefault;
+static PreferredContentSize s_notification_content_size = PreferredContentSizeInitial;
 
 ///////////////////////////////////
 //! Legacy preference keys
@@ -187,7 +187,7 @@ static void prv_migrate_notification_content_size(struct pbl_settings_file *file
     return;
   }
 
-  s_notification_content_size = PreferredContentSizeDefault;
+  s_notification_content_size = PreferredContentSizeInitial;
   struct pbl_settings_file shell_prefs = {};
   if (pbl_settings_open(&shell_prefs, SHELL_PREFS_FILE_NAME, SHELL_PREFS_FILE_LEN) == 0) {
     uint8_t text_style;
@@ -622,7 +622,7 @@ void alerts_preferences_set_notification_status_bar_style(NotificationStatusBarS
 PreferredContentSize alerts_preferences_get_notification_content_size(void) {
   return (s_notification_content_size <= NotificationContentSizeSystem)
              ? s_notification_content_size
-             : PreferredContentSizeDefault;
+             : PreferredContentSizeInitial;
 }
 
 void alerts_preferences_set_notification_content_size(PreferredContentSize size) {
