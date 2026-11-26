@@ -5,7 +5,7 @@
 | X4 | `xteink_x4` | `xteinkx4` | Native RISC-V |
 | X4 Pro | `xteink_x4_pro` | `xteinkx4pro` | Native Xtensa and compatible Flint, Diorite or Aplite ARM apps through Samsa |
 
-Both readers have a 480 × 800 physical panel and a 240 × 400 native app canvas. The [firmware releases](https://github.com/ericmigi/PebbleOS/releases) include a matched firmware and resource pair for each board, the SDK and a collection of 34 Pro watchfaces. The Android companion APK and its source require access to the [companion release](https://github.com/ericmigi/coreapp/releases/tag/xteink-companion-0.1.0).
+Both readers have a 480 × 800 physical panel and a 240 × 400 native app canvas. The [firmware releases](https://github.com/ericmigi/PebbleOS/releases) include a matched firmware and resource pair for each board, the SDK and a collection of 34 Pro watchfaces. The [public Android companion source](https://github.com/ericmigi/mobileapp/tree/codex/xteink-pro-companion) includes support for the Pro.
 
 ## Flash a release over USB
 
@@ -47,7 +47,7 @@ Both boards install firmware over USB. PBZ over-the-air firmware updates are una
 
 Use this route for faces with weather, configuration, or other PebbleKit JS. CoreApp installs the native binary and resources on the watch and runs the bundled JavaScript on Android. Each face can request its own network, location or other permissions. Open its settings in CoreApp to configure services and keys it needs.
 
-1. Install the [Xteink companion APK](https://github.com/ericmigi/coreapp/releases/tag/xteink-companion-0.1.0) and pair the reader in **Devices**. On the Pro, the connected device identifies itself as **Xteink X4 Pro**.
+1. Install the [Xteink companion built from public source](#build-the-android-companion) and pair the reader in **Devices**. On the Pro, the connected device identifies itself as **Xteink X4 Pro**.
 2. For one face, open its `.pbw` on Android with CoreApp and select the connected reader. For the collection, extract the PBWs on the computer and enable **Devices → your reader → More options → Dev Connection**. Select the correct reader if several are paired.
 3. With Node.js 22.4 or newer on the computer, send the files to the phone’s developer WebSocket. Use the phone’s LAN IP on the same trusted network, or forward phone TCP port 9000 to a local port on your computer. The examples use the latter endpoint.
 
@@ -136,16 +136,74 @@ ls build/*.pbw
 
 For Pro-only source select `-DPEBBLE_PLATFORMS=xteinkx4pro`. The release’s `watchface-sources.zip` contains the individual Pro projects and their build script. See [app projects](../../docs/sdk/app_build.md) and [SDK packaging](../../docs/sdk/building.md) for the platform layout, compiler selection and 144 × 168 compatibility mode.
 
-## Build the Android companion
+## Run the Xteink emulators
 
-The [private companion source](https://github.com/ericmigi/coreapp/tree/codex/xteink-pro-companion) contains the native Pro selection, Flint catalog fallback, and Developer Connection changes. Use JDK 17 and install Android SDK Platform 37, then set `ANDROID_HOME` to your SDK path. This revision derives its Android version code from a numeric Git tag. Fetch the upstream version tag into a full-history clone.
+The `qemu_esp32c3` board runs the original X4’s RISC-V apps. The `qemu_esp32s3` board runs the Pro’s Xtensa apps. Both boot PebbleOS with a virtual framebuffer. Use the physical reader to evaluate e-paper refresh, ghosting, power consumption and touch.
+
+From the repository root, complete the firmware build prerequisites above. Install Espressif’s two QEMU binaries using ESP-IDF’s tools installer. Install the system libraries listed in [Espressif’s QEMU guide](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/tools/qemu.html) and make sure your Python installation includes Tk for the desktop viewer.
 
 ```sh
-git clone --no-tags --branch codex/xteink-pro-companion https://github.com/ericmigi/coreapp.git CoreApp-xteink
-cd CoreApp-xteink
-git fetch https://github.com/coredevices/CoreApp.git refs/tags/2.1.0:refs/tags/2.1.0
-git submodule update --init --recursive
+python "$IDF_PATH/tools/idf_tools.py" install qemu-riscv32 qemu-xtensa
+. "$IDF_PATH/export.sh"
+. .venv/bin/activate
+qemu-system-riscv32 -machine help | grep esp32c3
+qemu-system-xtensa -machine help | grep esp32s3
+python -c 'import tkinter'
+
+pbl configure --board qemu_esp32c3 -b build-emu-x4
+pbl build -b build-emu-x4
+pbl configure --board qemu_esp32s3 -b build-emu-pro
+pbl build -b build-emu-pro
+```
+
+Start either emulator, or run both commands in separate terminals. The viewer opens upright. Use Up and Down to navigate, Right or Return for Select, and Left or Escape for Back. Each build directory retains its own emulated flash between launches.
+
+```sh
+pbl run -b build-emu-x4 --console-port 5721
+pbl run -b build-emu-pro --console-port 5722
+```
+
+In a second terminal with the same environment, install a native PBW through the loopback console. This example extracts Arcminute from the bundled Pro collection. For the original X4, supply a PBW built with the `xteinkx4` target from the SDK instructions above.
+
+```sh
+unzip -p extras/xteink/watchfaces.zip arcminute-xteinkx4pro.pbw > build-emu-pro/arcminute.pbw
+python tools/install_xteink_pbw.py --board xteink_x4_pro \
+  --port socket://127.0.0.1:5722 build-emu-pro/arcminute.pbw
+python tools/install_xteink_pbw.py --board xteink_x4 \
+  --port socket://127.0.0.1:5721 /path/to/native-x4-face.pbw
+```
+
+The face opens in the viewer after installation. Once the desired frame is visible, press Ctrl-C in that emulator’s terminal. Its last framebuffer capture is saved as `qemu-view.ppm`. To save an upright 480 × 800 PNG, run the following for the desired build directory.
+
+```sh
+python - build-emu-pro <<'PY'
+from pathlib import Path
+import sys
+from PIL import Image
+
+build = Path(sys.argv[1])
+with Image.open(build / "qemu-view.ppm") as frame:
+    frame.transpose(Image.Transpose.ROTATE_90).save(build / "watchface.png")
+PY
+```
+
+Run the firmware version integration test on each emulator. The test harness starts its own instance and checks the running firmware through its console.
+
+```sh
+pbl -b build-emu-x4 itest system/test_boot.py::test_version -q
+pbl -b build-emu-pro itest system/test_boot.py::test_version -q
+```
+
+## Build the Android companion
+
+The [Xteink branch of MobileApp](https://github.com/ericmigi/mobileapp/tree/codex/xteink-pro-companion) supports Pro identification, native PBWs and Flint app-store downloads. Install a JDK and Android SDK Platform 37. The Android build derives its version from a numeric Git tag, so use a full clone with tags. For local development the public repository supplies a sample Firebase configuration.
+
+```sh
+git clone --branch codex/xteink-pro-companion https://github.com/ericmigi/mobileapp.git
+cd mobileapp
+export ANDROID_HOME="$HOME/Library/Android/sdk"   # Linux default: $HOME/Android/Sdk
+cp androidApp/src/google-services-dummy.json androidApp/src/google-services.json
 ./gradlew :androidApp:assembleDebug
 ```
 
-The APK is `public/androidApp/build/outputs/apk/debug/androidApp-debug.apk`. Android permits in-place upgrades when package name and signer match. Use the release APK to retain its signing identity on a phone with that build already installed.
+Install `androidApp/build/outputs/apk/debug/androidApp-debug.apk` on Android and pair the reader in **Devices**. An in-place upgrade requires the same signing key as the installed app. The sample configuration covers local builds; the [upstream README](https://github.com/coredevices/mobileapp#mobile-app) lists services that need developer credentials.
