@@ -57,6 +57,9 @@ static void prv_render_app(uint8_t sequence) {
   // The frame is drawn whole, its text edges with it
   sys_text_detail_app_frame_begin();
 #endif
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+  app_state_get_menu_navigation()->rendered = 0;
+#endif
   if (!window_stack_is_animating(stack)) {
     PBL_PROFILER_NODE_START(render_app);
     window_render(app_window_stack_get_top_window(), ctx);

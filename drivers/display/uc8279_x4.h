@@ -27,4 +27,5 @@ int epaper_write_frame(const struct pbl_display_ssd1677 *epd, uint8_t command,
 
 // Write an address-windowed UC8279 plane, excluding the hidden gate lines.
 int epaper_write_window(const struct pbl_display_ssd1677 *epd, uint8_t command,
-                        const uint8_t *frame, const struct pbl_display_ssd1677_window *window);
+                        const uint8_t *frame, const struct pbl_display_ssd1677_window *window,
+                        bool invert);

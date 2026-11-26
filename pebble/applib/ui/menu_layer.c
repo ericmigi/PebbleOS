@@ -23,6 +23,10 @@
 #include <applib/ui/window.h>
 #include <process_management/process_manager.h>
 #include <shell/system_theme.h>
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+#include <kernel/pebble_tasks.h>
+#include <process_state/app_state/app_state.h>
+#endif
 
 #ifdef CONFIG_TOUCH
 #include <pbl/kernel/time.h>
@@ -403,48 +407,77 @@ static void prv_menu_reconcile_selection_before_step(MenuLayer *menu_layer) {
 }
 #endif // CONFIG_TOUCH
 
-void menu_up_click_handler(ClickRecognizerRef recognizer, void *context) {
-  MenuLayer *menu_layer = context;
-  const bool up = true;
-  if (menu_layer->scroll_wrap_around &&
-      prv_menu_scroll_handle_wrap_around(menu_layer, recognizer, up)) {
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+// Keep stationary labels in place on e-paper. For an oversized row expose the edge
+// encountered in the direction of travel.
+static void prv_reveal_cursor(MenuLayer *menu, bool up) {
+  ScrollLayer *scroll = &menu->scroll_layer;
+  GPoint offset = scroll_layer_get_content_offset(scroll);
+  const int height = scroll->layer.frame.size.h;
+  const int top = menu->selection.y + offset.y;
+  const int bottom = top + menu->selection.h;
+  if (height <= 0 || (top >= 0 && bottom <= height)) {
     return;
   }
-#ifdef CONFIG_TOUCH
-  prv_menu_reconcile_selection_before_step(menu_layer);
+  const bool align_top = menu->selection.h > height ? !up : top < 0;
+  offset.y += align_top ? -top : height - bottom;
+  scroll_layer_set_content_offset(scroll, offset, false);
+}
+
+static void prv_note_cursor(MenuLayer *menu, MenuIndex previous) {
+  if (pebble_task_get_current() != PebbleTask_App ||
+      menu_index_compare(&previous, &menu->selection.index) == 0) {
+    return;
+  }
+  MenuNavigationFrame *frame = app_state_get_menu_navigation();
+  frame->menu = menu;
+#ifdef CONFIG_SHELL
+  frame->row = menu->selection.index.row;
+#endif
+  if (++frame->requested == 0) {
+    frame->requested++;
+  }
+}
 #endif
 
-  MenuIndex prev_index = menu_layer->selection.index;
-  const bool animated = true;
-  menu_layer_set_selected_next(menu_layer, up, MenuRowAlignCenter, animated);
-  MenuIndex current_index = menu_layer->selection.index;
-  if ((menu_layer->scroll_vibe_on_blocked) &&
-      (menu_index_compare(&current_index, &prev_index) == 0) &&
-      (prv_menu_index_is_first_index(menu_layer, &current_index))) {
-    prv_vibe_pulse();
+static void prv_menu_step(ClickRecognizerRef recognizer, MenuLayer *menu_layer, bool up) {
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+  MenuIndex previous = menu_layer->selection.index;
+#endif
+  if (!(menu_layer->scroll_wrap_around &&
+        prv_menu_scroll_handle_wrap_around(menu_layer, recognizer, up))) {
+#ifdef CONFIG_TOUCH
+    prv_menu_reconcile_selection_before_step(menu_layer);
+#endif
+    MenuIndex before_step = menu_layer->selection.index;
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+    if (!menu_layer->center_focused && pebble_task_get_current() == PebbleTask_App &&
+        system_theme_is_system_ui()) {
+      menu_layer_set_selected_next(menu_layer, up, MenuRowAlignNone, false);
+      prv_reveal_cursor(menu_layer, up);
+    } else
+#endif
+    {
+      menu_layer_set_selected_next(menu_layer, up, MenuRowAlignCenter, true);
+    }
+    MenuIndex current = menu_layer->selection.index;
+    if (menu_layer->scroll_vibe_on_blocked && menu_index_compare(&current, &before_step) == 0 &&
+        (up ? prv_menu_index_is_first_index(menu_layer, &current)
+            : prv_menu_index_is_last_index(menu_layer, &current))) {
+      prv_vibe_pulse();
+    }
   }
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+  prv_note_cursor(menu_layer, previous);
+#endif
+}
+
+void menu_up_click_handler(ClickRecognizerRef recognizer, void *context) {
+  prv_menu_step(recognizer, context, true);
 }
 
 void menu_down_click_handler(ClickRecognizerRef recognizer, void *context) {
-  MenuLayer *menu_layer = context;
-  const bool up = false;
-  if (menu_layer->scroll_wrap_around &&
-      prv_menu_scroll_handle_wrap_around(menu_layer, recognizer, up)) {
-    return;
-  }
-#ifdef CONFIG_TOUCH
-  prv_menu_reconcile_selection_before_step(menu_layer);
-#endif
-
-  MenuIndex prev_index = menu_layer->selection.index;
-  const bool animated = true;
-  menu_layer_set_selected_next(menu_layer, up, MenuRowAlignCenter, animated);
-  MenuIndex current_index = menu_layer->selection.index;
-  if ((menu_layer->scroll_vibe_on_blocked) &&
-      (menu_index_compare(&current_index, &prev_index) == 0) &&
-      (prv_menu_index_is_last_index(menu_layer, &current_index))) {
-    prv_vibe_pulse();
-  }
+  prv_menu_step(recognizer, context, false);
 }
 
 static void prv_menu_click_config_provider(void *context) {
@@ -878,6 +911,14 @@ static void PBL_NOINLINE prv_draw_background(MenuLayer *menu_layer, GContext *ct
 void menu_layer_update_proc(Layer *scroll_content_layer, GContext *ctx) {
   MenuLayer *menu_layer = (MenuLayer *)(((uint8_t *)scroll_content_layer) -
                                         offsetof(MenuLayer, scroll_layer.content_sublayer));
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+  if (pebble_task_get_current() == PebbleTask_App) {
+    MenuNavigationFrame *frame = app_state_get_menu_navigation();
+    if (frame->menu == menu_layer) {
+      frame->rendered = frame->requested;
+    }
+  }
+#endif
   prv_refresh_theme_colors(menu_layer);
   const GSize frame_size = menu_layer->scroll_layer.layer.frame.size;
   const int16_t content_top_y = -scroll_layer_get_content_offset(&menu_layer->scroll_layer).y;
@@ -1032,6 +1073,11 @@ void menu_layer_pad_bottom_enable(MenuLayer *menu_layer, bool enable) {
 }
 
 void menu_layer_deinit(MenuLayer *menu_layer) {
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+  if (pebble_task_get_current() == PebbleTask_App && app_state_get_menu_navigation()->menu == menu_layer) {
+    app_state_get_menu_navigation()->menu = nullptr;
+  }
+#endif
 #ifdef CONFIG_TOUCH
   // Deregister from the Tier-1 touch registry first so a gesture in flight on this widget is
   // cancelled with no client callbacks before its client state is torn down (double-deinit safe).

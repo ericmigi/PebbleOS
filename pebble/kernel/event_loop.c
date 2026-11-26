@@ -24,6 +24,9 @@
 #include <pbl/services/bluetooth/gateway.h>
 #include <pbl/services/clock.h>
 #include <pbl/services/compositor/compositor.h>
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+#include <pbl/services/compositor/compositor_display.h>
+#endif
 #include <pbl/services/debounced_connection_service.h>
 #include <pbl/services/ecompass.h>
 #include <pbl/services/event_service.h>
@@ -177,6 +180,12 @@ static void back_button_force_quit_handler(struct pbl_work *work) {
 static void launcher_handle_button_event(PebbleEvent *e) {
   ButtonId button_id = e->button.button_id;
   const bool watchface_running = app_manager_is_watchface_running();
+
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+  if (!watchface_running) {
+    compositor_display_note_input();
+  }
+#endif
 
   // trigger the backlight on any button down event
   if (e->type == PEBBLE_BUTTON_DOWN_EVENT) {

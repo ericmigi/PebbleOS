@@ -132,6 +132,9 @@ typedef struct {
   AppGlance glance;
 
   TextRenderState text_render_state;
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+  MenuNavigationFrame menu_navigation;
+#endif
 
   bool text_perimeter_debugging_enabled;
 
@@ -152,6 +155,9 @@ bool app_state_configure(MemorySegment *app_state_ram, ProcessAppSDKType sdk_typ
     return false;
   }
 
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+  s_app_state_ptr->menu_navigation = (MenuNavigationFrame){};
+#endif
   s_app_state_ptr->sdk_type = sdk_type;
   s_app_state_ptr->initial_obstruction_origin_y = obstruction_origin_y;
 
@@ -604,6 +610,12 @@ void app_state_set_js_memory_api_context(JsMemoryAPIContext *context) {
 ApplibInternalEventsInfo *app_state_get_applib_internal_events_info(void) {
   return &s_app_state_ptr->applib_internal_events_info;
 }
+
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+MenuNavigationFrame *app_state_get_menu_navigation(void) {
+  return &s_app_state_ptr->menu_navigation;
+}
+#endif
 
 TextRenderState *app_state_get_text_render_state(void) {
   return &s_app_state_ptr->text_render_state;

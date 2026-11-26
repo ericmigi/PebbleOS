@@ -106,6 +106,14 @@ config DISPLAY_UC8279_X4
       its built-in monochrome waveforms and an offset of 120 gate lines.
       The probe requires the SPI clock and data GPIOs in the display node.
 
+config DISPLAY_UC8279_LOCAL_TEXT
+    bool "Hold monochrome pixels during UC8279 text refinement"
+    depends on DISPLAY_UC8279_X4
+    default y if BOARD_XTEINK_X4_PRO
+    help
+      Use local text refinement and factory differential menu cleanup on
+      the X4 Pro UC8279 panel reporting variant 0x68.
+
 config DISPLAY_SSD1677_MOTION_FRAMES
     int "SSD1677 differential drive frames during small animations"
     depends on DISPLAY_SSD1677

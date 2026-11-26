@@ -16,6 +16,16 @@
  * Asserts when the display size or format differs from the platform's.
  */
 void compositor_display_init(void);
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+//! A button edge postpones an already scheduled low-priority text refinement.
+void compositor_display_note_input(void);
+//! Flush the current built-in menu selection with the panel's navigation waveform.
+void compositor_display_update_menu(void (*complete)(bool success));
+#ifdef CONFIG_SHELL
+void compositor_display_trace_menu(unsigned requested, unsigned rendered, unsigned row,
+                                   unsigned modal, bool submitted);
+#endif
+#endif
 
 #ifdef CONFIG_SERVICE_BOOT_SPLASH_POWER_OFF
 //! Stop further display submissions and ignore completions still queued on KernelMain.

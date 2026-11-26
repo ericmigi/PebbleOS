@@ -95,8 +95,21 @@ struct pbl_display_ssd1677_state {
   uint32_t completed_drives;
   uint16_t unsettled_pulses;
   uint32_t full_mono_drives;
+  uint32_t menu_cleans;
+  bool menu_clean_pending;
+  bool cursor_pending;
+  uint32_t cursor_previews, cursor_finishes;
+  uint32_t cursor_menu_frames, cursor_tags, cursor_changed_tags;
+  uint32_t cursor_state_rejects, cursor_size_rejects;
   bool motion_override;
   uint32_t motion_drives;
+  uint16_t repair_tiles[25]; // One bit per changed 32x32 tile on the 480x800 framebuffer.
+  uint16_t grey_tiles[25]; // Tiles containing visible intermediate grey on the last pass.
+  uint8_t repair_pulses;
+  bool repair_armed;
+  bool repair_disabled;
+  uint32_t repair_drives;
+  uint32_t repaired_tiles;
 #ifdef CONFIG_SHELL
   uint32_t sparse_updates;
   uint32_t sparse_regions;
@@ -281,8 +294,8 @@ void pbl_display_ssd1677_grey_tune(uint8_t light, uint8_t dark, uint8_t frame_ra
 /** Count successfully completed physical panel waveforms. */
 bool pbl_display_ssd1677_text_grey_supported(const struct pbl_display *disp);
 uint32_t pbl_display_uc8279_completed_drives(const struct pbl_display *disp);
-/** Check for a pending idle cleanup. Arm a full refresh when requested. */
-bool pbl_display_uc8279_motion_settle(const struct pbl_display *disp, bool arm);
+/** Return the pending cleanup delay in milliseconds, or zero. Optionally arm that cleanup. */
+uint32_t pbl_display_uc8279_motion_settle(const struct pbl_display *disp, bool arm);
 #endif
 
 /** @cond INTERNAL_HIDDEN */

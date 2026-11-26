@@ -13,6 +13,8 @@
 #include <pbl/drivers/display.h>
 #ifdef CONFIG_DISPLAY_UC8279_X4
 #include <pbl/drivers/display/ssd1677.h>
+#include <kernel/ui/modals/modal_manager.h>
+#include <process_management/app_install_types.h>
 #include <process_management/app_manager.h>
 #endif
 #include <pbl/kernel/assert.h>
@@ -50,6 +52,16 @@ void compositor_display_prepare_shutdown(void) {
   // Block further composition and idle grey refinements, including queued flush completions.
   s_powering_off = true;
   s_flush_pending = true;
+}
+#endif
+
+#ifdef CONFIG_DISPLAY_UC8279_X4
+static bool prv_system_ui(void) {
+  // Discreet, input-transparent layers can coexist with an animating watchface.
+  return !epd_bench_active() &&
+         (!(modal_manager_get_properties() & ModalProperty_Unfocused) ||
+          (!app_manager_is_watchface_running() &&
+           app_install_id_from_system(app_manager_get_current_app_id())));
 }
 #endif
 
@@ -150,16 +162,30 @@ static struct pbl_display_detail s_detail = {.row = prv_detail_row};
 // the black and white frame and its top-up: interaction keeps the speed of black and white.
 #define GREY_IDLE_MS (150 + 200)
 
-static void prv_send(uint16_t y0, uint16_t y1, bool grey);
+static void prv_send(uint16_t y0, uint16_t y1, bool grey, [[maybe_unused]] bool navigation);
 
 static uint32_t prv_refine_delay(void) {
 #ifdef CONFIG_DISPLAY_UC8279_X4
-  // A one-second watchface tick is still active. A full cleanup between ticks visibly inverts it.
-  if (pbl_display_uc8279_motion_settle(DISPLAY, false)) {
-    return 3000U;
+  uint32_t settle = pbl_display_uc8279_motion_settle(DISPLAY, false);
+  if (settle != 0U) {
+    return settle;
   }
 #endif
   return GREY_IDLE_MS;
+}
+
+static void prv_grey_refine(void *data);
+
+static void prv_defer_refinement(void) {
+  uint32_t delay = prv_refine_delay();
+  if (s_grey_timer != EVENTED_TIMER_INVALID_ID) {
+    if (evented_timer_reschedule(s_grey_timer, delay)) {
+      return;
+    }
+    // Its callback may already be in KernelMain's queue. Cancel that ID before replacing it.
+    evented_timer_cancel(s_grey_timer);
+  }
+  s_grey_timer = evented_timer_register(delay, false, prv_grey_refine, nullptr);
 }
 
 static void prv_grey_refine(void *data) {
@@ -180,7 +206,7 @@ static void prv_grey_refine(void *data) {
   s_flush_y0 = 0;
   s_flush_y1 = PBL_DISPLAY_HEIGHT * FRAMEBUFFER_SCALE - 1;
   s_flush_start_ticks = pbl_uptime_ticks();
-  prv_send(s_flush_y0, s_flush_y1, grey);
+  prv_send(s_flush_y0, s_flush_y1, grey, false);
 }
 #endif
 
@@ -210,11 +236,10 @@ static void prv_flush_finish(void *data) {
 #ifdef CONFIG_TEXT_DETAIL
   bool refine = text_detail_wants_grey();
 #ifdef CONFIG_DISPLAY_UC8279_X4
-  refine |= pbl_display_uc8279_motion_settle(DISPLAY, false);
+  refine |= pbl_display_uc8279_motion_settle(DISPLAY, false) != 0U;
 #endif
   if (success && !epd_bench_active() && !s_detail.grey && refine) {
-    s_grey_timer =
-        evented_timer_register_or_reschedule(s_grey_timer, prv_refine_delay(), prv_grey_refine, nullptr);
+    prv_defer_refinement();
   }
 #endif
 
@@ -287,7 +312,31 @@ void compositor_display_init(void) {
 #endif
 }
 
-void compositor_display_update(void (*handle_update_complete_cb)(bool success)) {
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+#ifdef CONFIG_SHELL
+static unsigned s_cursor_requested, s_cursor_rendered, s_cursor_row, s_cursor_modal, s_cursor_sent;
+
+void compositor_display_trace_menu(unsigned requested, unsigned rendered, unsigned row,
+                                   unsigned modal, bool submitted) {
+  s_cursor_requested = requested;
+  s_cursor_rendered = rendered;
+  s_cursor_row = row;
+  s_cursor_modal = modal;
+  s_cursor_sent += submitted;
+}
+#endif
+
+void compositor_display_note_input(void) {
+#ifdef CONFIG_TEXT_DETAIL
+  if (s_grey_timer != EVENTED_TIMER_INVALID_ID) {
+    prv_defer_refinement();
+  }
+#endif
+}
+#endif
+
+static void prv_display_update(void (*handle_update_complete_cb)(bool success),
+                               [[maybe_unused]] bool navigation) {
 #ifdef CONFIG_SERVICE_BOOT_SPLASH_POWER_OFF
   if (s_powering_off) {
     return;
@@ -337,10 +386,14 @@ void compositor_display_update(void (*handle_update_complete_cb)(bool success)) 
   evented_timer_cancel(s_grey_timer);
   s_grey_timer = EVENTED_TIMER_INVALID_ID;
   compositor_get_text_detail_frame(&s_detail_frame);
-  prv_send(s_flush_y0, s_flush_y1, false);
+  prv_send(s_flush_y0, s_flush_y1, false, navigation);
 #else
   struct pbl_display_buffer buf = {
     .data = (uint8_t *)framebuffer_get_line(fb, 0),
+#ifdef CONFIG_DISPLAY_UC8279_X4
+    .system_ui = prv_system_ui(),
+    .menu_navigation = navigation,
+#endif
     .pitch = FRAMEBUFFER_BYTES_PER_ROW,
   };
 
@@ -356,15 +409,22 @@ void compositor_display_update(void (*handle_update_complete_cb)(bool success)) 
 }
 
 #ifdef CONFIG_TEXT_DETAIL
-static void prv_send(uint16_t y0, uint16_t y1, bool grey) {
+static void prv_send(uint16_t y0, uint16_t y1, bool grey, [[maybe_unused]] bool navigation) {
   s_detail.grey = grey;
+#ifdef CONFIG_DISPLAY_UC8279_X4
+  const bool system_ui = prv_system_ui();
+#endif
 #ifdef CONFIG_FRAMEBUFFER_SCALE2
   s_retains_grey = grey || text_detail_wants_grey();
 #endif
   struct pbl_display_buffer buf = {
     .data = (uint8_t *)framebuffer_get_line(compositor_get_framebuffer(), 0),
 #ifdef CONFIG_DISPLAY_UC8279_X4
-    .continuous = !grey && !text_detail_wants_grey() && app_manager_is_watchface_running(),
+    .system_ui = system_ui,
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+    .menu_navigation = navigation && !grey && system_ui,
+#endif
+    .continuous = !system_ui && !grey && !text_detail_wants_grey() && app_manager_is_watchface_running(),
 #endif
     .pitch = FRAMEBUFFER_BYTES_PER_ROW,
 #ifdef CONFIG_FRAMEBUFFER_SCALE2
@@ -382,6 +442,16 @@ static void prv_send(uint16_t y0, uint16_t y1, bool grey) {
   if (ret != 0) {
     prv_flush_finish((void *)1);
   }
+}
+#endif
+
+void compositor_display_update(void (*complete)(bool success)) {
+  prv_display_update(complete, false);
+}
+
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+void compositor_display_update_menu(void (*complete)(bool success)) {
+  prv_display_update(complete, true);
 }
 #endif
 
@@ -480,7 +550,19 @@ static int prv_cmd_text_greytest(const struct pbl_shell *sh, size_t argc, char *
 }
 #endif
 
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+static int prv_cmd_text_cursor(const struct pbl_shell *sh, size_t argc, char **argv) {
+  pbl_shell_print(sh, "cursor row %u, request %u, raster %u, modal 0x%x, sent %u",
+                  s_cursor_row, s_cursor_requested, s_cursor_rendered, s_cursor_modal, s_cursor_sent);
+  return 0;
+}
+#endif
+
 static const struct pbl_shell_cmd sub_text[] = {
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+  PBL_SHELL_CMD(cursor, nullptr, "Show the last app menu selection and panel submissions",
+                prv_cmd_text_cursor),
+#endif
   PBL_SHELL_CMD(mode, nullptr, "Show or set the text mode: mono, grey, sub or subgrey",
                 prv_cmd_text_mode),
 #ifdef CONFIG_FRAMEBUFFER_SCALE2

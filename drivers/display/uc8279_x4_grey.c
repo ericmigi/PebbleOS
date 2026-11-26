@@ -88,6 +88,9 @@ static bool prv_snapshot_row(const uint8_t **cursor, unsigned y, uint8_t *levels
 static int prv_plane(const struct pbl_display_ssd1677 *epd, const struct pbl_display_buffer *buf,
                      const uint8_t *snapshot, bool msb) {
   const bool flip = epd->state->flip;
+  if (!msb) {
+    memset(epd->state->grey_tiles, 0, sizeof(epd->state->grey_tiles));
+  }
   uint8_t levels[PANEL_WIDTH / 4U];
   int ret = epaper_write_command(epd, msb ? 0x13 : 0x10, nullptr, 0);
   // The controller addresses 600 gates. The first 120 precede the glass and stay white.
@@ -115,6 +118,9 @@ static int prv_plane(const struct pbl_display_ssd1677 *epd, const struct pbl_dis
           ink &= ink - 1U;
           const unsigned pixel = x + bit;
           const unsigned level = edge ? (levels[pixel / 4U] >> (2U * (pixel % 4U))) & 3U : 0;
+          if (!msb && (level == 1U || level == 2U)) {
+            epd->state->grey_tiles[y / 32U] |= 1U << (pixel / 32U);
+          }
           // DTM1 encodes light and DTM2 encodes dark. Both encode solid black.
           if (level == 0U || level == 3U || level == (msb ? 2U : 1U)) {
             s_tile[i + (flip ? 7U - bit : bit)][column / 8U] |= mask;
@@ -154,13 +160,42 @@ static int prv_activate(const struct pbl_display_ssd1677 *epd) {
   return ret;
 }
 
-static int prv_waveform(const struct pbl_display_ssd1677 *epd) {
+static int prv_text_window(const struct pbl_display_ssd1677 *epd) {
+  struct pbl_display_ssd1677_state *s = epd->state;
+  unsigned x0 = PANEL_WIDTH, y0 = PANEL_HEIGHT, x1 = 0, y1 = 0;
+  for (unsigned row = 0; row < PANEL_HEIGHT / 32U; row++) {
+    unsigned bits = s->grey_tiles[row];
+    if (!bits) {
+      continue;
+    }
+    x0 = PBL_MIN(x0, 32U * (unsigned)__builtin_ctz(bits));
+    x1 = PBL_MAX(x1, 32U * (32U - (unsigned)__builtin_clz(bits)));
+    y0 = PBL_MIN(y0, 32U * row);
+    y1 = 32U * (row + 1U);
+  }
+  if (x0 == PANEL_WIDTH) {
+    s->last_window_width = s->last_window_height = 0;
+    return -ENOENT;
+  }
+  unsigned source0 = s->flip ? y0 : PANEL_HEIGHT - y1;
+  unsigned source1 = (s->flip ? y1 : PANEL_HEIGHT - y0) - 1U;
+  unsigned gate0 = 120U + (s->flip ? PANEL_WIDTH - x1 : x0);
+  unsigned gate1 = 119U + (s->flip ? PANEL_WIDTH - x0 : x1);
+  s->last_window_width = source1 - source0 + 1U;
+  s->last_window_height = gate1 - gate0 + 1U;
+  const uint8_t coords[] = {source0 >> 8, source0,    source1 >> 8, source1, gate0 >> 8,
+                            gate0,        gate1 >> 8, gate1,        1};
+  int ret = epaper_write_command(epd, 0x91, nullptr, 0);
+  return ret ? ret : epaper_write_command(epd, 0x90, coords, sizeof(coords));
+}
+
+static int prv_waveform(const struct pbl_display_ssd1677 *epd, bool local_text) {
   static const uint8_t psr[] = {0x37, 0x4d};
   static const uint8_t lut_regs[] = {0x20, 0x21, 0x23, 0x22, 0x24};
   const uint8_t power[] = {
     0x17, s_image_packet[1], s_image_packet[2], s_image_packet[3], s_image_packet[4]
   };
-  const uint8_t cdi = 0x97;
+  const uint8_t cdi = local_text ? 0xd7 : 0x97;
   int ret = epaper_write_command(epd, 0x00, psr, sizeof(psr));
   if (ret == 0) {
     ret = epaper_write_command(epd, 0x30, s_image_packet, 1);
@@ -175,12 +210,34 @@ static int prv_waveform(const struct pbl_display_ssd1677 *epd) {
     ret = epaper_write_command(epd, 0x82, s_image_packet + 5, 1);
   }
   for (unsigned i = 0; ret == 0 && i < sizeof(lut_regs); i++) {
-    ret = epaper_write_command(epd, lut_regs[i], s_image_packet + 9 + i * 49, 49);
+    // Absolute grey selectors keep their factory trajectories. Equal plane bits represent
+    // already-rendered solid ink or paper, which both use VCOM's neutral phase sequence.
+    unsigned bank = local_text && (i == 1 || i == 4) ? 0 : i;
+    const uint8_t *row = s_image_packet + 9 + bank * 49;
+    uint8_t text[49] = {0};
+    if (local_text) {
+      // All retained selectors match VCOM after the second group. Keep both active
+      // groups exactly and use the factory text bank's zero padding for the remainder.
+      memcpy(text, row, 14);
+      row = text;
+    }
+    ret = epaper_write_command(epd, lut_regs[i], row, 49);
   }
   if (ret == 0) {
     ret = epaper_write_command(epd, 0x50, &cdi, 1);
   }
-  return ret != 0 ? ret : prv_activate(epd);
+  if (ret || !local_text) {
+    return ret ? ret : prv_activate(epd);
+  }
+  ret = prv_text_window(epd);
+  if (ret == -ENOENT) {
+    return 0;
+  }
+  if (!ret) {
+    ret = prv_activate(epd);
+  }
+  int leave = epaper_write_command(epd, 0x92, nullptr, 0);
+  return ret ? ret : leave;
 }
 
 int uc8279_x4_prepare_grey(const struct pbl_display_ssd1677 *epd,
@@ -211,6 +268,18 @@ int uc8279_x4_prepare_grey(const struct pbl_display_ssd1677 *epd,
   }
   state->grey_hash_valid = ret == 0;
   state->grey_hash = hash;
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+  // A new selector map can precede any change to the B/W base. Restore the previous
+  // edges before applying the new map so removed grey pixels return to their base.
+  if ((ret == 0 || ret == -ENOMEM) && state->last_was_grey) {
+    int clear = uc8279_x4_leave_grey(epd, buf);
+    if (clear != 0) {
+      pbl_free(state->next_grey_levels);
+      state->next_grey_levels = nullptr;
+      return clear;
+    }
+  }
+#endif
   if (ret == -ENOMEM) {
     // A dense frame still gets all four levels. Encode directly before releasing the compositor.
     state->need_half = true;
@@ -243,9 +312,17 @@ int uc8279_x4_finish_grey(const struct pbl_display_ssd1677 *epd,
     state->last_write_ms += (uint32_t)pbl_uptime_ms() - start;
   }
   start = (uint32_t)pbl_uptime_ms();
+  bool drove = false;
   if (ret == 0) {
-    ret = prv_waveform(epd);
-    if (ret == 0) {
+    state->last_window_width = PANEL_HEIGHT;
+    state->last_window_height = PANEL_WIDTH;
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+    ret = prv_waveform(epd, true);
+#else
+    ret = prv_waveform(epd, false);
+#endif
+    drove = ret == 0 && state->last_window_width != 0;
+    if (drove) {
       state->last_drive = UC8279_DRIVE_GREY;
       state->unsettled_pulses = 0;
       state->completed_drives++;
@@ -261,9 +338,7 @@ int uc8279_x4_finish_grey(const struct pbl_display_ssd1677 *epd,
   }
   state->last_post_ms = (uint32_t)pbl_uptime_ms() - start;
   state->need_half = ret != 0;
-  state->last_was_grey = ret == 0;
-  state->last_window_width = PANEL_HEIGHT;
-  state->last_window_height = PANEL_WIDTH;
+  state->last_was_grey = ret == 0 && drove;
   state->idle_since_ms = (uint32_t)pbl_uptime_ms();
   if (state->powered && epd->power_off_ms != 0U) {
     (void)pbl_delayed_work_reschedule(&pbl_sys_workq, &state->idle, PBL_MSEC(epd->power_off_ms));
@@ -271,7 +346,7 @@ int uc8279_x4_finish_grey(const struct pbl_display_ssd1677 *epd,
   return ret;
 }
 
-// DTM1 still holds the prior B/W base. The factory settle bank drives that to the next page.
+// The factory settle bank drives the previous page to the new monochrome destination.
 int uc8279_x4_leave_grey(const struct pbl_display_ssd1677 *epd,
                          const struct pbl_display_buffer *buf) {
   static const uint8_t window[] = {0, 0, 3, 0x1f, 0, 120, 2, 0x57, 1};
@@ -280,6 +355,7 @@ int uc8279_x4_leave_grey(const struct pbl_display_ssd1677 *epd,
       {{0x03, 0x20}, {0xe1, 0x02}, {0x50, 0xd7}, {0xe0, 0x02}, {0xe5, 0x5a}};
   struct pbl_display_ssd1677_state *s = epd->state;
   uint32_t start = (uint32_t)pbl_uptime_ms();
+  // OLD still holds the previous monochrome base, including the paper around each glyph.
   int ret = epaper_write_frame(epd, 0x13, buf->data);
   s->last_write_ms = (uint32_t)pbl_uptime_ms() - start;
   start = (uint32_t)pbl_uptime_ms();
@@ -354,7 +430,7 @@ static int prv_stream_image(const struct pbl_display_ssd1677 *epd, uc8279_image_
   s->last_write_ms = (uint32_t)pbl_uptime_ms() - start;
   start = (uint32_t)pbl_uptime_ms();
   if (ret == 0) {
-    ret = prv_waveform(epd);
+    ret = prv_waveform(epd, false);
     if (ret == 0) {
       s->last_drive = UC8279_DRIVE_GREY;
       s->unsettled_pulses = 0;

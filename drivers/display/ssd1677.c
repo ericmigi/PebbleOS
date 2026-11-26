@@ -608,19 +608,40 @@ bool pbl_display_ssd1677_text_grey_supported(const struct pbl_display *disp) {
   return !epd->state->uc8279 || epd->state->panel_id[0][3] == 0x68;
 }
 
-bool pbl_display_uc8279_motion_settle(const struct pbl_display *disp, bool arm) {
+uint32_t pbl_display_uc8279_motion_settle(const struct pbl_display *disp, bool arm) {
   if (disp->ops != &pbl_display_ssd1677_ops) {
     return false;
   }
   struct pbl_display_ssd1677_state *state = prv_epd(disp)->state;
   pbl_mutex_lock(&state->lock, PBL_FOREVER);
-  bool pending = state->uc8279 && state->unsettled_pulses != 0U &&
-                 !state->next_frame.continuous;
-  if (pending && arm) {
-    state->need_half = true;
+  uint32_t delay = 0;
+  if (state->uc8279 && state->cursor_pending) {
+    // Leave room for deliberate two-per-second navigation before the optical settle.
+    delay = 650U;
+  } else if (state->uc8279 && state->unsettled_pulses != 0U) {
+    if (!state->next_frame.continuous) {
+      delay = 3000U;
+      if (arm) {
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+        if (state->panel_id[0][3] == 0x68 && state->next_frame.system_ui &&
+            !state->motion_override && state->powered && !state->need_half) {
+          state->menu_clean_pending = true;
+        } else
+#endif
+        {
+          state->need_half = true;
+        }
+      }
+    } else if (!state->repair_disabled && state->powered && !state->need_half &&
+               state->repair_pulses >= 2U) {
+      delay = 425U;
+      if (arm) {
+        state->repair_armed = true;
+      }
+    }
   }
   pbl_mutex_unlock(&state->lock);
-  return pending;
+  return delay;
 }
 
 uint32_t pbl_display_uc8279_completed_drives(const struct pbl_display *disp) {
@@ -653,9 +674,9 @@ int epaper_write_frame(const struct pbl_display_ssd1677 *epd, uint8_t command,
 }
 
 int epaper_write_window(const struct pbl_display_ssd1677 *epd, uint8_t command,
-                        const uint8_t *frame, const struct pbl_display_ssd1677_window *window) {
+                        const uint8_t *frame, const struct pbl_display_ssd1677_window *window, bool invert) {
   int ret = prv_cmd(epd, command, nullptr, 0);
-  return ret != 0 ? ret : prv_write_rows(epd, window, &(struct plane_src){.frame = frame});
+  return ret != 0 ? ret : prv_write_rows(epd, window, &(struct plane_src){.frame = frame, .invert = invert});
 }
 #endif
 
@@ -2209,6 +2230,14 @@ static int prv_cmd_stat(const struct pbl_shell *sh, size_t argc, char **argv) {
                     modes[epd->state->last_drive], (unsigned)epd->state->completed_drives,
                     epd->state->powered ? "on" : "off");
     pbl_shell_print(sh, "%u full monochrome drives", (unsigned)epd->state->full_mono_drives);
+    pbl_shell_print(sh, "%u entire-menu differential cleans", (unsigned)epd->state->menu_cleans);
+    pbl_shell_print(sh, "%u cursor previews, %u settled", (unsigned)epd->state->cursor_previews,
+                    (unsigned)epd->state->cursor_finishes);
+    pbl_shell_print(sh, "cursor menu %u tagged %u changed %u state-rejected %u cache-rejected %u",
+                    (unsigned)epd->state->cursor_menu_frames, (unsigned)epd->state->cursor_tags,
+                    (unsigned)epd->state->cursor_changed_tags,
+                    (unsigned)epd->state->cursor_state_rejects,
+                    (unsigned)epd->state->cursor_size_rejects);
     pbl_shell_print(sh, "%u motion drives", (unsigned)epd->state->motion_drives);
     pbl_shell_print(sh, "sparse updates %u, regions %u, bytes saved across both planes %u",
                     (unsigned)epd->state->sparse_updates, (unsigned)epd->state->sparse_regions,

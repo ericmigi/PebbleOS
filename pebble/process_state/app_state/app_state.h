@@ -58,6 +58,20 @@ typedef struct TextRenderState {
   void *special_codepoint_handler_context;
 } TextRenderState;
 
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+// The rendered generation travels with the app framebuffer across skipped submissions.
+typedef struct {
+  const struct MenuLayer *menu;
+  uint32_t requested;
+  uint32_t rendered;
+  uint32_t submitted;
+#ifdef CONFIG_SHELL
+  uint16_t row;
+#endif
+} MenuNavigationFrame;
+MenuNavigationFrame *app_state_get_menu_navigation(void);
+#endif
+
 typedef struct AppStateInitParams {
   ProcessAppSDKType sdk_type;
   int16_t obstruction_origin_y;

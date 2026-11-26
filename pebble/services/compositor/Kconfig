@@ -8,6 +8,13 @@ config SERVICE_COMPOSITOR
 
 if SERVICE_COMPOSITOR
 
+config SERVICE_COMPOSITOR_DIRECT_SCREEN_SWITCH
+    bool "Present app and modal screen changes directly"
+    default y if BOARD_XTEINK_X4_PRO
+    help
+      Skip shell transition animations. On slow panels a partial wipe
+      can stay visible while the destination screen is ready to display.
+
 config SERVICE_COMPOSITOR_COALESCE_FRAMES
     bool "Let app rendering continue during e-paper refresh"
     depends on DISPLAY_SSD1677

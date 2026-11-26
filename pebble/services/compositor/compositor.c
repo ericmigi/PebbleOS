@@ -528,7 +528,25 @@ void compositor_app_render_ready(void) {
     compositor_render_app();
     epd_appbench_compose_done(start);
     s_flush_failed = false;
-    prv_compositor_flush();
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+    MenuNavigationFrame *nav = app_state_get_menu_navigation();
+    bool cursor = nav->rendered != 0 && nav->rendered != nav->submitted;
+    ModalProperty properties = modal_manager_get_properties();
+    bool eligible = !app_manager_is_watchface_running() &&
+                    app_install_id_from_system(app_manager_get_current_app_id()) &&
+                    (properties & ModalProperty_Unfocused);
+    bool send_cursor = cursor && eligible && framebuffer_is_dirty(&s_framebuffer);
+#ifdef CONFIG_SHELL
+    compositor_display_trace_menu(nav->requested, nav->rendered, nav->row, properties, send_cursor);
+#endif
+    if (send_cursor) {
+      nav->submitted = nav->rendered;
+      compositor_display_update_menu(prv_handle_display_update_complete);
+    } else
+#endif
+    {
+      prv_compositor_flush();
+    }
     // The flush dropped the mirror; an app frame copied one to one and sent restores it
     s_app_framebuffer_mirrored = s_app_frame_verbatim && !s_flush_failed;
     s_app_framebuffer_mirror_origin = s_app_frame_origin;
@@ -653,6 +671,9 @@ static void prv_animation_teardown(Animation *animation) {
 }
 
 void compositor_transition(const CompositorTransition *compositor_animation) {
+#ifdef CONFIG_SERVICE_COMPOSITOR_DIRECT_SCREEN_SWITCH
+  compositor_animation = nullptr;
+#endif
   // Whatever comes next, its first frame has to be composited in full.
   s_app_framebuffer_mirrored = false;
   s_modal_rect = GRectZero;

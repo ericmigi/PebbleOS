@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include "uc8279_x4.h"
+#include "uc8279_x4_cursor.h"
 
 #include "geometry.h"
 
@@ -117,6 +118,13 @@ static void prv_panel_thread(void *arg) {
     int ret = state->next_grey
                   ? uc8279_x4_finish_grey(epd, &state->next_frame)
                   : prv_update_bw(epd, &state->next_frame, state->next_y0, state->next_y1);
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+    bool keep = !ret && state->panel_id[0][3] == 0x68 && state->next_frame.system_ui;
+    uc8279_cursor_remember(&state->next_frame, keep);
+    if (!keep) {
+      state->cursor_pending = false;
+    }
+#endif
     pbl_mutex_unlock(&state->lock);
     pbl_display_complete(&epd->disp, ret);
   }
@@ -193,6 +201,7 @@ static uint32_t prv_tile_crc(const uint8_t *data, unsigned pitch, unsigned bytes
 struct uc_dirty_regions {
   struct pbl_display_ssd1677_window rects[12];
   unsigned count;
+  uint16_t tiles[25];
 #ifdef CONFIG_SHELL
   unsigned saved_per_plane;
 #endif
@@ -278,6 +287,7 @@ static bool prv_dirty_window(const struct pbl_display_ssd1677 *epd,
       top = PBL_MIN(top, y);
       bottom = PBL_MAX(bottom, y + rows - 1U);
     }
+    regions->tiles[y / 32U] = (uint16_t)dirty;
     if (!s->need_half && dirty && regions->count <= PBL_ARRAY_SIZE(regions->rects)) {
       for (unsigned col = 0; dirty; ++col, dirty >>= 1) {
         if (!(dirty & 1U)) {
@@ -332,7 +342,7 @@ static int prv_write_regions(const struct pbl_display_ssd1677 *epd, uint8_t comm
   for (unsigned i = 0; i < regions->count; ++i) {
     int ret = prv_partial_window(epd, &regions->rects[i]);
     if (ret == 0) {
-      ret = epaper_write_window(epd, command, frame, &regions->rects[i]);
+      ret = epaper_write_window(epd, command, frame, &regions->rects[i], false);
     }
     if (ret == 0 && i + 1 < regions->count) {
       ret = epaper_write_command(epd, 0x92, nullptr, 0);
@@ -344,9 +354,219 @@ static int prv_write_regions(const struct pbl_display_ssd1677 *epd, uint8_t comm
   return 0;
 }
 
+static void prv_forget_repair(struct pbl_display_ssd1677_state *s) {
+  memset(s->repair_tiles, 0, sizeof(s->repair_tiles));
+  s->repair_pulses = 0;
+  s->repair_armed = false;
+}
+
+// Write OLD for contiguous runs of marked framebuffer tiles in panel scan order.
+static int prv_write_tile_runs(const struct pbl_display_ssd1677 *epd, const uint8_t *frame,
+                               const uint16_t tile_rows[25], bool invert,
+                               struct pbl_display_ssd1677_window *bounds, unsigned *tiles) {
+  int ret = 0;
+  for (unsigned row = 0; row < 25U && ret == 0; ++row) {
+    unsigned bits = tile_rows[row];
+    while (bits && ret == 0) {
+      unsigned first = __builtin_ctz(bits);
+      unsigned last = first;
+      while (bits & (1U << (last + 1U))) {
+        ++last;
+      }
+      unsigned strip = (1U << (last - first + 1U)) - 1U;
+      bits &= ~(strip << first);
+      struct pbl_display_ssd1677_window w = prv_scan_rect(
+          epd, first * 32U, row * 32U, PBL_MIN((last + 1U) * 32U, epd->disp.props.width) - 1U,
+          PBL_MIN((row + 1U) * 32U, epd->disp.props.height) - 1U);
+      if (bounds) {
+        *tiles += last - first + 1U;
+        bounds->x0 = PBL_MIN(bounds->x0, w.x0);
+        bounds->y0 = PBL_MIN(bounds->y0, w.y0);
+        bounds->x1 = PBL_MAX(bounds->x1, w.x1);
+        bounds->y1 = PBL_MAX(bounds->y1, w.y1);
+      }
+      ret = prv_partial_window(epd, &w);
+      if (!ret) {
+        ret = epaper_write_window(epd, 0x10, frame, &w, invert);
+      }
+      if (!ret) {
+        ret = epaper_write_command(epd, 0x92, nullptr, 0);
+      }
+    }
+  }
+  return ret;
+}
+
+static int prv_drive_du(const struct pbl_display_ssd1677 *epd,
+                        const struct pbl_display_ssd1677_window *bounds) {
+  static const struct uc_command differential[] = {
+    {0x50, 1, {0xd7}}, {0xe0, 1, {0x02}}, {0xe5, 1, {0x5a}}, {0x03, 1, {0x20}}, {0xe1, 1, {0x02}},
+  };
+  static const struct uc_command otp[] = {{0x00, 2, {0x17, 0x4d}}, {0x12, 0, {0}}};
+  int ret = prv_uc_command_list(epd, differential, PBL_ARRAY_SIZE(differential));
+  if (!ret && !epd->state->powered) {
+    ret = epaper_write_command(epd, 0x04, nullptr, 0);
+    if (!ret) {
+      ret = prv_uc_wait(epd);
+    }
+    if (!ret) {
+      epd->state->powered = true;
+      epd->state->power_off_pending = false;
+    }
+  }
+  if (!ret) {
+    ret = prv_partial_window(epd, bounds);
+  }
+  if (!ret) {
+    ret = prv_uc_command_list(epd, otp, PBL_ARRAY_SIZE(otp));
+  }
+  if (!ret) {
+    ret = PBL_POLL_SLEEP_MS(pbl_gpio_get(&epd->busy) == 0, 1, 100);
+  }
+  if (!ret) {
+    ret = prv_uc_wait(epd);
+  }
+  if (!ret) {
+    ret = epaper_write_command(epd, 0x92, nullptr, 0);
+  }
+  return ret;
+}
+
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+static int prv_finish_cursor(const struct pbl_display_ssd1677 *epd,
+                             const struct pbl_display_buffer *buf) {
+  struct pbl_display_ssd1677_state *s = epd->state;
+  int ret = uc8279_cursor_seed(epd, buf);
+  s->cursor_pending = false;
+  if (!ret) {
+    ret = uc8279_x4_leave_grey(epd, buf);
+  }
+  if (ret) {
+    s->need_half = true;
+  } else {
+    ++s->cursor_finishes;
+    s->unsettled_pulses = 0;
+  }
+  return ret;
+}
+
+static int prv_menu_clean(const struct pbl_display_ssd1677 *epd, const uint8_t *frame) {
+  struct pbl_display_ssd1677_state *s = epd->state;
+  const struct pbl_display_ssd1677_window bounds =
+      prv_scan_rect(epd, 0, 0, epd->disp.props.width - 1U, epd->disp.props.height - 1U);
+  uint32_t start = (uint32_t)pbl_uptime_ms();
+  int ret = prv_partial_window(epd, &bounds);
+  if (!ret) {
+    ret = epaper_write_window(epd, 0x10, frame, &bounds, true);
+  }
+  if (!ret) {
+    ret = epaper_write_command(epd, 0x92, nullptr, 0);
+  }
+  if (!ret) {
+    ret = epaper_write_frame(epd, 0x13, frame);
+  }
+  s->last_write_ms = (uint32_t)pbl_uptime_ms() - start;
+  start = (uint32_t)pbl_uptime_ms();
+  if (!ret) {
+    ret = prv_drive_du(epd, &bounds);
+    if (!ret) {
+      s->completed_drives++;
+      s->last_drive = UC8279_DRIVE_TRANSITION;
+      s->last_window_width = (bounds.x1 - bounds.x0 + 1U) * 8U;
+      s->last_window_height = bounds.y1 - bounds.y0 + 1U;
+    }
+  }
+  s->last_refresh_ms = (uint32_t)pbl_uptime_ms() - start;
+  start = (uint32_t)pbl_uptime_ms();
+  if (!ret) {
+    ret = epaper_write_frame(epd, 0x10, frame);
+  }
+  if (ret) {
+    (void)epaper_write_command(epd, 0x92, nullptr, 0);
+  }
+  s->last_post_ms = (uint32_t)pbl_uptime_ms() - start;
+  s->need_half = ret != 0;
+  s->last_was_grey = false;
+  if (!ret) {
+    s->updates = 0;
+    s->unsettled_pulses = 0;
+    s->menu_clean_pending = false;
+    ++s->menu_cleans;
+  }
+  s->idle_since_ms = (uint32_t)pbl_uptime_ms();
+  if (s->powered && epd->power_off_ms) {
+    (void)pbl_delayed_work_reschedule(&pbl_sys_workq, &s->idle, PBL_MSEC(epd->power_off_ms));
+  }
+  return ret;
+}
+#endif
+
+// Both planes initially match the retained framebuffer. Seed only marked tile strips in OLD,
+// fire the standard differential waveform once, then restore OLD to match NEW.
+static int prv_repair(const struct pbl_display_ssd1677 *epd, const uint8_t *frame) {
+  struct pbl_display_ssd1677_state *s = epd->state;
+  struct pbl_display_ssd1677_window bounds = {.x0 = UINT16_MAX, .y0 = UINT16_MAX};
+  unsigned tiles = 0;
+  int ret = 0;
+  for (unsigned pass = 0; pass < 2 && ret == 0; ++pass) {
+    ret = prv_write_tile_runs(epd, frame, s->repair_tiles, !pass, pass ? nullptr : &bounds, &tiles);
+    if (pass || ret || !tiles) {
+      continue;
+    }
+    ret = prv_drive_du(epd, &bounds);
+  }
+  if (ret) {
+    (void)epaper_write_command(epd, 0x92, nullptr, 0);
+    s->need_half = true;
+  } else if (tiles) {
+    ++s->completed_drives;
+    ++s->repair_drives;
+    s->repaired_tiles += tiles;
+    s->unsettled_pulses = 0;
+  }
+  prv_forget_repair(s);
+  return ret;
+}
+
 #ifdef CONFIG_SHELL
 #include <pbl/shell/shell.h>
 #include <pbl/util/misc.h>
+
+static int prv_cmd_repair(const struct pbl_shell *sh, size_t argc, char **argv) {
+  struct pbl_display_ssd1677_state *s = nullptr;
+  const struct pbl_device *dev;
+  PBL_DEVICE_CLASS_FOREACH(&pbl_display_class, dev) {
+    const struct pbl_display *disp = PBL_CONTAINER_OF(dev, const struct pbl_display, dev);
+    if (pbl_device_is_ready(dev) && disp->ops == &pbl_display_ssd1677_ops) {
+      s = PBL_CONTAINER_OF(disp, const struct pbl_display_ssd1677, disp)->state;
+      if (s->uc8279) {
+        break;
+      }
+    }
+  }
+  if (!s || !s->uc8279) {
+    return -ENOTSUP;
+  }
+  pbl_mutex_lock(&s->lock, PBL_FOREVER);
+  if (argc == 2) {
+    if (!strcmp(argv[1], "off")) {
+      s->repair_disabled = true;
+      prv_forget_repair(s);
+    } else if (!strcmp(argv[1], "on")) {
+      s->repair_disabled = false;
+    } else {
+      pbl_mutex_unlock(&s->lock);
+      return -EINVAL;
+    }
+  }
+  pbl_shell_print(sh, "Watchface repair %s, %u completed, %u tiles, %u pending pulses",
+                  s->repair_disabled ? "off" : "on", (unsigned)s->repair_drives,
+                  (unsigned)s->repaired_tiles, (unsigned)s->repair_pulses);
+  pbl_mutex_unlock(&s->lock);
+  return 0;
+}
+PBL_SHELL_SUBCMD_ADD(sub_epd, repair, nullptr, "Watchface contrast repair [on|off]",
+                     prv_cmd_repair, 1, 1);
 
 static int prv_motion(const struct pbl_shell *sh, size_t argc, char **argv) {
   unsigned long frames = 0;
@@ -394,7 +614,7 @@ PBL_SHELL_SUBCMD_ADD(sub_epd, pulse, nullptr,
 #endif
 
 static int prv_motion_draw(const struct pbl_display_ssd1677 *epd, unsigned frames,
-                           bool text_clock) {
+                           bool text_clock, bool cursor) {
   const uint8_t reg[] = {0x37, 0x4d};
   int ret = epaper_write_command(epd, 0x00, reg, sizeof(reg));
   if (ret == 0 && text_clock) {
@@ -404,6 +624,11 @@ static int prv_motion_draw(const struct pbl_display_ssd1677 *epd, unsigned frame
   // Reuse the factory settle bank's transition polarities. Static pixels and VCOM stay idle.
   for (unsigned i = 0; i < 5 && ret == 0; ++i) {
     uint8_t bank[42] = {1, frames, 0, 0, 0, 1, 1};
+    if (cursor) {
+      // A recently saturated selection needs an extra black-to-white frame. All other
+      // selectors hold during this final frame, with unchanged factory drive rails.
+      bank[2] = i == 2U ? 0x81 : 0x01;
+    }
     if (i == 2)
       bank[1] |= 0x80;
     if (i == 3)
@@ -430,12 +655,38 @@ static int prv_update_bw(const struct pbl_display_ssd1677 *epd,
   uint32_t start = (uint32_t)pbl_uptime_ms();
   struct pbl_display_ssd1677_window w = {0};
   struct uc_dirty_regions regions = {0};
+  bool menu = false;
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+  menu = state->panel_id[0][3] == 0x68 && buf->system_ui && !state->motion_override;
+#endif
+  state->cursor_menu_frames += buf->system_ui;
+  state->cursor_tags += buf->menu_navigation;
+  if (!menu) {
+    state->menu_clean_pending = false;
+  }
   if (!prv_dirty_window(epd, buf, y0, y1, &w, &regions)) {
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+    if (state->cursor_pending && !state->need_half && !buf->menu_navigation) {
+      return prv_finish_cursor(epd, buf);
+    }
+    if (menu && state->menu_clean_pending && state->powered && !state->need_half) {
+      return prv_menu_clean(epd, buf->data);
+    }
+#endif
+    if (state->repair_armed && buf->continuous && !state->need_half &&
+        !state->last_was_grey && state->powered) {
+      return prv_repair(epd, buf->data);
+    }
     if (!state->last_was_grey || state->next_retains_grey) {
       return 0;
     }
-    // Both RAM planes already hold the same B/W base. Re-drive the glass absolutely.
-    state->need_half = true;
+    // Retire the visible grey even when the old and new monochrome bases match.
+    prv_forget_repair(state);
+    return uc8279_x4_leave_grey(epd, buf);
+  }
+  state->repair_armed = false;
+  if (!buf->continuous || state->need_half || state->last_was_grey) {
+    prv_forget_repair(state);
   }
   bool partial =
       !state->need_half && (epd->full_interval == 0U || state->updates < epd->full_interval);
@@ -446,6 +697,31 @@ static int prv_update_bw(const struct pbl_display_ssd1677 *epd,
   // The compositor restores full contrast at idle on boards with text refinement.
   rapid = state->powered && start - state->idle_since_ms <= 250U;
 #endif
+  bool cursor = false;
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+  // Settled grey text already has synchronized monochrome RAM. Preview the new selection
+  // against that base without waiting for the slower grey-to-mono settle waveform.
+  if (buf->menu_navigation) {
+    ++state->cursor_changed_tags;
+    if (!menu || state->need_half || state->unsettled_pulses >= 96U) {
+      ++state->cursor_state_rejects;
+    } else {
+      cursor = uc8279_cursor_preview(buf);
+      state->cursor_size_rejects += !cursor;
+    }
+  }
+  if (state->cursor_pending && !cursor && !state->need_half) {
+    return prv_finish_cursor(epd, buf);
+  }
+  if (state->need_half) {
+    state->cursor_pending = false;
+    uc8279_cursor_reset();
+  }
+#endif
+  if (!rapid && state->repair_pulses == 1U) {
+    // An isolated short drive is not a burst. A later clock tick must not arm a repair.
+    prv_forget_repair(state);
+  }
   // The optional low-contrast profile permits a longer burst on very small windows.
   // Larger motion, idle refinement and the balanced profile retain the shorter cleaning interval.
   bool small_fast = !state->motion_override && state->pulse_frames == 1U &&
@@ -454,13 +730,16 @@ static int prv_update_bw(const struct pbl_display_ssd1677 *epd,
   bool motion = state->motion_override ? state->motion_left != 0U : rapid && bounded;
   bool motion_window =
       state->panel_id[0][3] == 0x68 && motion && !state->need_half && window_pixels <= 160000U;
+  // Menus can arrive within the animation window too, but have no watchface burst repair.
+  // Use the stock differential drive for their partial updates.
+  bool short_drive = cursor || (motion_window && !menu);
   bool text_clock = !state->motion_override || state->motion_text_clock;
   // A small clock tick can use the factory differential waveform indefinitely between
   // animations. Counting those ticks as short pulses forces a full-screen flash.
   bool clock_tick = !rapid && !state->motion_override && !state->need_half &&
                     !state->last_was_grey && window_pixels <= 16384U;
   bool continuous = buf->continuous && !state->need_half && !state->last_was_grey;
-  partial = continuous || clock_tick ||
+  partial = cursor || continuous || clock_tick ||
             ((partial || motion_window) && (bounded || !state->unsettled_pulses));
   const struct uc_command drive[] = {
     {0x50, 1, {partial ? 0xd7 : 0x97}}, // VCOM/data interval
@@ -468,7 +747,16 @@ static int prv_update_bw(const struct pbl_display_ssd1677 *epd,
     {0xe5, 1, {partial ? 0x5a : 0x1e}}, // Temperature setting for OTP waveform
   };
   int ret = 0;
-  if (partial && state->last_was_grey) {
+#ifdef CONFIG_DISPLAY_UC8279_LOCAL_TEXT
+  // Rebaseline every visible tile once. A known, powered glass can be driven straight
+  // to its destination; cold start and failed transfers retain the full clearing waveform.
+  if (!cursor && menu && state->powered && !state->need_half &&
+      (state->menu_clean_pending || !partial ||
+       (epd->full_interval && state->updates >= epd->full_interval))) {
+    return prv_menu_clean(epd, buf->data);
+  }
+#endif
+  if (partial && !cursor && state->last_was_grey) {
     return uc8279_x4_leave_grey(epd, buf);
   }
   state->last_was_grey = false;
@@ -509,11 +797,11 @@ static int prv_update_bw(const struct pbl_display_ssd1677 *epd,
     }
   }
   if (ret == 0) {
-    if (partial && motion_window) {
+    if (partial && short_drive) {
       if (state->motion_override) {
         state->motion_left--;
       }
-      ret = prv_motion_draw(epd, state->pulse_frames ? state->pulse_frames : 3, text_clock);
+      ret = prv_motion_draw(epd, state->pulse_frames ? state->pulse_frames : 3, text_clock, cursor);
     } else {
       ret = prv_uc_command_list(epd, draw, PBL_ARRAY_SIZE(draw));
     }
@@ -531,11 +819,22 @@ static int prv_update_bw(const struct pbl_display_ssd1677 *epd,
     state->completed_drives++;
     state->last_drive = partial ? UC8279_DRIVE_PARTIAL : UC8279_DRIVE_FULL;
     if (!partial) {
+      prv_forget_repair(state);
       state->full_mono_drives++;
       state->unsettled_pulses = 0;
-    } else if (motion_window) {
+    } else if (short_drive) {
       state->unsettled_pulses++;
       state->motion_drives++;
+      if (cursor) {
+        state->cursor_pending = true;
+        ++state->cursor_previews;
+      }
+      if (buf->continuous && !state->repair_disabled && rapid && !state->motion_override) {
+        for (unsigned row = 0; row < PBL_ARRAY_SIZE(state->repair_tiles); ++row) {
+          state->repair_tiles[row] |= regions.tiles[row];
+        }
+        state->repair_pulses = PBL_MIN(state->repair_pulses + 1U, 2U);
+      }
 #ifdef CONFIG_SHELL
       uint32_t busy = (uint32_t)pbl_uptime_ms() - fired;
       if (!state->measured_motion_drives || busy < state->motion_min_busy_ms) {
@@ -548,7 +847,7 @@ static int prv_update_bw(const struct pbl_display_ssd1677 *epd,
     }
   }
   state->last_refresh_ms = (uint32_t)pbl_uptime_ms() - start;
-  if (partial && motion_window && text_clock) {
+  if (partial && short_drive && text_clock) {
     const uint8_t normal_pll = 0x0e;
     int restore = epaper_write_command(epd, 0x30, &normal_pll, 1);
     if (!ret)
@@ -580,7 +879,12 @@ static int prv_update_bw(const struct pbl_display_ssd1677 *epd,
   if (ret == 0 && continuous && !rapid && !motion_window && state->unsettled_pulses) {
     state->unsettled_pulses = 1;
   }
-  state->updates = partial ? state->updates + 1U : 0U;
+  if (!ret) {
+    state->updates = partial ? state->updates + 1U : 0U;
+    if (!partial) {
+      state->menu_clean_pending = false;
+    }
+  }
   state->idle_since_ms = (uint32_t)pbl_uptime_ms();
   if (state->powered && epd->power_off_ms != 0U) {
     (void)pbl_delayed_work_reschedule(&pbl_sys_workq, &state->idle, PBL_MSEC(epd->power_off_ms));

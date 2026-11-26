@@ -129,6 +129,10 @@ struct pbl_display_buffer {
   const struct pbl_display_detail *detail;
   /** Keep a live monochrome image visible during maintenance when the controller permits it. */
   bool continuous;
+  /** Built-in interactive app or launcher, excluding watchfaces and diagnostic draws. */
+  bool system_ui;
+  /** A built-in menu drew a new cursor position in response to navigation input. */
+  bool menu_navigation;
 };
 
 /**
