@@ -4,13 +4,16 @@
 import contextlib
 import io
 import os
+import struct
 import sys
 import unittest
+from types import SimpleNamespace
 
 # Allow us to run even if not at the `tools` directory.
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 sys.path.insert(0, root_dir)
 
+from font.fontgen import Font
 from resources.resource_map.resource_generator_font import FontResourceGenerator
 from resources.types.resource_definition import ResourceDefinition
 
@@ -62,6 +65,34 @@ def build_font(
         data = FontResourceGenerator.build_font_data(TTF_PATH, definition)
     # The header opens with the version byte, then max_height
     return data[1], out.getvalue()
+
+
+class TestEdgeFontEncoding(unittest.TestCase):
+    def test_nibble_order_and_bitmap_pitch(self):
+        font = Font(TTF_PATH, 16, 256, 1024, False)
+        font.set_edges(4)
+        bitmap = SimpleNamespace(
+            width=4,
+            rows=2,
+            pitch=5,
+            buffer=bytes.fromhex("00 50 a0 f0 ff a0 f0 00 50 ff"),
+        )
+        w, h, x, y, advance, data = font._edge_glyph(bitmap, 0, 0, 4)
+        self.assertEqual((w, h, x, y, advance), (2, 1, 0, 0, 2))
+        self.assertEqual(data, struct.pack("<IHBHBH", 3, 2, 0, 0xFA50, 0, 0x50FA))
+
+    def test_long_gap_crosses_rows_and_preserves_intervening_ink(self):
+        font = Font(TTF_PATH, 16, 256, 1024, False)
+        font.set_edges(4)
+        pixels = bytearray(64 * 24)
+        # Logical positions 255 (solid black) and 383 (one covered subpixel).
+        for row in (14, 15):
+            pixels[row * 64 + 62 : row * 64 + 64] = bytes([255, 255])
+        pixels[22 * 64 + 62] = 255
+        bitmap = SimpleNamespace(width=64, rows=24, pitch=64, buffer=pixels)
+        *_, data = font._edge_glyph(bitmap, 0, 0, 64)
+        self.assertEqual(data[:48], (1 << 255).to_bytes(48, "little"))
+        self.assertEqual(data[48:], struct.pack("<HBHBH", 2, 255, 0xFFFF, 127, 15))
 
 
 class TestFontHeightFromName(unittest.TestCase):

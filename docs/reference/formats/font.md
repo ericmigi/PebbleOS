@@ -52,7 +52,18 @@ unrelated runtime struct).
 - bit 1: glyph bitmaps are RLE4-compressed if set, plain bitmaps if clear.
 - bit 2: glyphs are color glyphs (see Color glyphs below).
   Cannot be combined with bit 1, and only loads on color displays.
-- bits 3–7: reserved.
+- Bit 3 stores glyphs at twice their layout resolution.
+- Bit 4 stores two coverage bits per pixel.
+- Bit 5 appends sparse antialiased edges to a one-bit glyph. After the
+  word-aligned bitmap comes a little-endian 16-bit count, then one record
+  per edge cell in row order. Each record starts with byte coordinates
+  `x, y` at layout resolution and stores four panel-pixel coverage values
+  in row-major order, least significant first.
+- Bit 6 switches bit 5 records to a byte gap followed by a little-endian
+  16-bit coverage word (four nibbles). The gap counts base cells skipped
+  since the previous record, starting at the top left of the glyph. Xteink firmware maps the 16 source levels onto four panel tones
+  using a pattern anchored to the glyph.
+- Bit 7 is reserved.
 
 ## Hash table
 

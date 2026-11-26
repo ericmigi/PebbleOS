@@ -5,11 +5,13 @@
 #include <fixtures/load_test_resources.h>
 
 // FW headers
+#include <pbl/crc/crc.h>
 #include <pbl/util/size.h>
 
 #include <applib/graphics/text_resources.h>
 #include <resource/language_pack.h>
 #include <resource/resource.h>
+#include <resource/resource_storage_impl.h>
 #include <resource/resource_ids.auto.h>
 #include <resource/system_resource.h>
 
@@ -859,4 +861,97 @@ void test_text_resources__test_glyph_decompression(void) {
     }
   }
 #endif
+}
+
+static_assert(sizeof(FontMetaData) == 8 && sizeof(FontMetaDataV3) == 10);
+static_assert(offsetof(FontInfo, base) == 4 && offsetof(FontInfo, extension) == 20);
+static_assert(sizeof(FontInfo) == (sizeof(void *) == 4 ? 40 : 48));
+
+static const uint8_t s_edge_font[] = {
+  3, 2, 1, 0, 'A',  0,    1, 2,    10,   FEATURE_OFFSET_16 | FEATURE_EDGES | FEATURE_EDGES4,
+  0, 1, 0, 0, 'A',  0,    4, 0,    0,    0,
+  0, 0, 3, 2, 0,    0,    3, 0x0f, 0,    0,
+  0, 2, 0, 0, 0x50, 0xfa, 4, 0xfa, 0x50,
+};
+
+static const GlyphData *lookup_edge_font(const uint8_t *font, size_t size) {
+  const ResourceManifest manifest = {.num_resources = 1};
+  const ResTableEntry entry = {
+    .resource_id = 1,
+    .length = size,
+    .crc = pbl_crc32_legacy(font, size)
+  };
+  struct pbl_fs_file file;
+  cl_assert_equal_i(fake_pfs_create(&file, "/lang1", RESOURCE_STORE_METADATA_BYTES + size), 0);
+  cl_assert_equal_i(pbl_fs_write(&file, &manifest, sizeof(manifest)), sizeof(manifest));
+  cl_assert_equal_i(pbl_fs_write(&file, &entry, sizeof(entry)), sizeof(entry));
+  cl_assert(pbl_fs_seek(&file, RESOURCE_STORE_METADATA_BYTES, PBL_FS_SEEK_SET) >= 0);
+  cl_assert_equal_i(pbl_fs_write(&file, font, size), size);
+  cl_assert_equal_i(pbl_fs_close(&file), 0);
+
+  const uint32_t id = LANGUAGE_PACK_RESOURCE_BASE + LANGUAGE_PACK_RESOURCE_STRIDE + 1;
+  cl_assert(text_resources_init_font(SYSTEM_APP, id, 0, &s_font_info));
+  cl_assert_equal_i(FONT_VERSION(s_font_info.base.md.version), FONT_VERSION_3);
+  GlyphLocation location;
+  return text_resources_get_glyph(&s_font_cache, 'A', &s_font_info, &location);
+}
+
+void test_text_resources__four_bit_edges_decode_row_major_gaps(void) {
+  const GlyphData *glyph = lookup_edge_font(s_edge_font, sizeof(s_edge_font));
+  cl_assert(glyph);
+  cl_assert(HAS_EDGES4(s_font_info.base.md.version));
+  const uint8_t expected[] = {15, 0, 0, 0, 2, 0, 0, 0, 0xe4, 2, 1, 0x4e};
+  cl_assert_equal_i(memcmp(glyph->data, expected, sizeof(expected)), 0);
+}
+
+void test_text_resources__legacy_edges_keep_absolute_coordinates(void) {
+  uint8_t font[sizeof(s_edge_font)];
+  memcpy(font, s_edge_font, sizeof(font));
+  font[9] &= ~FEATURE_EDGES4;
+  const uint8_t edges[] = {0, 0, 0xe4, 2, 1, 0x4e};
+  memcpy(font + sizeof(font) - sizeof(edges), edges, sizeof(edges));
+  const GlyphData *glyph = lookup_edge_font(font, sizeof(font));
+  cl_assert(glyph);
+  cl_assert(!HAS_EDGES4(s_font_info.base.md.version));
+  cl_assert_equal_i(memcmp((const uint8_t *)glyph->data + 6, edges, sizeof(edges)), 0);
+}
+
+void test_text_resources__four_bit_edges_reject_truncated_record(void) {
+  cl_assert(!lookup_edge_font(s_edge_font, sizeof(s_edge_font) - 1));
+}
+
+void test_text_resources__four_bit_edges_reject_position_beyond_final_row(void) {
+  uint8_t font[sizeof(s_edge_font)];
+  memcpy(font, s_edge_font, sizeof(font));
+  font[sizeof(font) - 3] = 5;
+  cl_assert(!lookup_edge_font(font, sizeof(font)));
+}
+
+void test_text_resources__four_bit_edges_reject_oversized_bitmap(void) {
+  uint8_t font[sizeof(s_edge_font)];
+  memcpy(font, s_edge_font, sizeof(font));
+  font[22] = font[23] = 255;
+  cl_assert(!lookup_edge_font(font, sizeof(font)));
+}
+
+void test_text_resources__four_bit_edges_reject_short_header(void) {
+  cl_assert(!lookup_edge_font(s_edge_font, 23));
+}
+
+void test_text_resources__four_bit_edges_dither_intermediate_coverage_by_position(void) {
+  uint8_t font[sizeof(s_edge_font)];
+  memcpy(font, s_edge_font, sizeof(font));
+  const uint8_t edges[] = {0, 0x22, 0x22, 3, 0x22, 0x22};
+  memcpy(font + sizeof(font) - sizeof(edges), edges, sizeof(edges));
+  const GlyphData *glyph = lookup_edge_font(font, sizeof(font));
+  cl_assert(glyph);
+  const uint8_t expected[] = {0, 0, 0x40, 1, 1, 0x44};
+  cl_assert_equal_i(memcmp((const uint8_t *)glyph->data + 6, expected, sizeof(expected)), 0);
+}
+
+void test_text_resources__four_bit_edges_reject_excessive_count(void) {
+  uint8_t font[sizeof(s_edge_font)];
+  memcpy(font, s_edge_font, sizeof(font));
+  font[31] = font[32] = 0xff;
+  cl_assert(!lookup_edge_font(font, sizeof(font)));
 }

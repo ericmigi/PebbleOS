@@ -86,6 +86,7 @@ FEATURE_AA2 = 0x10
 # Each glyph is a 1-bit bitmap at the font's resolution followed by its edges: a uint16 count,
 # then x, y and the coverage of the 2x2 panel pixels of each pixel not fully covered (3 bytes)
 FEATURE_EDGES = 0x20
+FEATURE_EDGES4 = 0x40
 
 
 HASH_TABLE_SIZE = 255
@@ -171,22 +172,27 @@ class Font:
                 f"Unsupported compression engine: '{engine}'. Font {self.ttf_path}"
             )
 
-    def set_edges(self):
-        """Store a 1-bit glyph and its edges at panel resolution (needs scale 2 and 2 bits)."""
+    def set_edges(self, bits=2):
+        """Store a 1-bit glyph and its edges at panel resolution, with two or four coverage bits."""
         self.edges = True
+        self.bits = bits
         self.features = (
             self.features & ~(FEATURE_SCALE2 | FEATURE_AA2)
         ) | FEATURE_EDGES
+        if bits == 4:
+            self.features |= FEATURE_EDGES4
 
     def _edge_glyph(self, bitmap, left2, top2, advance2):
         """The glyph at the font's resolution, inked at half coverage, and its edge pixels."""
         w2, h2 = bitmap.width, bitmap.rows
+        bits = self.bits
+        full = (1 << bits) - 1
         level = {}
         for y in range(h2):
             row = bitmap.buffer[y * bitmap.pitch : y * bitmap.pitch + w2]
             for x, v in enumerate(row):
-                if v >> 6:
-                    level[(left2 + x, top2 + y)] = v >> 6
+                if v >> (8 - bits):
+                    level[(left2 + x, top2 + y)] = v >> (8 - bits)
         # Pixels of the font's resolution are 2x2 panel pixels on even panel coordinates
         cx0, cy0 = left2 // 2, top2 // 2
         cx1, cy1 = (left2 + w2 - 1) // 2, (top2 + h2 - 1) // 2
@@ -197,20 +203,46 @@ class Font:
                 cell = 0
                 for i in range(4):
                     cell |= level.get((2 * cx + (i & 1), 2 * cy + (i >> 1)), 0) << (
-                        2 * i
+                        bits * i
                     )
-                total = sum((cell >> (2 * i)) & 3 for i in range(4))
-                base.append(1 if total >= 6 else 0)
-                if cell not in (0, 0xFF):
-                    edges.append((cx - cx0, cy - cy0, cell))
+                total = sum((cell >> (bits * i)) & full for i in range(4))
+                base.append(1 if total >= 2 * full else 0)
+                if cell in (0, (1 << (4 * bits)) - 1):
+                    continue
+                if bits == 4:
+                    # Skip cells whose four panel tones all equal the base bitmap.
+                    x, y = 2 * (cx - cx0), 2 * (cy - cy0)
+                    if all(
+                        (((cell >> (4 * i)) & 15) + (2 * (x + i % 2) + y + i // 2) % 5)
+                        // 5
+                        == 3 * base[-1]
+                        for i in range(4)
+                    ):
+                        continue
+                edges.append((cx - cx0, cy - cy0, cell))
         packed = []
         for word in grouper(32, base, 0):
             w = 0
             for index, bit in enumerate(word):
                 w |= bit << index
             packed.append(struct.pack("<I", w))
-        packed.append(struct.pack("<H", len(edges)))
-        packed.extend(struct.pack("<BBB", *edge) for edge in edges)
+        if bits == 4:
+            # Encode the sorted positions as gaps, retaining three bytes per cached edge.
+            records = bytearray()
+            next_pos = 0
+            for x, y, coverage in edges:
+                pos = y * width + x
+                while pos - next_pos > 255:
+                    fill = next_pos + 255
+                    records.extend(struct.pack("<BH", 255, 0xFFFF if base[fill] else 0))
+                    next_pos = fill + 1
+                records.extend(struct.pack("<BH", pos - next_pos, coverage))
+                next_pos = pos + 1
+            packed.append(struct.pack("<H", len(records) // 3))
+            packed.append(records)
+        else:
+            packed.append(struct.pack("<H", len(edges)))
+            packed.extend(struct.pack("<BBB", *edge) for edge in edges)
         data = b"".join(packed)
         data += b"\0" * (-len(data) % 4)
         if len(data) > self.max_glyph_size:
@@ -224,7 +256,7 @@ class Font:
         self.fallback_face = freetype.Face(path)
 
     def _load_flags(self):
-        if self.bits == 2:
+        if self.bits > 1:
             flags = freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_LIGHT
         elif self.legacy:
             flags = freetype.FT_LOAD_RENDER
@@ -415,8 +447,8 @@ class Font:
             | freetype.FT_LOAD_MONOCHROME
             | freetype.FT_LOAD_TARGET_MONO
         )
-        if self.bits == 2:
-            # Antialiased, with light hinting, quantised to four levels below
+        if self.bits > 1:
+            # Antialiased, with light hinting before coverage quantization
             flags = freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_LIGHT
         if self.autohint:
             flags |= freetype.FT_LOAD_FORCE_AUTOHINT

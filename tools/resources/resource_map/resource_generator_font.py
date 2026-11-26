@@ -140,20 +140,25 @@ class FontResourceGenerator(ResourceGenerator):
             if getattr(definition, "autohint", False):
                 font.set_autohint()
             bits = getattr(definition, "bits", 1) or 1
-            if bits not in (1, 2) or (bits == 2 and is_legacy):
+            edges = getattr(definition, "edges", False)
+            if (
+                bits not in (1, 2, 4)
+                or (bits > 1 and is_legacy)
+                or (bits == 4 and not edges)
+            ):
                 raise ValueError(
-                    f"Font {definition.name}: bits must be 1, or 2 without 2.7"
+                    f"Font {definition.name}: invalid coverage depth or legacy font format"
                 )
             if bits == 2:
                 font.set_bits2()
             if getattr(definition, "fallback", None):
                 font.set_fallback(definition.fallback)
-            if getattr(definition, "edges", False):
-                if scale != 2 or bits != 2:
+            if edges:
+                if scale != 2 or bits not in (2, 4):
                     raise ValueError(
-                        f"Font {definition.name}: edges need scale 2 and bits 2"
+                        f"Font {definition.name}: edges need scale 2 and 2 or 4 bits"
                     )
-                font.set_edges()
+                font.set_edges(bits)
 
             if definition.character_regex is not None:
                 font.set_regex_filter(definition.character_regex)

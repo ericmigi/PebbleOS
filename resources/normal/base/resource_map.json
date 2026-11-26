@@ -2851,7 +2851,7 @@
       "fallback": "normal/base/ttf/NotoSans-Regular.ttf",
       "renderHeight": 14,
       "scale": 2,
-      "bits": 2,
+      "bits": 4,
       "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
@@ -2864,7 +2864,7 @@
       "fallback": "normal/base/ttf/NotoSans-Bold.ttf",
       "renderHeight": 14,
       "scale": 2,
-      "bits": 2,
+      "bits": 4,
       "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
@@ -2877,7 +2877,7 @@
       "fallback": "normal/base/ttf/NotoSans-Regular.ttf",
       "renderHeight": 16,
       "scale": 2,
-      "bits": 2,
+      "bits": 4,
       "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
@@ -2890,7 +2890,7 @@
       "fallback": "normal/base/ttf/NotoSans-Bold.ttf",
       "renderHeight": 16,
       "scale": 2,
-      "bits": 2,
+      "bits": 4,
       "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
@@ -2903,7 +2903,7 @@
       "fallback": "normal/base/ttf/NotoSans-Regular.ttf",
       "renderHeight": 20,
       "scale": 2,
-      "bits": 2,
+      "bits": 4,
       "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
@@ -2916,7 +2916,7 @@
       "fallback": "normal/base/ttf/NotoSans-SemiBold.ttf",
       "renderHeight": 20,
       "scale": 2,
-      "bits": 2,
+      "bits": 4,
       "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
@@ -2929,7 +2929,7 @@
       "fallback": "normal/base/ttf/NotoSans-Regular.ttf",
       "renderHeight": 26,
       "scale": 2,
-      "bits": 2,
+      "bits": 4,
       "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
@@ -2942,7 +2942,7 @@
       "fallback": "normal/base/ttf/NotoSans-SemiBold.ttf",
       "renderHeight": 28,
       "scale": 2,
-      "bits": 2,
+      "bits": 4,
       "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
@@ -2955,7 +2955,7 @@
       "fallback": "normal/base/ttf/NotoSans-Regular.ttf",
       "renderHeight": 32,
       "scale": 2,
-      "bits": 2,
+      "bits": 4,
       "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },
@@ -2968,7 +2968,7 @@
       "fallback": "normal/base/ttf/NotoSans-SemiBold.ttf",
       "renderHeight": 34,
       "scale": 2,
-      "bits": 2,
+      "bits": 4,
       "edges": true,
       "config": "CONFIG_SYSTEM_UI_FONT_ATKINSON_NEXT"
     },

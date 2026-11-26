@@ -46,6 +46,6 @@ config APP_RAM_4X_RUNTIME_SIZE
 # fontgen refuses a glyph larger than this
 
 config PLATFORM_MAX_FONT_GLYPH_SIZE
-    default 800
+    default 1024
 
 endif # PLATFORM_XTEINKX4

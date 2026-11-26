@@ -28,11 +28,16 @@
 // each glyph is a 1-bit bitmap followed by its edges at panel resolution: a uint16 count, then
 // x, y and the coverage of the pixel's 2x2 panel pixels, 3 bytes each
 #define FEATURE_EDGES (1 << 5)
+// Edge records store a row-major gap followed by four coverage nibbles.
+#define FEATURE_EDGES4 (1 << 6)
 
 // HACK ALERT: Store the v3 FontMetaDataV3 feature bits in the top six bits of FontMetaData
 // version field. We need this information at the lowest levels and can't extend FontMetaData
 // for legacy support reasons.
-#define FONT_VERSION(_version)          ((_version) & 0x03)
+// The unused internal version 0 denotes a v3 header with four-bit edges.
+// Keep FontInfo within the existing app allocator ABI.
+#define HAS_EDGES4(version)             (((version) & 0x03) == 0)
+#define FONT_VERSION(version)           (HAS_EDGES4(version) ? FONT_VERSION_3 : ((version) & 0x03))
 #define HAS_FEATURE(_version, _feature) ((_version) & (_feature))
 #define VERSION_FIELD_FEATURE_OFFSET_16 (1 << 7)
 #define VERSION_FIELD_FEATURE_RLE4      (1 << 6)

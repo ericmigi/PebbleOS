@@ -308,8 +308,33 @@ static GlyphData *prv_line_cache_glyph(LineCacheData *data) {
   return (GlyphData *)&data->header;
 }
 
-static bool prv_load_glyph_bitmap(FontCache *font_cache, Codepoint codepoint, const FontResource *font_res,
-                                  LineCacheData *data) {
+// Convert 16 coverage levels to the four panel tones on a glyph-anchored five-pixel lattice.
+static bool prv_unpack_edges4(uint8_t *edges, unsigned count, unsigned width, unsigned height) {
+  unsigned next_pos = 0;
+  for (unsigned j = 0; j < count; j++, edges += 3) {
+    const unsigned pos = next_pos + edges[0];
+    if (pos >= width * height) {
+      return false;
+    }
+    const unsigned x = pos % width;
+    const unsigned y = pos / width;
+    const unsigned coverage = edges[1] | ((unsigned)edges[2] << 8);
+    unsigned levels = 0;
+    for (unsigned i = 0; i < 4; i++) {
+      const unsigned ink = (coverage >> (4 * i)) & 15;
+      const unsigned phase = (2 * (2 * x + i % 2) + 2 * y + i / 2) % 5;
+      levels |= ((ink + phase) / 5) << (2 * i);
+    }
+    edges[0] = x;
+    edges[1] = y;
+    edges[2] = levels;
+    next_pos = pos + 1;
+  }
+  return true;
+}
+
+static bool prv_load_glyph_bitmap(FontCache *font_cache, Codepoint codepoint,
+                                  const FontResource *font_res, LineCacheData *data) {
   GlyphData *g = prv_line_cache_glyph(data);
 
   const size_t bitmap_offset = (FONT_VERSION(font_res->md.version) == FONT_VERSION_1)
@@ -339,6 +364,9 @@ static bool prv_load_glyph_bitmap(FontCache *font_cache, Codepoint codepoint, co
     glyph_size_bytes = bitmap_words_bytes + sizeof(uint16_t);
   }
 
+  if (edges && glyph_size_bytes > CACHE_GLYPH_SIZE) {
+    return false;
+  }
   PBL_ASSERT(glyph_size_bytes <= CACHE_GLYPH_SIZE,
              "text codepoint %" PRIx32 " is %zu bytes, overflowing %d max size", codepoint,
              glyph_size_bytes, CACHE_GLYPH_SIZE);
@@ -371,9 +399,14 @@ static bool prv_load_glyph_bitmap(FontCache *font_cache, Codepoint codepoint, co
       uint16_t count;
       memcpy(&count, target + bitmap_words_bytes, sizeof(count));
       const size_t edge_bytes = 3U * count;
-      if (glyph_size_bytes + edge_bytes > CACHE_GLYPH_SIZE ||
-          (edge_bytes && prv_read_font(font_cache, font_res, bitmap_addr + glyph_size_bytes,
-                                       target + glyph_size_bytes, edge_bytes) != edge_bytes)) {
+      if (glyph_size_bytes + edge_bytes > CACHE_GLYPH_SIZE) {
+        return false;
+      }
+      uint8_t *records = target + glyph_size_bytes;
+      if ((edge_bytes && prv_read_font(font_cache, font_res, bitmap_addr + glyph_size_bytes,
+                                       records, edge_bytes) != edge_bytes) ||
+          (HAS_EDGES4(font_res->md.version) &&
+           !prv_unpack_edges4(records, count, g->header.width_px, g->header.height_px))) {
         PBL_LOG_WRN("Failed to load glyph edges; cp: %" PRIx32, codepoint);
         return false;
       }
@@ -431,6 +464,7 @@ static PBL_ALWAYS_INLINE const GlyphData *prv_get_glyph_metadata_from_spi(
     }
     if (need_bitmap && !cached->is_bitmap_loaded &&
         !prv_load_glyph_bitmap(font_cache, codepoint, font_res, cached)) {
+      font_cache->glyph_buffer_key = 0;
       return nullptr;
     }
     return prv_line_cache_glyph(cached);
@@ -471,7 +505,8 @@ static PBL_ALWAYS_INLINE const GlyphData *prv_get_glyph_metadata_from_spi(
     PBL_PROFILER_NODE_STOP(text_render_flash);
   }
 
-  if (!num_bytes_loaded) {
+  if (!num_bytes_loaded || (HAS_FEATURE(font_res->md.version, VERSION_FIELD_FEATURE_EDGES) &&
+                            num_bytes_loaded != sizeof(GlyphHeaderData))) {
     PBL_LOG_WRN("Failed to load glyph metadata from resources; cp: %" PRIx32 ", offset: %" PRIx32,
                 codepoint, data->resource_offset);
     return nullptr;
@@ -487,6 +522,7 @@ static PBL_ALWAYS_INLINE const GlyphData *prv_get_glyph_metadata_from_spi(
   LineCacheData *final_data = (LineCacheData *)(font_cache->glyph_buffer);
 
   if (need_bitmap && !prv_load_glyph_bitmap(font_cache, codepoint, font_res, final_data)) {
+    font_cache->glyph_buffer_key = 0;
     return nullptr;
   }
 
@@ -572,6 +608,13 @@ static bool prv_load_font_res(ResAppNum app_num, uint32_t resource_id, FontResou
       }
       if (header.features & FEATURE_SCALE2) {
         font_res->md.version |= VERSION_FIELD_FEATURE_SCALE2;
+      }
+      if (header.features & FEATURE_EDGES4) {
+        if (!(header.features & FEATURE_EDGES) ||
+            (header.features & (FEATURE_SCALE2 | FEATURE_AA2 | FEATURE_COLOR | FEATURE_RLE4))) {
+          return false;
+        }
+        font_res->md.version &= ~0x03;
       }
       if (header.features & FEATURE_EDGES) {
         if (header.features & FEATURE_RLE4) {
