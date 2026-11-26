@@ -30,6 +30,16 @@ jobs:
         with:
           submodules: true
 
+      - name: Expose the container's PebbleOS SDK tools
+        run: |
+          sdk=/opt/pebbleos-sdk
+          test -x "$sdk/arm-none-eabi/bin/arm-none-eabi-gcc"
+          {
+            echo "$sdk/arm-none-eabi/bin"
+            echo "$sdk/qemu/bin"
+            echo "$sdk/sftool"
+          } >> "$GITHUB_PATH"
+
       - name: Install Espressif compilers
         run: |
           apt-get update -qq
