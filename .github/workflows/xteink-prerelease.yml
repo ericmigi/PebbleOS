@@ -1,0 +1,112 @@
+name: Xteink prerelease
+
+on:
+  push:
+    branches: [codex/xteink-combined]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xteink-release-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'ericmigi/PebbleOS' && github.ref == 'refs/heads/codex/xteink-combined'
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/coredevices/pebbleos-docker:v17
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - run: git config --system --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/rebase
+        with:
+          submodules: true
+
+      - name: Install Espressif compilers
+        run: |
+          # Checksums from ESP-IDF tools/tools.json, releases v5.4 and v5.5.4.
+          install_compiler() {
+            local name=$1 version=$2 digest=$3
+            local archive="$name-${version#esp-}-x86_64-linux-gnu.tar.xz"
+            local base="https://github.com/espressif/crosstool-NG/releases/download"
+            curl --fail --location --retry 3 "$base/$version/$archive" -o "$RUNNER_TEMP/$archive"
+            (cd "$RUNNER_TEMP" && echo "$digest  $archive" | sha256sum --check)
+            tar -xf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+            echo "$RUNNER_TEMP/$name/bin" >> "$GITHUB_PATH"
+          }
+          install_compiler riscv32-esp-elf esp-14.2.0_20260121 b3fce4b04dd15a9f0ed1c209b5a2f389c04eff92ed85e4cc0ebc275b7d95e95a
+          install_compiler xtensa-esp-elf esp-14.2.0_20241119 e3e6dcf3d275c3c9ab0e4c8a9d93fd10e7efc035d435460576c9d95b4140c676
+
+      - run: python -m pip install -r requirements.txt
+      - name: Build normal firmware and resources
+        run: |
+          mkdir assets
+          for board in xteink_x4 xteink_x4_pro; do
+            pbl configure --board "$board" -b "build-$board"
+            pbl build -b "build-$board"
+            cp "build-$board/pebbleos.bin" "assets/$board-pebbleos.bin"
+            cp "build-$board/system_resources.pbpack" "assets/$board-system_resources.pbpack"
+          done
+
+      - name: Export X4, X4 Pro and Flint app SDK
+        run: |
+          pbl sdk "4.47-xteink.${GITHUB_SHA:0:12}" --board xteink_x4 --board xteink_x4_pro --board qemu_flint --tarball -b build-sdk-xteink
+          for platform in xteinkx4 xteinkx4pro flint; do
+            test -s "build-sdk-xteink/sdk-core/pebble/$platform/lib/libpebble.a"
+          done
+          cp build-sdk-xteink/sdk-core.tar.gz assets/xteink-sdk-core.tar.gz
+
+      - name: Package watchfaces and checksum every asset
+        run: |
+          cp extras/xteink/watchfaces.zip assets/
+          if [[ -f extras/xteink/watchface-sources.zip ]]; then
+            cp extras/xteink/watchface-sources.zip assets/
+          fi
+          cd assets
+          for file in *.zip; do unzip -tq "$file"; done
+          sha256sum ./* > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xteink-prerelease
+          path: assets/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: xteink-prerelease
+          path: assets
+      - name: Publish the verified assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd assets
+          sha256sum --check SHA256SUMS
+          tag="xteink-preview-${GITHUB_SHA:0:12}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' > "$RUNNER_TEMP/draft"; then
+            if [[ $(cat "$RUNNER_TEMP/draft") == false ]]; then
+              echo "$tag is already published"
+              exit 0
+            fi
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "PebbleOS for Xteink X4 and X4 Pro (${GITHUB_SHA:0:12})" \
+              --notes "Firmware, system resources, app SDK and watchfaces from commit $GITHUB_SHA." \
+              --draft --prerelease --latest=false
+          fi
+          gh release upload "$tag" ./* --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
