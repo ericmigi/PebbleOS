@@ -32,6 +32,8 @@ jobs:
 
       - name: Install Espressif compilers
         run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends curl xz-utils unzip
           # Checksums from ESP-IDF tools/tools.json, releases v5.4 and v5.5.4.
           install_compiler() {
             local name=$1 version=$2 digest=$3
@@ -45,7 +47,7 @@ jobs:
           install_compiler riscv32-esp-elf esp-14.2.0_20260121 b3fce4b04dd15a9f0ed1c209b5a2f389c04eff92ed85e4cc0ebc275b7d95e95a
           install_compiler xtensa-esp-elf esp-14.2.0_20241119 e3e6dcf3d275c3c9ab0e4c8a9d93fd10e7efc035d435460576c9d95b4140c676
 
-      - run: python -m pip install -r requirements.txt
+      - run: python3 -m pip install -r requirements.txt 'esptool>=5,<6'
       - name: Build normal firmware and resources
         run: |
           mkdir assets
