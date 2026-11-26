@@ -123,7 +123,7 @@ int pbl_i18n_catalog_get_info(const struct pbl_i18n_catalog *catalog,
  *
  * @param string Original string, possibly with a context from pbl_i18n_ctx_noop().
  * @param owner Owner of the cached translation, must not be NULL.
- * @return Translation, or the original string without its context if there is none.
+ * @return Translation, the original string without its context, or NULL for a NULL input.
  */
 const char *pbl_i18n_get(const char *string, const void *owner);
 

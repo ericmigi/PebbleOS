@@ -439,7 +439,7 @@ static const char *prv_message_from_msgid(const char *msgid) {
 static const char *prv_get_locked(const char *msgid, const void *owner) {
   PBL_ASSERTN(owner);
   if (msgid == nullptr || msgid[0] == 0) {
-    goto fail;
+    return msgid;
   }
 
   struct pbl_i18n__domain *db = &s_system_domain;
@@ -489,7 +489,8 @@ static void prv_get_with_buffer_locked(const char *msgid, char *buffer, size_t l
     return;
   }
   if (msgid == nullptr || msgid[0] == 0) {
-    goto fail;
+    buffer[0] = '\0';
+    return;
   }
 
   struct pbl_i18n__domain *db = &s_system_domain;

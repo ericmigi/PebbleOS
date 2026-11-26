@@ -71,6 +71,18 @@ void test_i18n__get(void) {
   pbl_i18n_free_all(__FILE__);
 }
 
+void test_i18n__absent_message(void) {
+  // A menu row can have no subtitle. Preserve the distinction from an empty string.
+  cl_assert(pbl_i18n_get(nullptr, __FILE__) == nullptr);
+  cl_assert_equal_s(pbl_i18n_get("", __FILE__), "");
+  cl_assert_equal_i(pbl_i18n_get_length(nullptr), 0);
+  char buffer[] = "x";
+  pbl_i18n_get_with_buffer(nullptr, buffer, 0);
+  cl_assert_equal_s(buffer, "x");
+  pbl_i18n_get_with_buffer(nullptr, buffer, sizeof(buffer));
+  cl_assert_equal_s(buffer, "");
+}
+
 void test_i18n__context(void) {
   cl_assert_equal_s(pbl_i18n_ctx_get("Notifications", "Enabled", __FILE__), "Activées");
   cl_assert_equal_s(pbl_i18n_ctx_get("Quiet Time", "Enabled", __FILE__), "Activé");
