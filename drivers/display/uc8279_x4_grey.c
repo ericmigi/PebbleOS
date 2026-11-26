@@ -19,6 +19,11 @@
 
 // The glass takes complete planes, in landscape scan order. Keep a strip of gates in RAM.
 static uint8_t s_tile[TILE_GATES][GATE_BYTES];
+static_assert(sizeof(s_tile) == UC8279_TRANSFER_BYTES);
+
+uint8_t *uc8279_x4_transfer_tile(void) {
+  return (uint8_t *)&s_tile;
+}
 
 // Keep only nonzero spans of each glyph row. The compositor's font cache is accessed on
 // KernelMain once. The panel thread can then convert the snapshot in controller scan order.

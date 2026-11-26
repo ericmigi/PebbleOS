@@ -5,9 +5,17 @@
 
 #include <pbl/drivers/display/ssd1677.h>
 
+// Shared by grey plane transfers and cursor encoding while holding the display lock.
+#define UC8279_TRANSFER_BYTES 6400U
+uint8_t *uc8279_x4_transfer_tile(void);
+
 int uc8279_x4_leave_grey(const struct pbl_display_ssd1677 *epd,
                          const struct pbl_display_buffer *buf);
-enum uc8279_grey_action { UC8279_GREY_SKIP, UC8279_GREY_DRAW, UC8279_GREY_CLEAR };
+enum uc8279_grey_action {
+  UC8279_GREY_SKIP,
+  UC8279_GREY_DRAW,
+  UC8279_GREY_CLEAR
+};
 
 int uc8279_x4_prepare_grey(const struct pbl_display_ssd1677 *epd,
                            const struct pbl_display_buffer *buf, enum uc8279_grey_action *action);

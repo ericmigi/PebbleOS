@@ -27,9 +27,9 @@ struct reader {
   uint8_t row[PITCH];
 };
 
-static uint8_t s_base[12288], s_masks[2][12288];
-static bool s_base_valid, s_mask_valid;
-static unsigned s_current;
+// The current base grows from the front and the cumulative mask from the back.
+static uint8_t s_arena[8192];
+static unsigned s_base_size, s_mask_size;
 
 static void prv_put(struct writer *w, unsigned col, uint8_t v) {
   uint8_t delta = w->row[col] ^ v;
@@ -65,53 +65,56 @@ static uint8_t prv_get(struct reader *r, unsigned col) {
 }
 
 void uc8279_cursor_reset(void) {
-  s_mask_valid = false;
+  s_mask_size = 0;
 }
 
 void uc8279_cursor_remember(const struct pbl_display_buffer *buf, bool keep) {
-  s_base_valid = false;
+  s_base_size = 0;
   if (!keep || buf->pitch != PITCH) {
     uc8279_cursor_reset();
     return;
   }
-  struct writer out = {.data = s_base, .capacity = sizeof(s_base)};
+  struct writer out = {.data = s_arena, .capacity = sizeof(s_arena) - s_mask_size};
   for (unsigned y = 0; y < HEIGHT && out.size <= out.capacity; y++) {
     for (unsigned col = 0; col < PITCH; col++) {
       prv_put(&out, col, buf->data[y * PITCH + col]);
     }
   }
-  s_base_valid = out.size <= out.capacity;
+  s_base_size = out.size <= out.capacity ? out.size : 0;
 }
 
 bool uc8279_cursor_preview(const struct pbl_display_buffer *buf) {
-  if (!s_base_valid || buf->pitch != PITCH) {
+  if (!s_base_size || buf->pitch != PITCH) {
     return false;
   }
-  struct reader prev = {.data = s_base}, mask = {.data = s_masks[s_current]};
-  struct writer next = {.data = s_masks[1U - s_current], .capacity = sizeof(s_masks[0])};
+  struct reader prev = {.data = s_arena}, mask = {.data = s_arena + sizeof(s_arena) - s_mask_size};
+  // The grey plane writer and this preview both run under the display lock. Stage the
+  // candidate in its transfer tile so an oversized move leaves the pending repair intact.
+  struct writer next = {.data = uc8279_x4_transfer_tile(), .capacity = UC8279_TRANSFER_BYTES};
   struct writer cost = {0};
   for (unsigned y = 0; y < HEIGHT; y++) {
     for (unsigned col = 0; col < PITCH; col++) {
       uint8_t target = buf->data[y * PITCH + col];
       uint8_t changed = prv_get(&prev, col) ^ target;
-      if (s_mask_valid) {
+      if (s_mask_size) {
         changed |= prv_get(&mask, col);
       }
       prv_put(&next, col, changed);
       prv_put(&cost, col, target);
     }
-    if (next.size > next.capacity || cost.size > sizeof(s_base)) {
+    if (next.size > next.capacity ||
+        PBL_MAX(cost.size, s_base_size) + next.size > sizeof(s_arena)) {
       return false;
     }
   }
-  s_current = 1U - s_current;
-  s_mask_valid = true;
+  memcpy(s_arena + sizeof(s_arena) - next.size, next.data, next.size);
+  s_mask_size = next.size;
   return true;
 }
 
 int uc8279_cursor_seed(const struct pbl_display_ssd1677 *epd,
                        const struct pbl_display_buffer *buf) {
-  struct reader prev = {.data = s_base}, mask = {.data = s_masks[s_current]};
+  struct reader prev = {.data = s_arena}, mask = {.data = s_arena + sizeof(s_arena) - s_mask_size};
   const bool flip = epd->state->flip;
   // One byte across every visible gate, in landscape controller order.
   static uint8_t strip[WIDTH];
