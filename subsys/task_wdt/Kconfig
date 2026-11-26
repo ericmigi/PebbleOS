@@ -11,6 +11,13 @@ menuconfig TASK_WDT
 
 if TASK_WDT
 
+config TASK_WDT_TEST_SHELL
+    bool "Shell command to test watchdog resets"
+    depends on SHELL
+    help
+      Enable the wdt stall command to deliberately stop a system thread
+      or disable interrupts and verify watchdog recovery during testing.
+
 config TASK_WDT_CHANNELS
     int "Channels"
     range 1 8

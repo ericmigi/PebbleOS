@@ -1,7 +1,7 @@
 /* SPDX-FileCopyrightText: 2026 Core Devices LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#ifdef CONFIG_SHELL
+#ifdef CONFIG_TASK_WDT_TEST_SHELL
 
 #include <errno.h>
 #include <string.h>
