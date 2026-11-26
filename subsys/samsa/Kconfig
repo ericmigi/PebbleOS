@@ -56,9 +56,17 @@ config SAMSA_BIND_SDK_DISPATCH
       Recognize the ARM SDK's shared import stub and perform its register
       restore and table lookup in one step. Other imports run normally.
 
+config SAMSA_FAST64
+    bool "Use the optimized Samsa interpreter with 64 decoded instructions"
+    help
+      Build the alternative Thumb dispatcher as one translation unit and
+      cache 64 instructions per process. The standard dispatcher is the default.
+
 config SAMSA_CACHE_ENTRIES
     int "Decoded instructions a process keeps"
+    range 64 64 if SAMSA_FAST64
     range 0 1024
+    default 64 if SAMSA_FAST64
     default 0
     help
       Thumb instructions kept decoded per process, by address: a power of

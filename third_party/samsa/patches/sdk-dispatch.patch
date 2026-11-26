@@ -1,0 +1,70 @@
+diff --git a/include/samsa/samsa.h b/include/samsa/samsa.h
+index 29f5ef5..5314f2a 100644
+--- a/include/samsa/samsa.h
++++ b/include/samsa/samsa.h
+@@ -37,6 +37,9 @@ typedef struct {
+ typedef struct {
+     uint32_t start, end;
+ } SamsaHook;
++/* A breakpoint on an ordinary Thumb instruction, without granting permission
++   to branch to a synthetic address. Normal hook ranges always have end > start. */
++#define SAMSA_INSTRUCTION_HOOK(addr) { (addr) | 1u, 0u }
+ struct SamsaCpu;
+ typedef struct {
+     bool (*read)(struct SamsaCpu *, uint32_t, unsigned, uint32_t *);
+diff --git a/src/samsa.c b/src/samsa.c
+index d5fd634..a934294 100644
+--- a/src/samsa.c
++++ b/src/samsa.c
+@@ -17,15 +17,19 @@ void samsa_set_xpsr(SamsaCpu *c, uint32_t x) {
+     c->_ge = (uint8_t)(x >> 16 & 15u);
+     c->itstate = (uint8_t)((x >> 25 & 3u) | (x >> 8 & 0xfcu));
+ }
+-bool target_special(const SamsaCpu *c, uint32_t a) {
++static bool is_hook(const SamsaCpu *c, uint32_t a, bool fetching) {
+     a &= ~1u;
+     if (c->_calling && a == SAMSA_RETURN_PC)
+         return true;
+-    for (unsigned i = 0; i < c->num_hooks; ++i)
+-        if (a >= c->hooks[i].start && a < c->hooks[i].end)
++    for (unsigned i = 0; i < c->num_hooks; ++i) {
++        const SamsaHook *h = &c->hooks[i];
++        if ((a >= h->start && a < h->end) ||
++            (fetching && h->end == 0u && h->start == (a | 1u)))
+             return true;
++    }
+     return false;
+ }
++bool target_special(const SamsaCpu *c, uint32_t a) { return is_hook(c, a, false); }
+ bool branch(SamsaCpu *c, uint32_t a, bool exchange) {
+     if (!last_it(c))
+         return usage(c);
+@@ -40,7 +44,7 @@ SamsaStop samsa_run(SamsaCpu *c, uint32_t max, uint32_t *executed) {
+     c->stop_info = 0;
+     while (count < max) {
+         uint32_t pc = c->r[15], h = 0, l = 0;
+-        if (target_special(c, pc)) {
++        if (is_hook(c, pc, true)) {
+             c->_stop = c->_calling && pc == SAMSA_RETURN_PC ? SAMSA_STOP_RETURN : SAMSA_STOP_HOOK;
+             break;
+         }
+diff --git a/tests/test_control.c b/tests/test_control.c
+index 269fb04..584601d 100644
+--- a/tests/test_control.c
++++ b/tests/test_control.c
+@@ -51,6 +51,15 @@ static void branches(void) {
+     init(&f);
+     CODE(&f, 0x4778); /* BX pc checks the even PC+4 exchange target. */
+     EQ(samsa_run(&f.c, 1, NULL), SAMSA_STOP_USAGE);
++    const SamsaHook instruction = SAMSA_INSTRUCTION_HOOK(0x1004);
++    f.c.hooks = &instruction;
++    f.c.num_hooks = 1;
++    EQ(samsa_run(&f.c, 1, NULL), SAMSA_STOP_USAGE);
++    EQ(f.c.r[15], 0x1000);
++    f.c.r[15] = 0x1004;
++    EQ(samsa_run(&f.c, 1, NULL), SAMSA_STOP_HOOK);
++    f.c.num_hooks = 0;
++    f.c.r[15] = 0x1000;
+     const SamsaHook pc_hook = {0x1004, 0x1006};
+     f.c.hooks = &pc_hook;
+     f.c.num_hooks = 1;

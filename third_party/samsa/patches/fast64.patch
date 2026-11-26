@@ -1,0 +1,1410 @@
+diff --git a/include/samsa/samsa.h b/include/samsa/samsa.h
+index 5314f2a..212480f 100644
+--- a/include/samsa/samsa.h
++++ b/include/samsa/samsa.h
+@@ -63,6 +63,7 @@ typedef struct SamsaCpu {
+             uint16_t first, second;
+             uint8_t op;
+         } code[SAMSA_CACHE_ENTRIES];
++        uint32_t lo, hi; /* Bounds of every address cached since the last flush. */
+         uint16_t region[3];
+     } _cache;
+ #endif
+diff --git a/src/alu.c b/src/alu.c
+index 0efa8ac..bafbd5d 100644
+--- a/src/alu.c
++++ b/src/alu.c
+@@ -1,26 +1,14 @@
+ /* SPDX-FileCopyrightText: 2026 Joshua Jun */
+ /* SPDX-License-Identifier: Apache-2.0 */
+ #include "alu.h"
++const uint16_t samsa_conditions[16] = {0xf0f0, 0x0f0f, 0xcccc, 0x3333, 0xff00, 0x00ff,
++                                       0xaaaa, 0x5555, 0x0c0c, 0xf3f3, 0xaa55, 0x55aa,
++                                       0x0a05, 0xf5fa, 0xffff, 0xffff};
+ uint32_t sx(uint32_t x, unsigned bits) {
+     uint32_t sign = UINT32_C(1) << (bits - 1u);
+     return (x ^ sign) - sign;
+ }
+-void nz(SamsaCpu *c, uint32_t value) {
+-    c->_flags = (uint8_t)((c->_flags & (C | V | Q)) | (value >> 24 & N) | (!value ? Z : 0));
+-}
+-void nzc(SamsaCpu *c, uint32_t value, unsigned carry) {
+-    nz(c, value);
+-    c->_flags = (uint8_t)((c->_flags & ~C) | (carry ? C : 0));
+-}
+-uint32_t add_c(SamsaCpu *c, uint32_t a, uint32_t b, unsigned carry, bool flags) {
+-    uint32_t t = a + b, r = t + carry;
+-    if (flags) {
+-        nzc(c, r, t < a || r < t);
+-        c->_flags = (uint8_t)((c->_flags & ~V) | (((~(a ^ b) & (a ^ r)) >> 27) & V));
+-    }
+-    return r;
+-}
+-uint32_t shift(uint32_t x, unsigned type, unsigned n, unsigned *carry) {
++SAMSA_HOT uint32_t shift(uint32_t x, unsigned type, unsigned n, unsigned *carry) {
+     if (!n)
+         return x;
+     switch (type) {
+@@ -48,49 +36,3 @@ uint32_t shift(uint32_t x, unsigned type, unsigned n, unsigned *carry) {
+     }
+     }
+ }
+-uint32_t imm_expand(unsigned imm, unsigned *carry) {
+-    uint32_t x = imm & 255u;
+-    if ((imm & 0xc00u) == 0) {
+-        switch (imm >> 8) {
+-        case 1:
+-            return x | x << 16;
+-        case 2:
+-            return x << 8 | x << 24;
+-        case 3:
+-            return x * UINT32_C(0x01010101);
+-        default:
+-            return x;
+-        }
+-    }
+-    return shift(128u | (imm & 127u), 3, imm >> 7, carry);
+-}
+-bool condition(const SamsaCpu *c, unsigned cond) {
+-    bool n = (c->_flags & N) != 0, z = (c->_flags & Z) != 0;
+-    bool cy = (c->_flags & C) != 0, v = (c->_flags & V) != 0, yes;
+-    switch (cond >> 1) {
+-    case 0:
+-        yes = z;
+-        break;
+-    case 1:
+-        yes = cy;
+-        break;
+-    case 2:
+-        yes = n;
+-        break;
+-    case 3:
+-        yes = v;
+-        break;
+-    case 4:
+-        yes = cy && !z;
+-        break;
+-    case 5:
+-        yes = n == v;
+-        break;
+-    case 6:
+-        yes = n == v && !z;
+-        break;
+-    default:
+-        return true;
+-    }
+-    return (cond & 1u) ? !yes : yes;
+-}
+diff --git a/src/alu.h b/src/alu.h
+index 8104609..9f7dafe 100644
+--- a/src/alu.h
++++ b/src/alu.h
+@@ -3,6 +3,20 @@
+ #ifndef SAMSA_ALU_H
+ #define SAMSA_ALU_H
+ #include "samsa/samsa.h"
++#include <string.h>
++/* An embedder may define SAMSA_HOT to place the code every instruction runs, for example in RAM
++   on a target that runs code from flash through a small cache. SAMSA_COLD keeps rare paths out
++   of it. */
++#ifndef SAMSA_HOT
++#define SAMSA_HOT
++#endif
++#if defined(__GNUC__)
++#define SAMSA_COLD __attribute__((noinline, cold))
++#define SAMSA_ASSUME_ALIGNED(p, n) __builtin_assume_aligned(p, n)
++#else
++#define SAMSA_COLD
++#define SAMSA_ASSUME_ALIGNED(p, n) (p)
++#endif
+ #if !defined(__BYTE_ORDER__) || __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+ #error "Samsa requires a little-endian host"
+ #endif
+@@ -13,20 +27,20 @@
+ #define Q 8u
+ uint32_t sx(uint32_t x, unsigned bits);
+ uint32_t shift(uint32_t x, unsigned type, unsigned amount, unsigned *carry);
+-uint32_t imm_expand(unsigned imm, unsigned *carry);
+-uint32_t add_c(SamsaCpu *c, uint32_t a, uint32_t b, unsigned carry, bool flags);
+-void nz(SamsaCpu *c, uint32_t value);
+-void nzc(SamsaCpu *c, uint32_t value, unsigned carry);
+-bool condition(const SamsaCpu *c, unsigned cond);
+ bool mem_fetch(SamsaCpu *c, uint32_t addr, uint32_t *halfword);
+-bool mem_read(SamsaCpu *c, uint32_t addr, unsigned size, unsigned perm, uint32_t *v);
+-bool mem_write(SamsaCpu *c, uint32_t addr, unsigned size, uint32_t value);
++bool mem_read_slow(SamsaCpu *c, uint32_t addr, unsigned size, unsigned perm, uint32_t *v);
++bool mem_write_slow(SamsaCpu *c, uint32_t addr, unsigned size, uint32_t value);
+ bool aligned(SamsaCpu *c, uint32_t addr, unsigned alignment);
+ bool target_special(const SamsaCpu *c, uint32_t addr);
+ bool branch(SamsaCpu *c, uint32_t addr, bool exchange);
+-uint8_t classify16(uint16_t h);
++extern const uint8_t samsa_class16[256];
++static inline uint8_t classify16(uint16_t h) { return samsa_class16[h >> 8]; }
+ uint8_t classify32(uint16_t h, uint16_t l);
+ bool execute16(SamsaCpu *c, unsigned op, uint16_t h, uint32_t pc, bool in_it);
++typedef bool SamsaOp16(SamsaCpu *c, uint16_t h, uint32_t pc, bool in_it);
++extern SamsaOp16 *const samsa_t16[];
++typedef bool SamsaOp32(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc);
++extern SamsaOp32 *const samsa_t32[];
+ bool execute32(SamsaCpu *c, unsigned op, uint16_t h, uint16_t l, uint32_t pc);
+ #if SAMSA_CACHE_ENTRIES
+ bool mem_exec(SamsaCpu *c, uint32_t addr, bool wide);
+@@ -50,4 +64,126 @@ static inline bool usage(SamsaCpu *c) {
+     return false;
+ }
+ static inline bool last_it(const SamsaCpu *c) { return (c->itstate & 7u) == 0; }
++static inline uint32_t imm_expand(unsigned imm, unsigned *carry) {
++    uint32_t x = imm & 255u;
++    if ((imm & 0xc00u) == 0) {
++        switch (imm >> 8) {
++        case 1:
++            return x | x << 16;
++        case 2:
++            return x << 8 | x << 24;
++        case 3:
++            return x * UINT32_C(0x01010101);
++        default:
++            return x;
++        }
++    }
++    return shift(128u | (imm & 127u), 3, imm >> 7, carry);
++}
++/* Registers in a 16-bit list. */
++static inline unsigned list_count(uint32_t x) {
++    x = (x & 0xffffu) - ((x >> 1) & 0x5555u);
++    x = (x & 0x3333u) + ((x >> 2) & 0x3333u);
++    x = (x + (x >> 4)) & 0x0f0fu;
++    return (x + (x >> 8)) & 31u;
++}
++/* The helpers every instruction runs are inline: calls cost more than their bodies. */
++static inline void nz(SamsaCpu *c, uint32_t value) {
++    c->_flags = (uint8_t)((c->_flags & (C | V | Q)) | (value >> 24 & N) | (!value ? Z : 0));
++}
++static inline void nzc(SamsaCpu *c, uint32_t value, unsigned carry) {
++    c->_flags =
++        (uint8_t)((c->_flags & (V | Q)) | (value >> 24 & N) | (!value ? Z : 0) | (carry ? C : 0));
++}
++static inline uint32_t add_c(SamsaCpu *c, uint32_t a, uint32_t b, unsigned carry, bool flags) {
++    uint32_t t = a + b, r = t + carry;
++    if (flags)
++        c->_flags = (uint8_t)((c->_flags & Q) | (r >> 24 & N) | (!r ? Z : 0) |
++                              (t < a || r < t ? C : 0) | (((~(a ^ b) & (a ^ r)) >> 27) & V));
++    return r;
++}
++/* Bit NZCV of entry cond: whether cond holds for those flags. */
++extern const uint16_t samsa_conditions[16];
++static inline bool condition(const SamsaCpu *c, unsigned cond) {
++    return (samsa_conditions[cond] >> (c->_flags >> 4)) & 1u;
++}
++/* The region an access fits in, if it is the one the last access of its kind used. */
++static inline const SamsaRegion *region_hit(const SamsaCpu *c, uint32_t a, unsigned size,
++                                            unsigned kind) {
++#if SAMSA_CACHE_ENTRIES
++    unsigned i = c->_cache.region[kind];
++    if (i && i <= c->num_regions) {
++        const SamsaRegion *r = &c->regions[i - 1u];
++        if (a >= r->guest_base && size <= r->size && a - r->guest_base <= r->size - size &&
++            a <= UINT32_MAX - (size - 1u))
++            return r;
++    }
++#else
++    (void)c;
++    (void)a;
++    (void)size;
++    (void)kind;
++#endif
++    return NULL;
++}
++/* Host accesses of 1, 2 or 4 bytes, without unaligned host accesses. */
++static inline uint32_t host_load(const uint8_t *p, unsigned size) {
++    if (size == 1)
++        return *p;
++    if (size == 2) {
++        uint16_t v;
++        if ((uintptr_t)p & 1u)
++            memcpy(&v, p, 2);
++        else
++            memcpy(&v, SAMSA_ASSUME_ALIGNED(p, 2), 2);
++        return v;
++    }
++    uint32_t v;
++    if ((uintptr_t)p & 3u)
++        memcpy(&v, p, 4);
++    else
++        memcpy(&v, SAMSA_ASSUME_ALIGNED(p, 4), 4);
++    return v;
++}
++static inline void host_store(uint8_t *p, unsigned size, uint32_t v) {
++    if (size == 1)
++        *p = (uint8_t)v;
++    else if (size == 2) {
++        uint16_t h = (uint16_t)v;
++        if ((uintptr_t)p & 1u)
++            memcpy(p, &h, 2);
++        else
++            memcpy(SAMSA_ASSUME_ALIGNED(p, 2), &h, 2);
++    } else if ((uintptr_t)p & 3u)
++        memcpy(p, &v, 4);
++    else
++        memcpy(SAMSA_ASSUME_ALIGNED(p, 4), &v, 4);
++}
++#if SAMSA_CACHE_ENTRIES
++/* Stores outside the addresses the cache ever held cannot hit a cached instruction. */
++static inline void invalidate_store(SamsaCpu *c, uint32_t a, unsigned size) {
++    if (a < c->_cache.hi && a + (size - 1u) >= c->_cache.lo)
++        invalidate_code(c, a, size);
++}
++#endif
++static inline bool mem_read(SamsaCpu *c, uint32_t a, unsigned size, unsigned perm, uint32_t *v) {
++    const SamsaRegion *r = region_hit(c, a, size, perm == SAMSA_X ? 2 : 0);
++    if (r && (r->perms & perm)) {
++        *v = host_load(r->host + (a - r->guest_base), size);
++        return true;
++    }
++    return mem_read_slow(c, a, size, perm, v);
++}
++static inline bool mem_write(SamsaCpu *c, uint32_t a, unsigned size, uint32_t v) {
++    const SamsaRegion *r = region_hit(c, a, size, 1);
++    if (r && (r->perms & SAMSA_W)) {
++        host_store(r->host + (a - r->guest_base), size, v);
++#if SAMSA_CACHE_ENTRIES
++        if (r->perms & SAMSA_X)
++            invalidate_store(c, a, size);
++#endif
++        return true;
++    }
++    return mem_write_slow(c, a, size, v);
++}
+ #endif
+diff --git a/src/decode16.c b/src/decode16.c
+index dee7899..988ef08 100644
+--- a/src/decode16.c
++++ b/src/decode16.c
+@@ -1,17 +1,9 @@
+ /* SPDX-FileCopyrightText: 2026 Joshua Jun */
+ /* SPDX-License-Identifier: Apache-2.0 */
+ #include "alu.h"
+-bool multiple(SamsaCpu *c, unsigned rn, uint32_t list, bool load, bool db, bool wb) {
+-    unsigned count = 0;
+-    for (unsigned i = 0; i < 16; ++i)
+-        count += (list >> i) & 1u;
+-    if (!count || rn == 15)
+-        return undef(c);
+-    if ((list & 0x8000u) && !last_it(c))
+-        return usage(c);
+-    uint32_t base = c->r[rn], addr = db ? base - count * 4u : base, v;
+-    if (!aligned(c, addr, 4))
+-        return false;
++SAMSA_COLD static bool multiple_each(SamsaCpu *c, unsigned rn, uint32_t list, bool load, bool db,
++                                     bool wb, uint32_t base, uint32_t addr) {
++    uint32_t start = addr, v;
+     for (unsigned i = 0; i < 16; ++i) {
+         if (!(list & (1u << i)))
+             continue;
+@@ -28,9 +20,47 @@ bool multiple(SamsaCpu *c, unsigned rn, uint32_t list, bool load, bool db, bool
+         addr += 4;
+     }
+     if (wb)
+-        c->r[rn] = db ? base - count * 4u : addr;
++        c->r[rn] = db ? start : addr;
+     return true;
+ }
++SAMSA_HOT bool multiple(SamsaCpu *c, unsigned rn, uint32_t list, bool load, bool db, bool wb) {
++    unsigned count = list_count(list);
++    if (!count || rn == 15)
++        return undef(c);
++    if ((list & 0x8000u) && !last_it(c))
++        return usage(c);
++    uint32_t base = c->r[rn], addr = db ? base - count * 4u : base;
++    if (!aligned(c, addr, 4))
++        return false;
++    /* Within one region no word can fault: transfer them directly. */
++    const SamsaRegion *r = region_hit(c, addr, count * 4u, load ? 0 : 1);
++    if (r && (r->perms & (load ? SAMSA_R : SAMSA_W))) {
++        uint8_t *p = r->host + (addr - r->guest_base);
++        for (unsigned i = 0; i < 15; ++i) {
++            if (!(list & (1u << i)))
++                continue;
++            if (load)
++                c->r[i] = host_load(p, 4);
++            else
++                host_store(p, 4, i == rn ? base : c->r[i]);
++            p += 4;
++        }
++#if SAMSA_CACHE_ENTRIES
++        if (!load && (r->perms & SAMSA_X))
++            invalidate_store(c, addr, count * 4u);
++#endif
++        if (list & 0x8000u) {
++            if (!load)
++                host_store(p, 4, c->r[15]);
++            else if (!branch(c, host_load(p, 4), true))
++                return false;
++        }
++        if (wb)
++            c->r[rn] = db ? base - count * 4u : addr + count * 4u;
++        return true;
++    }
++    return multiple_each(c, rn, list, load, db, wb, base, addr);
++}
+ static uint32_t reverse(uint32_t x, unsigned op) {
+     uint32_t r = ((x & 0xff00ffu) << 8) | ((x >> 8) & 0xff00ffu);
+     if (op == 0)
+@@ -62,292 +92,326 @@ enum {
+     T16_BRANCH,
+     T16_UNDEFINED,
+ };
+-uint8_t classify16(uint16_t h) {
+-    if (h < 0x1800u)
+-        return T16_SHIFT;
+-    if (h < 0x2000u)
+-        return T16_ADD3;
+-    if (h < 0x4000u)
+-        return T16_IMM8;
+-    if ((h & 0xfc00u) == 0x4000u)
+-        return T16_ALU;
+-    if ((h & 0xfc00u) == 0x4400u)
+-        return T16_SPECIAL;
+-    if ((h & 0xf800u) == 0x4800u)
+-        return T16_LITERAL;
+-    if ((h & 0xf000u) == 0x5000u)
+-        return T16_REGMEM;
+-    if ((h & 0xe000u) == 0x6000u || (h & 0xf000u) == 0x8000u)
+-        return T16_IMMEM;
+-    if ((h & 0xf000u) == 0x9000u)
+-        return T16_SPMEM;
+-    if ((h & 0xf000u) == 0xa000u)
+-        return T16_ADR;
+-    if ((h & 0xff00u) == 0xb000u)
+-        return T16_SPADJ;
+-    if ((h & 0xf500u) == 0xb100u)
+-        return T16_CB;
+-    if ((h & 0xff00u) == 0xb200u)
+-        return T16_EXTEND;
+-    if ((h & 0xf600u) == 0xb400u)
+-        return T16_STACK;
+-    if ((h & 0xff00u) == 0xba00u)
+-        return T16_REVERSE;
+-    if ((h & 0xff00u) == 0xbe00u)
+-        return T16_BKPT;
+-    if ((h & 0xff00u) == 0xbf00u)
+-        return T16_IT;
+-    if ((h & 0xf000u) == 0xc000u)
+-        return T16_MULTIPLE;
+-    if ((h & 0xf000u) == 0xd000u)
+-        return T16_COND;
+-    return (h & 0xf800u) == 0xe000u ? T16_BRANCH : T16_UNDEFINED;
++/* Every 16-bit encoding's class follows from its top byte. */
++/* clang-format off */
++const uint8_t samsa_class16[256] = {
++    /* 00 */ T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT,
++    /* 08 */ T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT,
++    /* 10 */ T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT, T16_SHIFT,
++    /* 18 */ T16_ADD3, T16_ADD3, T16_ADD3, T16_ADD3, T16_ADD3, T16_ADD3, T16_ADD3, T16_ADD3,
++    /* 20 */ T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8,
++    /* 28 */ T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8,
++    /* 30 */ T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8,
++    /* 38 */ T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8, T16_IMM8,
++    /* 40 */ T16_ALU, T16_ALU, T16_ALU, T16_ALU, T16_SPECIAL, T16_SPECIAL, T16_SPECIAL, T16_SPECIAL,
++    /* 48 */ T16_LITERAL, T16_LITERAL, T16_LITERAL, T16_LITERAL, T16_LITERAL, T16_LITERAL, T16_LITERAL, T16_LITERAL,
++    /* 50 */ T16_REGMEM, T16_REGMEM, T16_REGMEM, T16_REGMEM, T16_REGMEM, T16_REGMEM, T16_REGMEM, T16_REGMEM,
++    /* 58 */ T16_REGMEM, T16_REGMEM, T16_REGMEM, T16_REGMEM, T16_REGMEM, T16_REGMEM, T16_REGMEM, T16_REGMEM,
++    /* 60 */ T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM,
++    /* 68 */ T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM,
++    /* 70 */ T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM,
++    /* 78 */ T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM,
++    /* 80 */ T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM,
++    /* 88 */ T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM, T16_IMMEM,
++    /* 90 */ T16_SPMEM, T16_SPMEM, T16_SPMEM, T16_SPMEM, T16_SPMEM, T16_SPMEM, T16_SPMEM, T16_SPMEM,
++    /* 98 */ T16_SPMEM, T16_SPMEM, T16_SPMEM, T16_SPMEM, T16_SPMEM, T16_SPMEM, T16_SPMEM, T16_SPMEM,
++    /* a0 */ T16_ADR, T16_ADR, T16_ADR, T16_ADR, T16_ADR, T16_ADR, T16_ADR, T16_ADR,
++    /* a8 */ T16_ADR, T16_ADR, T16_ADR, T16_ADR, T16_ADR, T16_ADR, T16_ADR, T16_ADR,
++    /* b0 */ T16_SPADJ, T16_CB, T16_EXTEND, T16_CB, T16_STACK, T16_STACK, T16_UNDEFINED, T16_UNDEFINED,
++    /* b8 */ T16_UNDEFINED, T16_CB, T16_REVERSE, T16_CB, T16_STACK, T16_STACK, T16_BKPT, T16_IT,
++    /* c0 */ T16_MULTIPLE, T16_MULTIPLE, T16_MULTIPLE, T16_MULTIPLE, T16_MULTIPLE, T16_MULTIPLE, T16_MULTIPLE, T16_MULTIPLE,
++    /* c8 */ T16_MULTIPLE, T16_MULTIPLE, T16_MULTIPLE, T16_MULTIPLE, T16_MULTIPLE, T16_MULTIPLE, T16_MULTIPLE, T16_MULTIPLE,
++    /* d0 */ T16_COND, T16_COND, T16_COND, T16_COND, T16_COND, T16_COND, T16_COND, T16_COND,
++    /* d8 */ T16_COND, T16_COND, T16_COND, T16_COND, T16_COND, T16_COND, T16_COND, T16_COND,
++    /* e0 */ T16_BRANCH, T16_BRANCH, T16_BRANCH, T16_BRANCH, T16_BRANCH, T16_BRANCH, T16_BRANCH, T16_BRANCH,
++    /* e8 */ T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED,
++    /* f0 */ T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED,
++    /* f8 */ T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED, T16_UNDEFINED,
++};
++/* clang-format on */
++/* One leaf function per class, so the common ones need no stack frame. */
++#define T16(name) static bool name(SamsaCpu *c, uint16_t h, uint32_t pc, bool it)
++SAMSA_HOT T16(t16_shift) {
++    (void)pc;
++    unsigned d = h & 7u, n = h >> 3 & 7u, cy = (c->_flags & C) != 0;
++    unsigned type = h >> 11, amount = h >> 6 & 31u;
++    if (type && !amount)
++        amount = 32;
++    uint32_t v = shift(c->r[n], type, amount, &cy);
++    put(c, d, v);
++    if (!it)
++        nzc(c, v, cy);
++    return true;
+ }
+-bool execute16(SamsaCpu *c, unsigned op, uint16_t h, uint32_t pc, bool it) {
++SAMSA_HOT T16(t16_add3) {
++    (void)pc;
+     unsigned d = h & 7u, n = h >> 3 & 7u, m = h >> 6 & 7u;
+-    unsigned cy = (c->_flags & C) != 0;
+-    uint32_t a, b, v, addr;
+-    switch (op) {
+-    case T16_SHIFT: {
+-        unsigned type = h >> 11, amount = h >> 6 & 31u;
+-        if (type && !amount)
+-            amount = 32;
+-        v = shift(c->r[n], type, amount, &cy);
+-        put(c, d, v);
++    uint32_t b = h & 0x400u ? m : c->r[m];
++    put(c, d, add_c(c, c->r[n], h & 0x200u ? ~b : b, (h >> 9) & 1u, !it));
++    return true;
++}
++SAMSA_HOT T16(t16_imm8) {
++    (void)pc;
++    unsigned d = h >> 8 & 7u;
++    uint32_t b = h & 255u;
++    switch (h >> 11 & 3u) {
++    case 0:
++        put(c, d, b);
+         if (!it)
+-            nzc(c, v, cy);
+-        return true;
+-    }
+-    case T16_ADD3: {
+-        b = h & 0x400u ? m : c->r[m];
+-        put(c, d, add_c(c, c->r[n], h & 0x200u ? ~b : b, (h >> 9) & 1u, !it));
+-        return true;
++            nz(c, b);
++        break;
++    case 1:
++        (void)add_c(c, c->r[d], ~b, 1, true);
++        break;
++    case 2:
++        put(c, d, add_c(c, c->r[d], b, 0, !it));
++        break;
++    case 3:
++        put(c, d, add_c(c, c->r[d], ~b, 1, !it));
++        break;
+     }
+-    case T16_IMM8: {
+-        d = h >> 8 & 7u;
+-        b = h & 255u;
+-        switch (h >> 11 & 3u) {
+-        case 0:
+-            put(c, d, b);
+-            if (!it)
+-                nz(c, b);
+-            break;
+-        case 1:
+-            (void)add_c(c, c->r[d], ~b, 1, true);
+-            break;
+-        case 2:
+-            put(c, d, add_c(c, c->r[d], b, 0, !it));
+-            break;
+-        case 3:
+-            put(c, d, add_c(c, c->r[d], ~b, 1, !it));
+-            break;
+-        }
+-        return true;
+-    }
+-    case T16_ALU: {
+-        a = c->r[d];
+-        b = c->r[n];
+-        bool flags = !it;
+-        switch (h >> 6 & 15u) {
+-        case 0:
+-            v = a & b;
+-            break;
+-        case 1:
+-            v = a ^ b;
+-            break;
+-        case 2:
+-        case 3:
+-        case 4:
+-        case 7:
+-            v = shift(a, (h >> 6 & 15u) == 7 ? 3 : (h >> 6 & 15u) - 2u, b & 255u, &cy);
+-            put(c, d, v);
+-            if (flags)
+-                nzc(c, v, cy);
+-            return true;
+-        case 5:
+-            put(c, d, add_c(c, a, b, cy, flags));
+-            return true;
+-        case 6:
+-            put(c, d, add_c(c, a, ~b, cy, flags));
+-            return true;
+-        case 8:
+-            nz(c, a & b);
+-            return true;
+-        case 9:
+-            put(c, d, add_c(c, ~b, 0, 1, flags));
+-            return true;
+-        case 10:
+-            (void)add_c(c, a, ~b, 1, true);
+-            return true;
+-        case 11:
+-            (void)add_c(c, a, b, 0, true);
+-            return true;
+-        case 12:
+-            v = a | b;
+-            break;
+-        case 13:
+-            v = a * b;
+-            break;
+-        case 14:
+-            v = a & ~b;
+-            break;
+-        default:
+-            v = ~b;
+-            break;
+-        }
++    return true;
++}
++T16(t16_alu) {
++    (void)pc;
++    unsigned d = h & 7u, n = h >> 3 & 7u, cy = (c->_flags & C) != 0;
++    uint32_t a = c->r[d], b = c->r[n], v;
++    bool flags = !it;
++    switch (h >> 6 & 15u) {
++    case 0:
++        v = a & b;
++        break;
++    case 1:
++        v = a ^ b;
++        break;
++    case 2:
++    case 3:
++    case 4:
++    case 7:
++        v = shift(a, (h >> 6 & 15u) == 7 ? 3 : (h >> 6 & 15u) - 2u, b & 255u, &cy);
+         put(c, d, v);
+         if (flags)
+-            nz(c, v);
++            nzc(c, v, cy);
+         return true;
+-    }
+-    case T16_SPECIAL: {
+-        d |= h >> 4 & 8u;
+-        n = h >> 3 & 15u;
+-        a = reg(c, d, pc);
+-        b = reg(c, n, pc);
+-        switch (h >> 8 & 3u) {
+-        case 0:
+-            v = a + b;
+-            break;
+-        case 1:
+-            (void)add_c(c, a, ~b, 1, true);
+-            return true;
+-        case 2:
+-            v = b;
+-            break;
+-        default:
+-            if ((h & 7u) || (n == 15 && (h & 128u)) || !last_it(c))
+-                return undef(c);
+-            if (!branch(c, b, true))
+-                return false;
+-            if (h & 128u)
+-                c->r[14] = (pc + 2u) | 1u;
+-            return true;
+-        }
+-        if (d == 15)
+-            return branch(c, v, false);
+-        put(c, d, v);
++    case 5:
++        put(c, d, add_c(c, a, b, cy, flags));
+         return true;
+-    }
+-    case T16_LITERAL: {
+-        d = h >> 8 & 7u;
+-        addr = ((pc + 4u) & ~3u) + (h & 255u) * 4u;
+-        return mem_read(c, addr, 4, SAMSA_R, &c->r[d]);
+-    }
+-    case T16_REGMEM: {
+-        unsigned op = h >> 9 & 7u, size = op == 0 || op == 4              ? 4
+-                                          : op == 1 || op == 5 || op == 7 ? 2
+-                                                                          : 1;
+-        addr = c->r[n] + c->r[m];
+-        if (op < 3)
+-            return mem_write(c, addr, size, c->r[d]);
+-        if (!mem_read(c, addr, size, SAMSA_R, &v))
+-            return false;
+-        put(c, d, op == 3 ? sx(v, 8) : op == 7 ? sx(v, 16) : v);
++    case 6:
++        put(c, d, add_c(c, a, ~b, cy, flags));
+         return true;
+-    }
+-    case T16_IMMEM: {
+-        unsigned size = h < 0x8000u ? (h & 0x1000u ? 1 : 4) : 2;
+-        addr = c->r[n] + (h >> 6 & 31u) * size;
+-        if (h & 0x800u)
+-            return mem_read(c, addr, size, SAMSA_R, &c->r[d]);
+-        return mem_write(c, addr, size, c->r[d]);
+-    }
+-    case T16_SPMEM: {
+-        d = h >> 8 & 7u;
+-        addr = c->r[13] + (h & 255u) * 4u;
+-        if (h & 0x800u)
+-            return mem_read(c, addr, 4, SAMSA_R, &c->r[d]);
+-        return mem_write(c, addr, 4, c->r[d]);
+-    }
+-    case T16_ADR: {
+-        c->r[h >> 8 & 7u] = (h & 0x800u ? c->r[13] : (pc + 4u) & ~3u) + (h & 255u) * 4u;
++    case 8:
++        nz(c, a & b);
+         return true;
+-    }
+-    case T16_SPADJ: {
+-        v = (h & 127u) * 4u;
+-        c->r[13] += h & 128u ? 0u - v : v;
++    case 9:
++        put(c, d, add_c(c, ~b, 0, 1, flags));
+         return true;
+-    }
+-    case T16_CB: {
+-        if (it)
+-            return usage(c);
+-        if ((c->r[d] != 0) == ((h & 0x800u) != 0))
+-            c->r[15] = pc + 4u + (h >> 3 & 31u) * 2u + (h >> 9 & 1u) * 64u;
++    case 10:
++        (void)add_c(c, a, ~b, 1, true);
+         return true;
+-    }
+-    case T16_EXTEND: {
+-        v = c->r[n];
+-        switch (h >> 6 & 3u) {
+-        case 0:
+-            v = sx(v & 0xffffu, 16);
+-            break;
+-        case 1:
+-            v = sx(v & 255u, 8);
+-            break;
+-        case 2:
+-            v &= 0xffffu;
+-            break;
+-        default:
+-            v &= 255u;
+-            break;
+-        }
+-        put(c, d, v);
++    case 11:
++        (void)add_c(c, a, b, 0, true);
+         return true;
++    case 12:
++        v = a | b;
++        break;
++    case 13:
++        v = a * b;
++        break;
++    case 14:
++        v = a & ~b;
++        break;
++    default:
++        v = ~b;
++        break;
+     }
+-    case T16_STACK: {
+-        bool pop = (h & 0x800u) != 0;
+-        return multiple(c, 13, (h & 255u) | (h & 256u ? (pop ? 0x8000u : 0x4000u) : 0), pop, !pop,
+-                        true);
+-    }
+-    case T16_REVERSE: {
+-        unsigned op = h >> 6 & 3u;
+-        if (op == 2)
+-            return undef(c);
+-        put(c, d, reverse(c->r[n], op));
+-        return true;
+-    }
+-    case T16_BKPT: {
+-        c->stop_info = (uint8_t)h;
+-        c->_stop = SAMSA_STOP_BKPT;
+-        return false;
+-    }
+-    case T16_IT: {
+-        if (!(h & 15u))
+-            return true;
+-        if (it || (h >> 4 & 15u) == 15u ||
+-            ((h >> 4 & 15u) == 14u && ((h & 15u) & ((h & 15u) - 1u))))
+-            return undef(c);
+-        c->itstate = (uint8_t)h;
++    put(c, d, v);
++    if (flags)
++        nz(c, v);
++    return true;
++}
++SAMSA_HOT T16(t16_special) {
++    (void)it;
++    unsigned d = (h & 7u) | (h >> 4 & 8u), n = h >> 3 & 15u;
++    uint32_t a = reg(c, d, pc), b = reg(c, n, pc), v;
++    switch (h >> 8 & 3u) {
++    case 0:
++        v = a + b;
++        break;
++    case 1:
++        (void)add_c(c, a, ~b, 1, true);
+         return true;
+-    }
+-    case T16_MULTIPLE: {
+-        n = h >> 8 & 7u;
+-        bool load = (h & 0x800u) != 0;
+-        if (!load && (h & (1u << n)) && (h & ((1u << n) - 1u)))
++    case 2:
++        v = b;
++        break;
++    default:
++        if ((h & 7u) || (n == 15 && (h & 128u)) || !last_it(c))
+             return undef(c);
+-        return multiple(c, n, h & 255u, load, false, !load || !(h & (1u << n)));
+-    }
+-    case T16_COND: {
+-        unsigned cond = h >> 8 & 15u;
+-        if (cond == 15) {
+-            c->stop_info = (uint8_t)h;
+-            c->_stop = SAMSA_STOP_SVC;
++        if (!branch(c, b, true))
+             return false;
+-        }
+-        if (cond == 14)
+-            return undef(c);
+-        if (it)
+-            return usage(c);
+-        if (condition(c, cond))
+-            c->r[15] = pc + 4u + sx((h & 255u) * 2u, 9);
++        if (h & 128u)
++            c->r[14] = (pc + 2u) | 1u;
+         return true;
+     }
+-    case T16_BRANCH:
+-        return branch(c, pc + 4u + sx((h & 2047u) << 1, 12), false);
++    if (d == 15)
++        return branch(c, v, false);
++    put(c, d, v);
++    return true;
++}
++SAMSA_HOT T16(t16_literal) {
++    (void)it;
++    return mem_read(c, ((pc + 4u) & ~3u) + (h & 255u) * 4u, 4, SAMSA_R, &c->r[h >> 8 & 7u]);
++}
++T16(t16_regmem) {
++    (void)pc;
++    (void)it;
++    unsigned d = h & 7u, n = h >> 3 & 7u, m = h >> 6 & 7u;
++    unsigned op = h >> 9 & 7u, size = op == 0 || op == 4              ? 4
++                                      : op == 1 || op == 5 || op == 7 ? 2
++                                                                      : 1;
++    uint32_t addr = c->r[n] + c->r[m], v;
++    if (op < 3)
++        return mem_write(c, addr, size, c->r[d]);
++    if (!mem_read(c, addr, size, SAMSA_R, &v))
++        return false;
++    put(c, d, op == 3 ? sx(v, 8) : op == 7 ? sx(v, 16) : v);
++    return true;
++}
++SAMSA_HOT T16(t16_immem) {
++    (void)pc;
++    (void)it;
++    unsigned d = h & 7u, n = h >> 3 & 7u;
++    unsigned size = h < 0x8000u ? (h & 0x1000u ? 1 : 4) : 2;
++    uint32_t addr = c->r[n] + (h >> 6 & 31u) * size;
++    if (h & 0x800u)
++        return mem_read(c, addr, size, SAMSA_R, &c->r[d]);
++    return mem_write(c, addr, size, c->r[d]);
++}
++SAMSA_HOT T16(t16_spmem) {
++    (void)pc;
++    (void)it;
++    unsigned d = h >> 8 & 7u;
++    uint32_t addr = c->r[13] + (h & 255u) * 4u;
++    if (h & 0x800u)
++        return mem_read(c, addr, 4, SAMSA_R, &c->r[d]);
++    return mem_write(c, addr, 4, c->r[d]);
++}
++SAMSA_HOT T16(t16_adr) {
++    (void)it;
++    c->r[h >> 8 & 7u] = (h & 0x800u ? c->r[13] : (pc + 4u) & ~3u) + (h & 255u) * 4u;
++    return true;
++}
++SAMSA_HOT T16(t16_spadj) {
++    (void)pc;
++    (void)it;
++    uint32_t v = (h & 127u) * 4u;
++    c->r[13] += h & 128u ? 0u - v : v;
++    return true;
++}
++SAMSA_HOT T16(t16_cb) {
++    if (it)
++        return usage(c);
++    if ((c->r[h & 7u] != 0) == ((h & 0x800u) != 0))
++        c->r[15] = pc + 4u + (h >> 3 & 31u) * 2u + (h >> 9 & 1u) * 64u;
++    return true;
++}
++SAMSA_HOT T16(t16_extend) {
++    (void)pc;
++    (void)it;
++    uint32_t v = c->r[h >> 3 & 7u];
++    switch (h >> 6 & 3u) {
++    case 0:
++        v = sx(v & 0xffffu, 16);
++        break;
++    case 1:
++        v = sx(v & 255u, 8);
++        break;
++    case 2:
++        v &= 0xffffu;
++        break;
+     default:
++        v &= 255u;
++        break;
++    }
++    put(c, h & 7u, v);
++    return true;
++}
++SAMSA_HOT T16(t16_stack) {
++    (void)pc;
++    (void)it;
++    bool pop = (h & 0x800u) != 0;
++    return multiple(c, 13, (h & 255u) | (h & 256u ? (pop ? 0x8000u : 0x4000u) : 0), pop, !pop,
++                    true);
++}
++T16(t16_reverse) {
++    (void)pc;
++    (void)it;
++    unsigned op = h >> 6 & 3u;
++    if (op == 2)
+         return undef(c);
++    put(c, h & 7u, reverse(c->r[h >> 3 & 7u], op));
++    return true;
++}
++T16(t16_bkpt) {
++    (void)pc;
++    (void)it;
++    c->stop_info = (uint8_t)h;
++    c->_stop = SAMSA_STOP_BKPT;
++    return false;
++}
++SAMSA_HOT T16(t16_it) {
++    (void)pc;
++    if (!(h & 15u))
++        return true;
++    if (it || (h >> 4 & 15u) == 15u || ((h >> 4 & 15u) == 14u && ((h & 15u) & ((h & 15u) - 1u))))
++        return undef(c);
++    c->itstate = (uint8_t)h;
++    return true;
++}
++SAMSA_HOT T16(t16_multiple) {
++    (void)pc;
++    (void)it;
++    unsigned n = h >> 8 & 7u;
++    bool load = (h & 0x800u) != 0;
++    if (!load && (h & (1u << n)) && (h & ((1u << n) - 1u)))
++        return undef(c);
++    return multiple(c, n, h & 255u, load, false, !load || !(h & (1u << n)));
++}
++SAMSA_HOT T16(t16_cond) {
++    unsigned cond = h >> 8 & 15u;
++    if (cond == 15) {
++        c->stop_info = (uint8_t)h;
++        c->_stop = SAMSA_STOP_SVC;
++        return false;
+     }
++    if (cond == 14)
++        return undef(c);
++    if (it)
++        return usage(c);
++    if (condition(c, cond))
++        c->r[15] = pc + 4u + sx((h & 255u) * 2u, 9);
++    return true;
++}
++SAMSA_HOT T16(t16_branch) {
++    (void)it;
++    return branch(c, pc + 4u + sx((h & 2047u) << 1, 12), false);
++}
++T16(t16_undefined) {
++    (void)h;
++    (void)pc;
++    (void)it;
++    return undef(c);
++}
++SamsaOp16 *const samsa_t16[T16_UNDEFINED + 1] = {
++    [T16_SHIFT] = t16_shift,   [T16_ADD3] = t16_add3,       [T16_IMM8] = t16_imm8,
++    [T16_ALU] = t16_alu,       [T16_SPECIAL] = t16_special, [T16_LITERAL] = t16_literal,
++    [T16_REGMEM] = t16_regmem, [T16_IMMEM] = t16_immem,     [T16_SPMEM] = t16_spmem,
++    [T16_ADR] = t16_adr,       [T16_SPADJ] = t16_spadj,     [T16_CB] = t16_cb,
++    [T16_EXTEND] = t16_extend, [T16_STACK] = t16_stack,     [T16_REVERSE] = t16_reverse,
++    [T16_BKPT] = t16_bkpt,     [T16_IT] = t16_it,           [T16_MULTIPLE] = t16_multiple,
++    [T16_COND] = t16_cond,     [T16_BRANCH] = t16_branch,   [T16_UNDEFINED] = t16_undefined,
++};
++bool execute16(SamsaCpu *c, unsigned op, uint16_t h, uint32_t pc, bool it) {
++    return samsa_t16[op](c, h, pc, it);
+ }
+
+ bool decode16(SamsaCpu *c, uint16_t h, uint32_t pc, bool it) {
+diff --git a/src/decode32.c b/src/decode32.c
+index bb0c2a4..1666079 100644
+--- a/src/decode32.c
++++ b/src/decode32.c
+@@ -8,8 +8,8 @@ static int64_t clamp(int64_t v, int64_t lo, int64_t hi, bool *saturated) {
+         *saturated = true;
+     return v < lo ? lo : v > hi ? hi : v;
+ }
+-static bool dp(SamsaCpu *c, unsigned op, unsigned n, unsigned d, uint32_t b, unsigned cy,
+-               bool flags, uint32_t pc) {
++SAMSA_HOT static bool dp(SamsaCpu *c, unsigned op, unsigned n, unsigned d, uint32_t b, unsigned cy,
++                         bool flags, uint32_t pc) {
+     uint32_t a = reg(c, n, pc), v;
+     bool test = d == 15 && flags && (op == 0 || op == 4 || op == 8 || op == 13);
+     if (d == 15 && !test)
+@@ -57,7 +57,7 @@ result:
+         put(c, d, v);
+     return true;
+ }
+-static bool control(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
++SAMSA_HOT static bool control(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
+     unsigned form = l & 0xd000u;
+     if (form == 0x9000u || form == 0xd000u) {
+         unsigned s = h >> 10 & 1u, j1 = l >> 13 & 1u, j2 = l >> 11 & 1u;
+@@ -259,7 +259,7 @@ static bool dual(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
+         put(c, n, next);
+     return true;
+ }
+-static bool single(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
++SAMSA_COLD static bool single_other(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
+     unsigned op = h >> 4 & 31u, n = h & 15u, t = l >> 12;
+     unsigned kind = op & 7u;
+     bool load = (kind & 1u) != 0, sign = (op & 16u) != 0;
+@@ -314,6 +314,21 @@ static bool single(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
+         put(c, n, next);
+     return true;
+ }
++SAMSA_HOT static bool single(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
++    unsigned op = h >> 4 & 31u, n = h & 15u, t = l >> 12, kind = op & 7u;
++    if ((op & 24u) == 8u && kind < 6 && n != 15 && t != 15) {
++        /* The common form, unsigned and zero-extending: [Rn, #imm12] */
++        unsigned size = kind < 2 ? 1 : kind < 4 ? 2 : 4;
++        uint32_t addr = c->r[n] + (l & 4095u), value;
++        if (!(kind & 1u))
++            return mem_write(c, addr, size, c->r[t]);
++        if (!mem_read(c, addr, size, SAMSA_R, &value))
++            return false;
++        put(c, t, value);
++        return true;
++    }
++    return single_other(c, h, l, pc);
++}
+ /* ARMv7E-M parallel add/subtract (A5.3.13/A5.3.14). op selects the lanes and
+    operations; prefix 0 sets GE, 1 saturates, 2 halves. */
+ static bool parallel(SamsaCpu *c, unsigned op, unsigned prefix, bool sign, unsigned d, uint32_t x,
+@@ -571,7 +586,7 @@ enum {
+     T32_MULTIPLY,
+     T32_UNDEFINED,
+ };
+-uint8_t classify32(uint16_t h, uint16_t l) {
++SAMSA_HOT uint8_t classify32(uint16_t h, uint16_t l) {
+     if ((h & 0xfe00u) == 0xea00u)
+         return T32_SHIFTED;
+     if ((h & 0xf800u) == 0xf000u)
+@@ -586,68 +601,77 @@ uint8_t classify32(uint16_t h, uint16_t l) {
+         return T32_REGISTER;
+     return (h & 0xff00u) == 0xfb00u ? T32_MULTIPLY : T32_UNDEFINED;
+ }
+-bool execute32(SamsaCpu *c, unsigned op, uint16_t h, uint16_t l, uint32_t pc) {
+-    switch (op) {
+-    case T32_SHIFTED: {
+-        if (l & 0x8000u)
+-            return undef(c);
+-        unsigned amount = (l >> 12 & 7u) * 4u + (l >> 6 & 3u), type = l >> 4 & 3u;
+-        unsigned m = l & 15u, cy = (c->_flags & C) != 0;
+-        if (m == 15)
+-            return undef(c);
+-        if (!amount && type) {
+-            if (type == 3)
+-                type = 4, amount = 1;
+-            else
+-                amount = 32;
+-        }
+-        uint32_t b = shift(c->r[m], type, amount, &cy);
+-        if ((h >> 5 & 15u) == 6) { /* ARMv7E-M PKHBT/PKHTB */
+-            unsigned n = h & 15u, d = l >> 8 & 15u;
+-            if ((h & 16u) || (l & 16u) || n == 13 || n == 15 || m == 13 || d == 13 || d == 15)
+-                return undef(c);
+-            uint32_t a = c->r[n];
+-            put(c, d, type ? (a & 0xffff0000u) | (b & 0xffffu) : (b & 0xffff0000u) | (a & 0xffffu));
+-            return true;
+-        }
+-        return dp(c, h >> 5 & 15u, h & 15u, l >> 8 & 15u, b, cy, (h & 16u) != 0, pc);
+-    }
+-    case T32_CONTROL:
+-        return control(c, h, l, pc);
+-    case T32_PLAIN:
+-        return plain(c, h, l, pc);
+-    case T32_MODIFIED: {
+-        unsigned imm = (h >> 10 & 1u) << 11 | (l >> 12 & 7u) << 8 | (l & 255u),
+-                 cy = (c->_flags & C) != 0;
+-        if ((imm & 0xc00u) == 0 && (imm & 0x300u) && !(imm & 255u))
+-            return undef(c);
+-        uint32_t b = imm_expand(imm, &cy);
+-        return dp(c, h >> 5 & 15u, h & 15u, l >> 8 & 15u, b, cy, (h & 16u) != 0, pc);
++SAMSA_HOT static bool shifted(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
++    if (l & 0x8000u)
++        return undef(c);
++    unsigned amount = (l >> 12 & 7u) * 4u + (l >> 6 & 3u), type = l >> 4 & 3u;
++    unsigned m = l & 15u, cy = (c->_flags & C) != 0;
++    if (m == 15)
++        return undef(c);
++    if (!amount && type) {
++        if (type == 3)
++            type = 4, amount = 1;
++        else
++            amount = 32;
+     }
+-    case T32_MULTIPLE: {
+-        unsigned n = h & 15u, mode = h >> 7 & 3u;
+-        bool load = (h & 16u) != 0, wb = (h & 32u) != 0;
+-        if ((mode != 1 && mode != 2) || (l & 0x2000u) || (!load && (l & 0x8000u)) ||
+-            (load && (l & 0xc000u) == 0xc000u) || (wb && (l & (1u << n))))
+-            return undef(c);
+-        unsigned count = 0;
+-        for (unsigned i = 0; i < 16; ++i)
+-            count += (l >> i) & 1u;
+-        if (count < 2)
++    uint32_t b = shift(c->r[m], type, amount, &cy);
++    if ((h >> 5 & 15u) == 6) { /* ARMv7E-M PKHBT/PKHTB */
++        unsigned n = h & 15u, d = l >> 8 & 15u;
++        if ((h & 16u) || (l & 16u) || n == 13 || n == 15 || m == 13 || d == 13 || d == 15)
+             return undef(c);
+-        return multiple(c, n, l, load, mode == 2, wb);
++        uint32_t a = c->r[n];
++        put(c, d, type ? (a & 0xffff0000u) | (b & 0xffffu) : (b & 0xffff0000u) | (a & 0xffffu));
++        return true;
+     }
+-    case T32_DUAL:
+-        return dual(c, h, l, pc);
+-    case T32_SINGLE:
+-        return single(c, h, l, pc);
+-    case T32_REGISTER:
+-        return data_reg(c, h, l);
+-    case T32_MULTIPLY:
+-        return multiply(c, h, l);
+-    default:
++    return dp(c, h >> 5 & 15u, h & 15u, l >> 8 & 15u, b, cy, (h & 16u) != 0, pc);
++}
++SAMSA_HOT static bool modified(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
++    unsigned imm = (h >> 10 & 1u) << 11 | (l >> 12 & 7u) << 8 | (l & 255u),
++             cy = (c->_flags & C) != 0;
++    if ((imm & 0xc00u) == 0 && (imm & 0x300u) && !(imm & 255u))
+         return undef(c);
+-    }
++    uint32_t b = imm_expand(imm, &cy);
++    return dp(c, h >> 5 & 15u, h & 15u, l >> 8 & 15u, b, cy, (h & 16u) != 0, pc);
++}
++SAMSA_HOT static bool load_store_multiple(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
++    (void)pc;
++    unsigned n = h & 15u, mode = h >> 7 & 3u;
++    bool load = (h & 16u) != 0, wb = (h & 32u) != 0;
++    if ((mode != 1 && mode != 2) || (l & 0x2000u) || (!load && (l & 0x8000u)) ||
++        (load && (l & 0xc000u) == 0xc000u) || (wb && (l & (1u << n))))
++        return undef(c);
++    if (list_count(l) < 2)
++        return undef(c);
++    return multiple(c, n, l, load, mode == 2, wb);
++}
++static bool register_op(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
++    (void)pc;
++    return data_reg(c, h, l);
++}
++static bool multiply_op(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
++    (void)pc;
++    return multiply(c, h, l);
++}
++static bool undefined32(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
++    (void)h;
++    (void)l;
++    (void)pc;
++    return undef(c);
++}
++SamsaOp32 *const samsa_t32[T32_UNDEFINED + 1] = {
++    [T32_SHIFTED] = shifted,
++    [T32_CONTROL] = control,
++    [T32_PLAIN] = plain,
++    [T32_MODIFIED] = modified,
++    [T32_MULTIPLE] = load_store_multiple,
++    [T32_DUAL] = dual,
++    [T32_SINGLE] = single,
++    [T32_REGISTER] = register_op,
++    [T32_MULTIPLY] = multiply_op,
++    [T32_UNDEFINED] = undefined32,
++};
++bool execute32(SamsaCpu *c, unsigned op, uint16_t h, uint16_t l, uint32_t pc) {
++    return samsa_t32[op](c, h, l, pc);
+ }
+
+ bool decode32(SamsaCpu *c, uint16_t h, uint16_t l, uint32_t pc) {
+diff --git a/src/mem.c b/src/mem.c
+index 0cbb03a..4a1d60b 100644
+--- a/src/mem.c
++++ b/src/mem.c
+@@ -65,13 +65,13 @@ bool mem_exec(SamsaCpu *c, uint32_t a, bool wide) {
+     return mem_fetch(c, a, NULL) && (!wide || mem_fetch(c, a + 2u, NULL));
+ }
+ #endif
+-bool mem_read(SamsaCpu *c, uint32_t a, unsigned size, unsigned perm, uint32_t *v) {
++bool mem_read_slow(SamsaCpu *c, uint32_t a, unsigned size, unsigned perm, uint32_t *v) {
+     const SamsaRegion *r = region(c, a, size, perm == SAMSA_X ? 2 : 0);
+     *v = 0;
+     if (r) {
+         if (!(r->perms & perm))
+             return fault(c, a);
+-        memcpy(v, r->host + (a - r->guest_base), size);
++        *v = host_load(r->host + (a - r->guest_base), size);
+         return true;
+     }
+     /* Bus is data-only: execute permission must come from a region. */
+@@ -82,15 +82,15 @@ bool mem_read(SamsaCpu *c, uint32_t a, unsigned size, unsigned perm, uint32_t *v
+     }
+     return fault(c, a);
+ }
+-bool mem_write(SamsaCpu *c, uint32_t a, unsigned size, uint32_t v) {
++bool mem_write_slow(SamsaCpu *c, uint32_t a, unsigned size, uint32_t v) {
+     const SamsaRegion *r = region(c, a, size, 1);
+     if (r) {
+         if (!(r->perms & SAMSA_W))
+             return fault(c, a);
+-        memcpy(r->host + (a - r->guest_base), &v, size);
++        host_store(r->host + (a - r->guest_base), size, v);
+ #if SAMSA_CACHE_ENTRIES
+         if (r->perms & SAMSA_X)
+-            invalidate_code(c, a, size);
++            invalidate_store(c, a, size);
+ #endif
+         return true;
+     }
+diff --git a/src/samsa.c b/src/samsa.c
+index a934294..88a451f 100644
+--- a/src/samsa.c
++++ b/src/samsa.c
+@@ -30,7 +30,7 @@ static bool is_hook(const SamsaCpu *c, uint32_t a, bool fetching) {
+     return false;
+ }
+ bool target_special(const SamsaCpu *c, uint32_t a) { return is_hook(c, a, false); }
+-bool branch(SamsaCpu *c, uint32_t a, bool exchange) {
++SAMSA_HOT bool branch(SamsaCpu *c, uint32_t a, bool exchange) {
+     if (!last_it(c))
+         return usage(c);
+     if (exchange && !(a & 1u) && !target_special(c, a))
+@@ -38,63 +38,147 @@ bool branch(SamsaCpu *c, uint32_t a, bool exchange) {
+     c->r[15] = a & ~1u;
+     return true;
+ }
+-SamsaStop samsa_run(SamsaCpu *c, uint32_t max, uint32_t *executed) {
++#if SAMSA_CACHE_ENTRIES
++/* Restrict the direct-fetch window to instruction starts that cannot trap. A point
++   breakpoint still permits a window on either side of the SDK dispatcher. */
++static void fetch_window(const SamsaCpu *c, const SamsaRegion *r, uint32_t pc,
++                         uint32_t *base, uint32_t *span) {
++    *span = 0;
++    if (!r || !(r->perms & SAMSA_X) || r->size < 4u)
++        return;
++    uint32_t first = 0, end = r->size - 3u;
++    uint64_t limit = (uint64_t)r->guest_base + r->size;
++    if (c->_calling && SAMSA_RETURN_PC >= r->guest_base && SAMSA_RETURN_PC < limit)
++        return;
++    for (unsigned i = 0; i < c->num_hooks; ++i) {
++        const SamsaHook *hook = &c->hooks[i];
++        if (hook->start < hook->end && hook->start < limit && hook->end > r->guest_base)
++            return;
++        if (hook->end || !(hook->start & 1u))
++            continue;
++        uint32_t at = hook->start & ~1u;
++        if (at < r->guest_base || at >= limit)
++            continue;
++        uint32_t offset = at - r->guest_base;
++        if (pc < at && offset < end)
++            end = offset;
++        else if (pc > at && offset + 2u > first)
++            first = offset + 2u;
++        else if (pc == at)
++            return;
++    }
++    if (first < end) {
++        *base = r->guest_base + first;
++        *span = end - first;
++    }
++}
++static inline void fill(SamsaCpu *c, unsigned slot, uint32_t pc, uint32_t h, uint32_t l,
++                        unsigned op) {
++    if (pc >= UINT32_MAX - 4u)
++        return;
++    c->_cache.code[slot].tag = pc | 1u;
++    c->_cache.code[slot].first = (uint16_t)h;
++    c->_cache.code[slot].second = (uint16_t)l;
++    c->_cache.code[slot].op = (uint8_t)op;
++    if (c->_cache.lo == c->_cache.hi)
++        c->_cache.lo = c->_cache.hi = pc;
++    if (pc < c->_cache.lo)
++        c->_cache.lo = pc;
++    if (pc + 4u > c->_cache.hi)
++        c->_cache.hi = pc + 4u;
++}
++#endif
++SAMSA_HOT SamsaStop samsa_run(SamsaCpu *c, uint32_t max, uint32_t *executed) {
+     uint32_t count = 0;
+     c->_stop = SAMSA_STOP_BUDGET;
+     c->stop_info = 0;
+-    while (count < max) {
+-        uint32_t pc = c->r[15], h = 0, l = 0;
+-        if (is_hook(c, pc, true)) {
+-            c->_stop = c->_calling && pc == SAMSA_RETURN_PC ? SAMSA_STOP_RETURN : SAMSA_STOP_HOOK;
+-            break;
+-        }
+-        c->fault_pc = pc;
+-        if (!aligned(c, pc, 2))
+-            break;
+ #if SAMSA_CACHE_ENTRIES
+-        unsigned slot = (pc >> 1) & (SAMSA_CACHE_ENTRIES - 1u);
+-        bool hit = c->_cache.code[slot].tag == (pc | 1u);
++    /* A window of an executable region without hooks, in which an instruction needs neither
++       the hook nor the permission check. Neither changes while the interpreter runs. */
++    const SamsaRegion *x = NULL;
++    uint32_t base = 0, span = 0;
++#endif
++    while (count < max) {
++        uint32_t pc = c->r[15], h, l = 0;
+         unsigned op;
+         bool wide;
+-        if (hit) {
+-            wide = (c->_cache.code[slot].op & 128u) != 0;
+-            if (!mem_exec(c, pc, wide))
+-                break;
++#if SAMSA_CACHE_ENTRIES
++        unsigned slot = (pc >> 1) & (SAMSA_CACHE_ENTRIES - 1u);
++        if (pc - base < span && !(pc & 1u)) {
++            c->fault_pc = pc;
++            if (c->_cache.code[slot].tag == (pc | 1u)) {
++                op = c->_cache.code[slot].op;
++                h = c->_cache.code[slot].first;
++                l = c->_cache.code[slot].second;
++            } else {
++                const uint8_t *p = x->host + (pc - x->guest_base);
++                h = host_load(p, 2);
++                if ((h >> 11) >= 29u) {
++                    l = host_load(p + 2, 2);
++                    op = classify32((uint16_t)h, (uint16_t)l) | 128u;
++                } else
++                    op = classify16((uint16_t)h);
++                fill(c, slot, pc, h, l, op);
++            }
+         } else {
+-            if (!mem_fetch(c, pc, &h))
++            if (is_hook(c, pc, true)) {
++                c->_stop =
++                    c->_calling && pc == SAMSA_RETURN_PC ? SAMSA_STOP_RETURN : SAMSA_STOP_HOOK;
+                 break;
+-            wide = (h >> 11) >= 29u;
+-            if (wide && !mem_fetch(c, pc + 2u, &l))
++            }
++            c->fault_pc = pc;
++            if (pc & 1u) {
++                (void)aligned(c, pc, 2);
+                 break;
++            }
++            if (c->_cache.code[slot].tag == (pc | 1u)) {
++                op = c->_cache.code[slot].op;
++                if (!mem_exec(c, pc, (op & 128u) != 0))
++                    break;
++                h = c->_cache.code[slot].first;
++                l = c->_cache.code[slot].second;
++            } else {
++                uint32_t first, second = 0;
++                if (!mem_fetch(c, pc, &first))
++                    break;
++                wide = (first >> 11) >= 29u;
++                if (wide && !mem_fetch(c, pc + 2u, &second))
++                    break;
++                h = first;
++                l = second;
++                op = wide ? classify32((uint16_t)h, (uint16_t)l) | 128u : classify16((uint16_t)h);
++                fill(c, slot, pc, h, l, op);
++            }
++            unsigned k = c->_cache.region[2];
++            x = k && k <= c->num_regions ? &c->regions[k - 1u] : NULL;
++            fetch_window(c, x, pc, &base, &span);
+         }
++        wide = (op & 128u) != 0;
++        op &= 127u;
+ #else
++        if (is_hook(c, pc, true)) {
++            c->_stop = c->_calling && pc == SAMSA_RETURN_PC ? SAMSA_STOP_RETURN : SAMSA_STOP_HOOK;
++            break;
++        }
++        c->fault_pc = pc;
++        if (!aligned(c, pc, 2))
++            break;
+         if (!mem_fetch(c, pc, &h))
+             break;
+-        bool wide = (h >> 11) >= 29u;
++        wide = (h >> 11) >= 29u;
+         if (wide && !mem_fetch(c, pc + 2u, &l))
+             break;
+-#endif
+-#if SAMSA_CACHE_ENTRIES
+-        if (hit) {
+-            h = c->_cache.code[slot].first;
+-            l = c->_cache.code[slot].second;
+-            op = c->_cache.code[slot].op & 127u;
+-        } else {
+-            op = wide ? classify32((uint16_t)h, (uint16_t)l) : classify16((uint16_t)h);
+-            c->_cache.code[slot].tag = pc | 1u;
+-            c->_cache.code[slot].first = (uint16_t)h;
+-            c->_cache.code[slot].second = (uint16_t)l;
+-            c->_cache.code[slot].op = (uint8_t)(op | (wide ? 128u : 0));
+-        }
++        op = 0;
+ #endif
+         uint8_t it = c->itstate;
+         c->r[15] = pc + (wide ? 4u : 2u);
+         bool ok = true;
+         if (!it || condition(c, it >> 4) || (!wide && (h & 0xff00u) == 0xbe00u)) {
+ #if SAMSA_CACHE_ENTRIES
+-            ok = wide ? execute32(c, op, (uint16_t)h, (uint16_t)l, pc)
+-                      : execute16(c, op, (uint16_t)h, pc, it != 0);
++            ok = wide ? samsa_t32[op](c, (uint16_t)h, (uint16_t)l, pc)
++                      : samsa_t16[op](c, (uint16_t)h, pc, it != 0);
+ #else
++            (void)op;
+             ok = wide ? decode32(c, (uint16_t)h, (uint16_t)l, pc)
+                       : decode16(c, (uint16_t)h, pc, it != 0);
+ #endif
+@@ -219,6 +303,7 @@ void invalidate_code(SamsaCpu *c, uint32_t a, uint32_t len) {
+     if (len >= SAMSA_CACHE_ENTRIES * 2u || a > UINT32_MAX - (len - 1u)) {
+         for (unsigned i = 0; i < SAMSA_CACHE_ENTRIES; ++i)
+             c->_cache.code[i].tag = 0;
++        c->_cache.lo = c->_cache.hi = 0;
+         return;
+     }
+     /* A write may touch either halfword of a cached wide instruction. */
+diff --git a/tests/test_control.c b/tests/test_control.c
+index 584601d..dd88725 100644
+--- a/tests/test_control.c
++++ b/tests/test_control.c
+@@ -65,6 +65,19 @@ static void branches(void) {
+     f.c.num_hooks = 1;
+     EQ(samsa_run(&f.c, 10, NULL), SAMSA_STOP_HOOK);
+     EQ(f.c.r[15], 0x1004);
++    /* A sequential fetch from the same cached code region must still hit the point. */
++    init(&f);
++    CODE(&f, 0x2001, 0x3002, 0x3004, 0x3008);
++    f.c.hooks = &instruction;
++    f.c.num_hooks = 1;
++    uint32_t count = UINT32_MAX;
++    EQ(samsa_run(&f.c, 4, &count), SAMSA_STOP_HOOK);
++    EQ(f.c.r[15], 0x1004);
++    EQ(f.c.r[0], 3);
++    EQ(count, 2);
++    f.c.r[15] += 2;
++    EQ(samsa_run(&f.c, 1, &count), SAMSA_STOP_BUDGET);
++    EQ(f.c.r[0], 11);
+     const unsigned op[] = {2, 3, 4, 7};
+     const uint32_t expected[] = {0, 0, UINT32_MAX, 0x80000001};
+     for (unsigned i = 0; i < 4; ++i) {
