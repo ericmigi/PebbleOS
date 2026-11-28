@@ -19,8 +19,10 @@
 #include <hardware/esp32s3_system.h>
 #include <hardware/esp32s3_wdt.h>
 
-#ifdef CONFIG_BOARD_XTEINK_X4_PRO
+#if defined(CONFIG_BOARD_XTEINK_X4_PRO) || defined(CONFIG_BOARD_T_DECK_PRO)
 #include "cpu_pll.h"
+#endif
+#ifdef CONFIG_BOARD_XTEINK_X4_PRO
 #include "power_off.h"
 #endif
 
@@ -49,7 +51,7 @@ static void prv_timg_wdt_disable(uintptr_t base) {
 
 static uint32_t prv_cpu_clock_set(void) {
 #if CPU_HZ == 240000000U
-#ifdef CONFIG_BOARD_XTEINK_X4_PRO
+#if defined(CONFIG_BOARD_XTEINK_X4_PRO) || defined(CONFIG_BOARD_T_DECK_PRO)
   if (!esp32s3_prepare_cpu_pll()) {
     pbl_modifyl(
         ESP32S3_SYSTEM_SYSCLK_CONF_PRE_DIV_CNT_MASK | ESP32S3_SYSTEM_SYSCLK_CONF_SOC_CLK_SEL_MASK,

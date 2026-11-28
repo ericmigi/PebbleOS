@@ -1,0 +1,5 @@
+# t_deck_pro board configuration
+
+CONFIG_SOC_ESP32S3=y
+
+CONFIG_UART=y

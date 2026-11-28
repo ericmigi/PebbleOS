@@ -14,8 +14,12 @@ static char s_serial[2U * SERIAL_BYTES + 1U];
 static char s_empty[1];
 
 char *otp_get_slot(const uint8_t index) {
-#ifdef CONFIG_BOARD_XTEINK_X4_PRO
+#if defined(CONFIG_BOARD_XTEINK_X4_PRO) || defined(CONFIG_BOARD_T_DECK_PRO)
+#ifdef CONFIG_BOARD_T_DECK_PRO
+  static char board_revision[] = "tdeck";
+#else
   static char board_revision[] = "x4pro";
+#endif
   if (index == OTP_HWVER) {
     return board_revision;
   }

@@ -169,7 +169,7 @@ static_assert(sizeof(struct FirmwareMetadata) ==
 #elifdef CONFIG_BOARD_GETAFIX_DVT2
 #define FIRMWARE_METADATA_HW_PLATFORM (FirmwareMetadataPlatformPebbleGetafixDVT2)
 #elif defined(CONFIG_BOARD_XTEINK_X4) || defined(CONFIG_BOARD_XTEINK_X4_PRO) || \
-    defined(CONFIG_BOARD_BOOX_PICCO)
+    defined(CONFIG_BOARD_BOOX_PICCO) || defined(CONFIG_BOARD_T_DECK_PRO)
 // It runs Flint/xteinkx4: phones pick an app's Flint binary from the ID of a Flint watch
 #define FIRMWARE_METADATA_HW_PLATFORM (FirmwareMetadataPlatformPebbleAsterix)
 #elif defined(CONFIG_BOARD_QEMU_EMERY) || defined(CONFIG_BOARD_NATIVE_EMERY)

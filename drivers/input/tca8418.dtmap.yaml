@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: ti,tca8418
+config: INPUT_TCA8418
+class: input
+define: PBL_TCA8418_DEFINE
+args:
+  - name: true
+  - parent: i2c
+  - reg: 0
+  - irq: 0
+  - irq: 0
+    as: irq-gpio
+  - prop: keypad,num-rows
+  - prop: keypad,num-columns
+  - prop: linux,keymap
+    item: "{0:#010x}"

@@ -12,6 +12,10 @@
 
 [Xteink installation, watchfaces, emulator and contributor guide](extras/xteink/README.md)
 
+## LilyGO T-Deck Pro
+
+[T-Deck Pro setup, flashing and app development](extras/t-deck-pro/README.md)
+
 ## Resources
 
 Here's a quick summary of resources to help you find your way around:

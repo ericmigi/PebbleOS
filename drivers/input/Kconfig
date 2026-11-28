@@ -53,3 +53,10 @@ config INPUT_SDL
       Watch buttons driven by the keyboard, through SDL, in a native build.
 
 endmenu
+
+config INPUT_TCA8418
+    bool "TI TCA8418 keyboard navigation"
+    default y
+    depends on INPUT && DT_HAS_TI_TCA8418_ENABLED
+    select I2C
+    select GPIO

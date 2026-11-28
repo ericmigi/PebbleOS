@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config RESOURCES_BOARD
+    default "qemu_flint"
+
+config ESP32C3_BT_CONTROLLER_IN_FLASH
+    default y if ESP32C3_BT
+
+config ESP32C3_BT_ARMED_BY_DEFAULT
+    default y if ESP32C3_BT
+
+choice NIMBLE_HCI
+    default NIMBLE_HCI_ESP32C3 if ESP32C3_BT
+endchoice

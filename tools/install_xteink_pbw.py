@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
 # SPDX-License-Identifier: Apache-2.0
 
-"""Install one or more compatible PBWs over the X4 or X4 Pro firmware console."""
+"""Install one or more compatible PBWs over the Xteink or T-Deck Pro firmware console."""
 
 import argparse
 import zipfile
@@ -18,9 +18,11 @@ from pblconsole.protocol import FrameTransport
 
 
 def variant(path, board):
-    prefixes = ("xteinkx4/",)
-    if board == "xteink_x4_pro":
-        prefixes = ("xteinkx4pro/", *PebbleBundle.PLATFORM_PATHS["flint"])
+    prefixes = {
+        "xteink_x4": ("xteinkx4/",),
+        "xteink_x4_pro": ("xteinkx4pro/", *PebbleBundle.PLATFORM_PATHS["flint"]),
+        "t_deck_pro": ("tdeckpro/",),
+    }[board]
     with zipfile.ZipFile(path) as archive:
         names = set(archive.namelist())
         for prefix in prefixes:
@@ -35,7 +37,7 @@ def main():
         "--port", required=True, help="Serial device or socket://HOST:PORT"
     )
     parser.add_argument(
-        "--board", choices=("xteink_x4", "xteink_x4_pro"), default="xteink_x4_pro"
+        "--board", choices=("xteink_x4", "xteink_x4_pro", "t_deck_pro"), default="xteink_x4_pro"
     )
     parser.add_argument("pbw", type=Path, nargs="+")
     args = parser.parse_args()

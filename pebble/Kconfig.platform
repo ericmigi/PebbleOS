@@ -22,6 +22,8 @@ config PLATFORM_XTEINKX4
     bool "Xteink X4"
 config PLATFORM_XTEINKX4PRO
     bool "Xteink X4 Pro and BOOX Picco"
+config PLATFORM_TDECKPRO
+    bool "LilyGO T-Deck Pro"
 config PLATFORM_GABBRO
     bool "Gabbro"
 endchoice

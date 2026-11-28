@@ -31,4 +31,7 @@ pbl_library_sources(
   intmatrix.c
 )
 pbl_library_sources_ifdef(CONFIG_CRC retained.c)
-pbl_library_sources_ifdef(CONFIG_BOARD_XTEINK_X4_PRO cpu_pll.c power_off.c)
+if(CONFIG_BOARD_XTEINK_X4_PRO OR CONFIG_BOARD_T_DECK_PRO)
+  pbl_library_sources(cpu_pll.c)
+endif()
+pbl_library_sources_ifdef(CONFIG_BOARD_XTEINK_X4_PRO power_off.c)

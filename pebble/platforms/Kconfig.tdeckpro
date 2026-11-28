@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: Apache-2.0
+
+if PLATFORM_TDECKPRO
+config PLATFORM_NAME
+    default "tdeckpro"
+
+config PLATFORM_ABI
+    default "xtensa"
+
+config PLATFORM_DISPLAY_WIDTH
+    default 240
+
+config PLATFORM_DISPLAY_HEIGHT
+    default 320
+
+config PLATFORM_MAX_APP_MEMORY_SIZE
+    default 63488
+
+config PLATFORM_MAX_WORKER_MEMORY_SIZE
+    default 7552
+
+config APP_RAM_4X_SEGMENT_SIZE
+    default 67584
+
+config APP_RAM_4X_RUNTIME_SIZE
+    default 30720
+endif

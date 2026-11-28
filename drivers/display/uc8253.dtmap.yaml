@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+compatible: ultrachip,uc8253
+config: DISPLAY_UC8253
+class: display
+define: PBL_DISPLAY_UC8253_DEFINE
+args:
+  - name: true
+  - parent: spi
+  - reg: 0
+  - prop: spi-max-frequency
+  - gpio: dc
+  - gpio: busy
+  - gpio: sd-select
+  - gpio: radio-select
+  - prop: width
+  - prop: height
